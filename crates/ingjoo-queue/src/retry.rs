@@ -2,13 +2,17 @@ use std::time::Duration;
 
 use rand::Rng;
 
+/// 指数退避重试策略，支持基础延迟、最大延迟和 ±20% 抖动
 #[derive(Clone)]
 pub struct RetryPolicy {
+    /// 基础延迟，每次重试翻倍
     pub base_delay: Duration,
+    /// 延迟上限
     pub max_delay: Duration,
 }
 
 impl RetryPolicy {
+    /// 创建默认策略（基础延迟 1s，最大延迟 60s）
     pub fn new() -> Self {
         Self {
             base_delay: Duration::from_secs(1),
@@ -16,11 +20,13 @@ impl RetryPolicy {
         }
     }
 
+    /// 设置基础延迟
     pub fn with_base_delay(mut self, d: Duration) -> Self {
         self.base_delay = d;
         self
     }
 
+    /// 设置最大延迟上限
     pub fn with_max_delay(mut self, d: Duration) -> Self {
         self.max_delay = d;
         self

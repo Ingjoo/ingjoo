@@ -49,3 +49,5 @@ futures-util = "0.3"
 syn = { version = "2", features = ["full", "parsing"] }
 quote = "1"
 proc-macro2 = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+clap = { version = "4", features = ["derive", "env"] }

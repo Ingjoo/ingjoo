@@ -1,6 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
+/// 文件元数据
 #[derive(Debug, Clone)]
 pub struct FileInfo {
     pub path: String,
@@ -8,6 +9,7 @@ pub struct FileInfo {
     pub mime_type: String,
 }
 
+/// 文件存储 trait，支持本地和 S3 等后端
 #[async_trait]
 pub trait FileStorage: Send + Sync {
     async fn save(&self, path: &str, data: &[u8]) -> Result<()>;
@@ -17,11 +19,13 @@ pub trait FileStorage: Send + Sync {
     async fn size(&self, path: &str) -> Result<u64>;
 }
 
+/// 本地文件系统存储
 pub struct LocalStorage {
     base_dir: std::path::PathBuf,
 }
 
 impl LocalStorage {
+    /// 创建本地存储，以 base_dir 为根目录
     pub fn new(base_dir: std::path::PathBuf) -> Self {
         Self { base_dir }
     }

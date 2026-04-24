@@ -27,6 +27,7 @@ pub enum ScheduleStatus {
 }
 
 impl ScheduleStatus {
+    /// 返回状态的字符串表示
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Active => "active",
@@ -35,6 +36,7 @@ impl ScheduleStatus {
         }
     }
 
+    /// 从字符串解析状态
     pub fn try_from_str(s: &str) -> Option<Self> {
         match s {
             "active" => Some(Self::Active),
@@ -63,6 +65,7 @@ pub struct ScheduledJob {
 }
 
 impl ScheduledJob {
+    /// 创建新的定时任务（自动生成 UUID）
     pub fn new(name: &str, cron_expr: &str, queue: &str, job_name: &str, payload: Value) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
@@ -80,11 +83,13 @@ impl ScheduledJob {
         }
     }
 
+    /// 设置最大重试次数
     pub fn with_max_attempts(mut self, max: i32) -> Self {
         self.max_attempts = max;
         self
     }
 
+    /// 替换任务载荷
     pub fn with_payload(mut self, payload: Value) -> Self {
         self.payload = payload;
         self
@@ -124,6 +129,7 @@ pub struct SqlScheduleStore<'a> {
 }
 
 impl<'a> SqlScheduleStore<'a> {
+    /// 创建 SQL 调度存储实例
     pub fn new(pool: &'a Pool, dialect: &'a Dialect) -> Self {
         Self { pool, dialect }
     }
@@ -311,6 +317,7 @@ pub struct Scheduler<'a, Q: Queue> {
 }
 
 impl<'a, Q: Queue> Scheduler<'a, Q> {
+    /// 创建调度器，绑定连接池、方言和队列
     pub fn new(pool: &'a Pool, dialect: &'a Dialect, queue: &'a Q) -> Self {
         Self {
             store: SqlScheduleStore::new(pool, dialect),

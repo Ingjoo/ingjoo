@@ -21,3 +21,12 @@ thiserror.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+criterion.workspace = true
+
+[[bench]]
+name = "domain_bench"
+harness = false
+
+[[bench]]
+name = "registry_bench"
+harness = false

@@ -1,7 +1,10 @@
+//! 作用域访问守卫 — 角色层级比较与权限检查
+
 use anyhow::Result;
 use async_trait::async_trait;
 use thiserror::Error;
 
+/// 作用域权限错误
 #[derive(Debug, Error)]
 pub enum ScopeError {
     #[error("resource not found")]
@@ -10,6 +13,7 @@ pub enum ScopeError {
     Forbidden,
 }
 
+/// 判断 actual 角色是否 >= required 角色（层级数组中排名越靠前权限越高）
 pub fn role_gte(actual: &str, required: &str, hierarchy: &[&str]) -> bool {
     let actual_rank = hierarchy.iter().position(|r| *r == actual);
     let required_rank = hierarchy.iter().position(|r| *r == required);
@@ -19,10 +23,12 @@ pub fn role_gte(actual: &str, required: &str, hierarchy: &[&str]) -> bool {
     }
 }
 
+/// 作用域访问守卫 — 检查用户在指定作用域中的角色权限
 #[async_trait]
 pub trait ScopeGuard: Send + Sync {
     type Member: Send + Sync + Clone;
 
+    /// 检查用户在作用域中的角色是否满足最低要求，通过则返回成员信息
     async fn check_access(
         &self,
         scope_id: &str,
@@ -30,6 +36,7 @@ pub trait ScopeGuard: Send + Sync {
         min_role: &str,
     ) -> Result<Self::Member, ScopeError>;
 
+    /// 使指定用户的作用域缓存失效（None 表示整个作用域）
     async fn invalidate(&self, scope_id: &str, user_id: Option<&str>);
 }
 

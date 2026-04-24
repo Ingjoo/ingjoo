@@ -3,12 +3,19 @@ use std::fmt;
 /// 存储层错误类型，提供比 anyhow::Error 更精细的错误分类
 #[derive(Debug)]
 pub enum StoreError {
+    /// 记录不存在
     NotFound(String),
+    /// 唯一约束冲突
     UniqueViolation { table: String, column: String },
+    /// 外键约束冲突
     ForeignKeyViolation(String),
+    /// 数据库内部错误
     Database(String),
+    /// 配置错误
     Config(String),
+    /// 请求参数错误
     BadRequest(String),
+    /// IO 错误
     Io(std::io::Error),
 }
 

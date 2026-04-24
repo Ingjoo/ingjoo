@@ -33,24 +33,29 @@ pub use ingjoo_core::db::models::UserGroup;
 pub use ingjoo_core::db::models::ModelAccessRow;
 pub use ingjoo_core::db::models::RecordRuleRow;
 
+/// 数据库访问层，实现所有 Store trait，聚合为 `Arc<dyn IngjooStore>`
 pub struct Db {
     pool: Pool,
     dialect: Dialect,
 }
 
 impl Db {
+    /// 创建 SQLite 方言的数据库实例
     pub fn new(pool: Pool) -> Self {
         Self { pool, dialect: Dialect::Sqlite }
     }
 
+    /// 创建指定方言的数据库实例
     pub fn with_dialect(pool: Pool, dialect: Dialect) -> Self {
         Self { pool, dialect }
     }
 
+    /// 获取连接池引用
     pub fn pool(&self) -> &Pool {
         &self.pool
     }
 
+    /// 获取数据库方言
     pub fn dialect(&self) -> &Dialect {
         &self.dialect
     }
@@ -59,6 +64,7 @@ impl Db {
         self.dialect.prepare(query)
     }
 
+    /// 执行数据库迁移：建表 + 增量迁移 + 种子数据
     pub async fn run_migrations(pool: &Pool, dialect: &Dialect) -> Result<()> {
         let ddl = r#"
             CREATE TABLE IF NOT EXISTS users (

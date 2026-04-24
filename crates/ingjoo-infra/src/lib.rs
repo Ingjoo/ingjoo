@@ -1,8 +1,15 @@
+//! 莺竹框架基础设施层
+//!
+//! 提供数据库访问、认证、路由、中间件、扩展实现等开箱即用的基础设施。
+//! 应用通过 [`AppState`] 组合各组件，由 [`base_router`] 挂载 HTTP 路由。
+
 pub mod config;
+pub mod extension_impl;
 pub mod extension_noop;
 pub mod extractors;
 pub mod handlers;
 pub mod middleware;
+pub mod plugin;
 pub mod router;
 pub mod state;
 
@@ -19,6 +26,8 @@ pub mod sms;
 pub mod storage;
 
 pub use ingjoo_core::PaginatedResult;
+
+pub use extension_impl::InMemoryVectorStore;
 
 #[cfg(feature = "db")]
 pub use db::models::{User, UserPublic, AuthToken, RegisterRequest, LoginRequest, UpdateProfileRequest, UserPreferences, UpdatePreferences, Attachment, CreateAttachment, ModuleSetting, SetModuleSetting};
@@ -38,7 +47,9 @@ pub use sms::{SmsProvider, SmsConfig, TencentSmsProvider};
 #[cfg(feature = "email")]
 pub use email::{EmailProvider, SmtpEmailProvider, EmailConfig};
 pub use config::IngjooConfig;
+pub use plugin::PluginManager;
 pub use state::AppState;
+pub use state::RateLimitConfig;
 pub use storage::{FileStorage, LocalStorage};
 #[cfg(feature = "s3")]
 pub use storage::S3Storage;

@@ -4,6 +4,10 @@ use std::time::Duration;
 const DEFAULT_TTL_SECS: u64 = 300;
 const DEFAULT_MAX_ENTRIES: usize = 1000;
 
+/// 框架级多分区缓存
+///
+/// 内部分为四个独立的 moka `Cache` 分区：权限访问、用户（按 ID 和按邮箱）、模块设置。
+/// 每个分区有独立的 TTL 和容量上限。
 pub struct FrameworkCache<M, U = ()> {
     scope_access: Cache<String, M>,
     user_by_id: Cache<String, U>,
@@ -18,6 +22,7 @@ impl<M: Clone + Send + Sync + 'static, U: Clone + Send + Sync + 'static> Default
 }
 
 impl<M: Clone + Send + Sync + 'static, U: Clone + Send + Sync + 'static> FrameworkCache<M, U> {
+    /// 创建带默认 TTL 和容量上限的缓存实例
     pub fn new() -> Self {
         Self {
             scope_access: Cache::builder()
@@ -39,52 +44,64 @@ impl<M: Clone + Send + Sync + 'static, U: Clone + Send + Sync + 'static> Framewo
         }
     }
 
+    /// 查询权限缓存
     pub fn get_scope_access(&self, scope_id: &str, user_id: &str) -> Option<M> {
         self.scope_access.get(&cache_key(scope_id, user_id))
     }
 
+    /// 写入权限缓存
     pub fn put_scope_access(&self, scope_id: &str, user_id: &str, member: M) {
         self.scope_access.insert(cache_key(scope_id, user_id), member);
     }
 
+    /// 失效指定 scope+user 的权限缓存
     pub fn invalidate_scope_access(&self, scope_id: &str, user_id: &str) {
         self.scope_access.invalidate(&cache_key(scope_id, user_id));
     }
 
+    /// 失效整个 scope 下所有用户的权限缓存
     pub fn invalidate_scope(&self, _scope_id: &str) {
         self.scope_access.invalidate_all();
         self.scope_access.run_pending_tasks();
     }
 
+    /// 按 ID 查询用户缓存
     pub fn get_user(&self, user_id: &str) -> Option<U> {
         self.user_by_id.get(user_id)
     }
 
+    /// 同时写入 ID 和邮箱两个索引
     pub fn put_user(&self, id_key: &str, email_key: &str, user: U) {
         self.user_by_id.insert(id_key.to_string(), user.clone());
         self.user_by_email.insert(email_key.to_string(), user);
     }
 
+    /// 按 ID 失效用户缓存
     pub fn invalidate_user(&self, user_id: &str) {
         self.user_by_id.invalidate(user_id);
     }
 
+    /// 按邮箱查询用户缓存
     pub fn get_user_by_email(&self, email: &str) -> Option<U> {
         self.user_by_email.get(email)
     }
 
+    /// 查询模块设置的生效值
     pub fn get_effective_setting(&self, module: &str, key: &str, scope_id: Option<&str>) -> Option<String> {
         self.effective_setting.get(&setting_cache_key(module, key, scope_id))
     }
 
+    /// 写入模块设置缓存
     pub fn put_effective_setting(&self, module: &str, key: &str, scope_id: Option<&str>, value: String) {
         self.effective_setting.insert(setting_cache_key(module, key, scope_id), value);
     }
 
+    /// 清空所有模块设置缓存
     pub fn invalidate_settings(&self) {
         self.effective_setting.invalidate_all();
     }
 
+    /// 返回各分区的条目计数
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             scope_access_entries: self.scope_access.entry_count(),
@@ -94,6 +111,7 @@ impl<M: Clone + Send + Sync + 'static, U: Clone + Send + Sync + 'static> Framewo
     }
 }
 
+/// 各分区缓存条目计数
 pub struct CacheStats {
     pub scope_access_entries: u64,
     pub user_entries: u64,

@@ -20,9 +20,11 @@ axum.workspace = true
 sqlx.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+clap.workspace = true
 
 [dev-dependencies]
 tower.workspace = true
 http.workspace = true
 uuid.workspace = true
 tempfile = "3"
+ingjoo-security = { path = "../ingjoo-security" }

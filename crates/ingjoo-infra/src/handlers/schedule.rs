@@ -8,16 +8,25 @@ use serde::{Deserialize, Serialize};
 
 use ingjoo_queue::{ScheduledJob, ScheduleStatus, ScheduleStore, SqlScheduleStore};
 
+use ingjoo_core::db::traits::IngjooStore;
+
 use crate::extractors::CurrentUser;
 use crate::middleware::error::AppError;
 use crate::AppState;
 
-fn require_admin(user: &CurrentUser) -> Result<(), AppError> {
-    if user.is_admin() {
-        Ok(())
-    } else {
-        Err(AppError::Forbidden("需要管理员权限".into()))
+async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
+    if !user.is_admin() {
+        let _ = store.create_audit_log(
+            Some(&user.user_id),
+            "admin_required_denied",
+            "schedules",
+            None,
+            None,
+            None,
+        ).await;
+        return Err(AppError::Forbidden("需要管理员权限".into()));
     }
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]
@@ -90,7 +99,7 @@ pub async fn list_schedules(
     State(state): State<Arc<AppState>>,
     Query(filter): Query<ScheduleFilter>,
 ) -> Result<Json<Vec<ScheduleResponse>>, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
     let store = make_store(&state);
     let status = filter.status.as_deref().and_then(ScheduleStatus::try_from_str);
     let jobs = store.list(status).await?;
@@ -102,7 +111,7 @@ pub async fn create_schedule(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateScheduleRequest>,
 ) -> Result<(StatusCode, Json<ScheduleResponse>), AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     let mut job = ScheduledJob::new(
         &req.name,
@@ -129,7 +138,7 @@ pub async fn get_schedule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<ScheduleResponse>, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
     let store = make_store(&state);
     let job = store.get(&id).await?.ok_or_else(|| AppError::NotFound(id))?;
     Ok(Json(ScheduleResponse::from(job)))
@@ -141,7 +150,7 @@ pub async fn update_schedule(
     Path(id): Path<String>,
     Json(req): Json<UpdateScheduleRequest>,
 ) -> Result<Json<ScheduleResponse>, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
     let store = make_store(&state);
     let mut job = store.get(&id).await?.ok_or_else(|| AppError::NotFound(id.clone()))?;
 
@@ -179,7 +188,7 @@ pub async fn delete_schedule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
     let store = make_store(&state);
     store.delete(&id).await?;
     Ok(StatusCode::NO_CONTENT)

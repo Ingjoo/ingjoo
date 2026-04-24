@@ -5,6 +5,7 @@ pub mod groups;
 pub mod health;
 pub mod menu;
 pub mod permission;
+pub mod plugin;
 pub mod schedule;
 pub mod settings;
 pub mod view;

@@ -1,3 +1,6 @@
+//! SQL 方言适配 — SQLite / PostgreSQL 跨库 SQL 生成
+
+/// 数据库方言枚举，驱动 SQL 片段的跨库适配
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Dialect {
     Sqlite,
@@ -5,6 +8,7 @@ pub enum Dialect {
 }
 
 impl Dialect {
+    /// 当前时间表达式（SQLite: `datetime('now')` / Postgres: `CURRENT_TIMESTAMP`）
     pub fn now(&self) -> &'static str {
         match self {
             Self::Sqlite => "datetime('now')",
@@ -12,6 +16,7 @@ impl Dialect {
         }
     }
 
+    /// 当前时间偏移正向表达式（如 `'+1 day'`）
     pub fn now_offset(&self, offset_expr: &str) -> String {
         match self {
             Self::Sqlite => format!("datetime('now', '{}')", offset_expr),
@@ -19,6 +24,7 @@ impl Dialect {
         }
     }
 
+    /// 当前时间偏移反向表达式（如 `'-24 hours'`）
     pub fn now_offset_negative(&self, offset_expr: &str) -> String {
         match self {
             Self::Sqlite => format!("datetime('now', '-{}')", offset_expr),
@@ -26,6 +32,7 @@ impl Dialect {
         }
     }
 
+    /// 当前时间偏移绑定参数表达式（用于参数化查询）
     pub fn now_offset_bind(&self, unit: &str) -> String {
         match self {
             Self::Sqlite => format!("datetime('now', ? || '{}')", unit),
@@ -33,6 +40,7 @@ impl Dialect {
         }
     }
 
+    /// 自增主键列定义
     pub fn serial_pk(&self) -> &'static str {
         match self {
             Self::Sqlite => "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -40,6 +48,7 @@ impl Dialect {
         }
     }
 
+    /// 文本列类型名
     pub fn text_type(&self) -> &'static str {
         match self {
             Self::Sqlite => "TEXT",
@@ -47,6 +56,7 @@ impl Dialect {
         }
     }
 
+    /// 带长度的文本列类型
     pub fn text_type_with_len(&self, len: u32) -> String {
         match self {
             Self::Sqlite => "TEXT".to_string(),
@@ -54,6 +64,7 @@ impl Dialect {
         }
     }
 
+    /// 时间戳列类型名
     pub fn timestamp_type(&self) -> &'static str {
         match self {
             Self::Sqlite => "TEXT",
@@ -61,6 +72,7 @@ impl Dialect {
         }
     }
 
+    /// 布尔列类型名
     pub fn boolean_type(&self) -> &'static str {
         match self {
             Self::Sqlite => "INTEGER",
@@ -68,6 +80,7 @@ impl Dialect {
         }
     }
 
+    /// 二进制列类型名
     pub fn blob_type(&self) -> &'static str {
         match self {
             Self::Sqlite => "BLOB",
@@ -75,6 +88,7 @@ impl Dialect {
         }
     }
 
+    /// 自动迁移列的 ALTER TABLE 模板（Postgres 带 `IF NOT EXISTS`）
     pub fn auto_migrate_column(&self) -> &'static str {
         match self {
             Self::Sqlite => "ALTER TABLE {table} ADD COLUMN {col} {type_} NOT NULL DEFAULT {default}",
@@ -82,6 +96,7 @@ impl Dialect {
         }
     }
 
+    /// 唯一约束 SQL 片段
     pub fn unique_constraint(&self, name: &str, columns: &str) -> String {
         match self {
             Self::Sqlite => format!("UNIQUE({})", columns),
@@ -89,6 +104,7 @@ impl Dialect {
         }
     }
 
+    /// `CREATE INDEX IF NOT EXISTS` 语句
     pub fn create_index_if_not_exists(&self, name: &str, table: &str, columns: &str) -> String {
         match self {
             Self::Sqlite => format!("CREATE INDEX IF NOT EXISTS {} ON {}({})", name, table, columns),
@@ -96,6 +112,7 @@ impl Dialect {
         }
     }
 
+    /// UPSERT 模板（`VALUES {}` 由调用方填充）
     pub fn upsert(&self, table: &str, columns: &str, conflict_cols: &str, update_cols: &str) -> String {
         match self {
             Self::Sqlite => format!(
@@ -109,6 +126,7 @@ impl Dialect {
         }
     }
 
+    /// 单个占位符（SQLite `?` / Postgres `$n`）
     pub fn placeholder(&self, idx: usize) -> String {
         match self {
             Self::Sqlite => "?".to_string(),
@@ -116,6 +134,7 @@ impl Dialect {
         }
     }
 
+    /// 批量占位符列表
     pub fn placeholders(&self, count: usize, start_idx: usize) -> Vec<String> {
         match self {
             Self::Sqlite => vec!["?".to_string(); count],
@@ -123,26 +142,32 @@ impl Dialect {
         }
     }
 
+    /// `DEFAULT <now>` SQL 片段
     pub fn default_timestamp(&self) -> String {
         format!("DEFAULT {}", self.now())
     }
 
+    /// `TIMESTAMP NOT NULL DEFAULT <now>` 列定义
     pub fn not_null_default_now(&self) -> String {
         format!("{} NOT NULL {}", self.timestamp_type(), self.default_timestamp())
     }
 
+    /// 外键引用列定义
     pub fn reference(&self, col: &str, ref_table: &str, ref_col: &str, on_delete: &str) -> String {
         format!("{} {} REFERENCES {}({}) ON DELETE {}", col, self.text_type(), ref_table, ref_col, on_delete)
     }
 
+    /// `TEXT PRIMARY KEY` 列定义
     pub fn text_primary_key(&self) -> &'static str {
         "TEXT PRIMARY KEY"
     }
 
+    /// `INTEGER NOT NULL DEFAULT <n>` 列定义
     pub fn integer_not_null_default(&self, default: i64) -> String {
         format!("INTEGER NOT NULL DEFAULT {}", default)
     }
 
+    /// 一站式 SQL 预处理：替换 `datetime('now')`、`AUTOINCREMENT`、占位符
     pub fn prepare(&self, sql: &str) -> String {
         let sql = self.replace_standalone_datetime_now(sql);
         let sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", self.serial_pk());
@@ -172,6 +197,7 @@ impl Dialect {
         result
     }
 
+    /// 将 SQL 中的 `?` 占位符替换为目标方言格式（SQLite 不变，Postgres `$n`）
     pub fn format_sql(&self, sql: &str) -> String {
         match self {
             Self::Sqlite => sql.to_string(),
@@ -220,6 +246,7 @@ impl Dialect {
         }
     }
 
+    /// 检查列是否存在的 SQL（SQLite 用 `pragma_table_info`，Postgres 用 `information_schema`）
     pub fn column_exists_sql(&self, table: &str, column: &str) -> String {
         match self {
             Self::Sqlite => format!(
@@ -233,6 +260,7 @@ impl Dialect {
         }
     }
 
+    /// 按分号拆分 DDL 语句，自动去除空白和空项
     pub fn split_ddl(ddl: &str) -> Vec<&str> {
         ddl.split(';')
             .map(|s| s.trim())

@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// 应用全局配置，从环境变量或 settings 表加载
 pub struct IngjooConfig {
+    /// JWT 签名密钥
     pub jwt_secret: String,
+    /// 文件存储根目录
     pub storage_path: PathBuf,
     #[cfg(feature = "sms")]
     pub sms: Option<crate::sms::SmsConfig>,
@@ -11,6 +14,7 @@ pub struct IngjooConfig {
 }
 
 impl IngjooConfig {
+    /// 从 settings 键值表构建配置
     #[allow(unused_variables)]
     pub fn from_settings(
         jwt_secret: String,

@@ -9,3 +9,10 @@ categories = ["caching"]
 
 [dependencies]
 moka.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "cache_bench"
+harness = false

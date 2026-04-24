@@ -5,13 +5,18 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation}
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
+/// JWT 认证配置
 pub struct AuthConfig {
+    /// 签名密钥
     pub secret: String,
+    /// access token 有效期（秒）
     pub access_ttl: i64,
+    /// refresh token 有效期（秒）
     pub refresh_ttl: i64,
 }
 
 impl AuthConfig {
+    /// 创建默认配置（access 15min, refresh 7d）
     pub fn new(secret: impl Into<String>) -> Self {
         Self {
             secret: secret.into(),
@@ -21,6 +26,7 @@ impl AuthConfig {
     }
 }
 
+/// JWT payload 声明
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenClaims {
     pub sub: String,
@@ -32,6 +38,7 @@ pub struct TokenClaims {
     pub iat: usize,
 }
 
+/// 认证提供者 trait：密码哈希、JWT 签发/验证、refresh token 管理
 pub trait AuthProvider: Send + Sync {
     fn hash_password(&self, password: &str) -> Result<String>;
     fn verify_password(&self, password: &str, hash: &str) -> Result<bool>;
@@ -42,6 +49,7 @@ pub trait AuthProvider: Send + Sync {
     fn verify_access_token(&self, token: &str) -> Result<TokenClaims>;
 }
 
+/// 基于 JWT + Argon2 的认证实现
 pub struct JwtAuthProvider {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
@@ -50,6 +58,7 @@ pub struct JwtAuthProvider {
 }
 
 impl JwtAuthProvider {
+    /// 从配置创建 JWT 认证提供者
     pub fn new(config: &AuthConfig) -> Self {
         Self {
             encoding_key: EncodingKey::from_secret(config.secret.as_bytes()),
@@ -113,6 +122,7 @@ impl AuthProvider for JwtAuthProvider {
     }
 }
 
+/// 默认认证工具类型别名
 pub type AuthUtil = JwtAuthProvider;
 
 #[cfg(test)]

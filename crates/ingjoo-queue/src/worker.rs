@@ -11,10 +11,12 @@ use tracing::{error, info, warn};
 
 use crate::{JobResult, QueuedJob, Queue, RetryPolicy};
 
+/// 任务处理器 trait，按任务名称路由到具体实现
 pub trait JobHandler: Send + Sync {
     fn handle(&self, payload: &Value) -> Pin<Box<dyn Future<Output = JobResult> + Send + '_>>;
 }
 
+/// 可配置并发的工作池，轮询队列并分发任务到已注册的处理器
 pub struct WorkerPool {
     queue: Arc<dyn Queue>,
     handlers: HashMap<String, Arc<dyn JobHandler>>,
@@ -24,6 +26,7 @@ pub struct WorkerPool {
 }
 
 impl WorkerPool {
+    /// 创建默认配置的工作池（并发数 4）
     pub fn new(queue: Arc<dyn Queue>) -> Self {
         Self {
             queue,
@@ -34,26 +37,31 @@ impl WorkerPool {
         }
     }
 
+    /// 设置最大并发数
     pub fn with_concurrency(mut self, n: usize) -> Self {
         self.concurrency = n.max(1);
         self
     }
 
+    /// 设置重试策略
     pub fn with_retry_policy(mut self, policy: RetryPolicy) -> Self {
         self.retry_policy = policy;
         self
     }
 
+    /// 设置轮询间隔
     pub fn with_poll_interval(mut self, interval: Duration) -> Self {
         self.poll_interval = interval;
         self
     }
 
+    /// 注册任务处理器
     pub fn register_handler(mut self, name: &str, handler: impl JobHandler + 'static) -> Self {
         self.handlers.insert(name.to_string(), Arc::new(handler));
         self
     }
 
+    /// 启动工作池主循环，监听多个队列直到收到关闭信号
     pub async fn run(self: Arc<Self>, queues: Vec<String>, mut shutdown: broadcast::Receiver<()>) {
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
         info!("工作池启动，并发数: {}", self.concurrency);

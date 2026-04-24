@@ -8,6 +8,7 @@ use tracing::warn;
 
 use crate::{JobStatus, QueuedJob, Queue};
 
+/// 基于内存的双端队列实现，用于开发和测试
 pub struct InMemoryQueue {
     jobs: Mutex<VecDeque<QueuedJob>>,
 }

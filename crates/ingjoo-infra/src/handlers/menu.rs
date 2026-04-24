@@ -9,20 +9,26 @@ use axum::Json;
 use serde::Deserialize;
 use sqlx::Row;
 
+use ingjoo_core::db::traits::IngjooStore;
 use ingjoo_core::MenuDescriptor;
 
 use crate::extractors::CurrentUser;
 use crate::middleware::error::AppError;
 use crate::AppState;
 
-// ==================== 权限检查 ====================
-
-fn require_admin(user: &CurrentUser) -> Result<(), AppError> {
-    if user.is_admin() {
-        Ok(())
-    } else {
-        Err(AppError::Forbidden("需要管理员权限".into()))
+async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
+    if !user.is_admin() {
+        let _ = store.create_audit_log(
+            Some(&user.user_id),
+            "admin_required_denied",
+            "menus",
+            None,
+            None,
+            None,
+        ).await;
+        return Err(AppError::Forbidden("需要管理员权限".into()));
     }
+    Ok(())
 }
 
 // ==================== 行提取 ====================
@@ -87,7 +93,7 @@ pub async fn create_menu(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateMenuRequest>,
 ) -> Result<(StatusCode, Json<MenuDescriptor>), AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     let id = uuid::Uuid::new_v4().to_string();
     let sequence = req.sequence.unwrap_or(10);
@@ -131,7 +137,7 @@ pub async fn update_menu(
     Path(id): Path<String>,
     Json(req): Json<UpdateMenuRequest>,
 ) -> Result<Json<MenuDescriptor>, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     // 查询现有记录
     let sql = state.dialect.prepare(
@@ -198,7 +204,7 @@ pub async fn delete_menu(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     let sql = state.dialect.prepare("DELETE FROM ir_menu WHERE id = ?");
     let result = sqlx::query(&sql)

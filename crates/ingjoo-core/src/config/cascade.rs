@@ -1,9 +1,16 @@
+//! 配置级联查询 — 按优先级依次查找，返回首个非空值
+
 use crate::db::error::StoreResult;
 use crate::db::traits::ModuleSettingStore;
 
+/// 配置级联工具 — 按 scope 优先级查找生效的配置值
 pub struct CascadeConfig;
 
 impl CascadeConfig {
+    /// 按 scopes 顺序逐级查找配置，返回第一个非空值
+    ///
+    /// 典型用法：`[("document_collection", Some("col1")), ("system", None)]`
+    /// 表示先查集合级配置，找不到则回退到系统默认。
     pub async fn get_effective<S: ModuleSettingStore + ?Sized>(
         store: &S,
         module: &str,
