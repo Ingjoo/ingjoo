@@ -11,6 +11,12 @@ pub struct FrameworkCache<M, U = ()> {
     effective_setting: Cache<String, String>,
 }
 
+impl<M: Clone + Send + Sync + 'static, U: Clone + Send + Sync + 'static> Default for FrameworkCache<M, U> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<M: Clone + Send + Sync + 'static, U: Clone + Send + Sync + 'static> FrameworkCache<M, U> {
     pub fn new() -> Self {
         Self {
@@ -121,7 +127,9 @@ mod tests {
 
     #[derive(Clone, Debug)]
     struct TestMember {
+        #[allow(dead_code)]
         scope_id: String,
+        #[allow(dead_code)]
         user_id: String,
         role: String,
     }

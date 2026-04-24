@@ -35,6 +35,7 @@
 
 ```toml
 [dependencies]
-ingjoo-core = { git = "https://github.com/your-org/ingjoo.git", package = "ingjoo-core" }
-ingjoo-security = { git = "https://github.com/your-org/ingjoo.git", package = "ingjoo-security" }
-ingjoo-infra = { git = "https://github.com/your-org/ingjoo.git", package = "ingjoo-infra" }
+ingjoo-core = { git = "https://github.com/ingjoo/ingjoo.git", package = "ingjoo-core" }
+ingjoo-security = { git = "https://github.com/ingjoo/ingjoo.git", package = "ingjoo-security" }
+ingjoo-infra = { git = "https://github.com/ingjoo/ingjoo.git", package = "ingjoo-infra" }
+```

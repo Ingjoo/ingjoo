@@ -1,3 +1,9 @@
+pub mod metadata;
+pub mod registry;
+
+pub use registry::{ModelDescriptor, FieldDescriptor, FieldType, IdType, ModelRegistry};
+pub use metadata::{ViewType, ActionType, MenuDescriptor, ViewDescriptor, ActionDescriptor};
+
 pub trait ModuleRoutes: Send + Sync {
     fn name(&self) -> &str;
 

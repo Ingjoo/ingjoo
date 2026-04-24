@@ -12,21 +12,26 @@ default = ["db", "auth"]
 full = ["db", "auth", "email", "sms", "captcha", "s3"]
 mock = []
 db = ["sqlx"]
-auth = ["argon2", "jsonwebtoken", "sha2", "uuid", "chrono", "rand"]
+auth = ["argon2", "jsonwebtoken", "sha2", "chrono", "rand"]
 email = ["lettre"]
-sms = ["reqwest", "hmac", "sha2", "hex", "chrono", "serde_json"]
+sms = ["reqwest", "hmac", "sha2", "hex", "chrono"]
 captcha = ["image", "rand", "base64"]
 s3 = ["aws-sdk-s3", "aws-config"]
 
 [dependencies]
 ingjoo-core = { path = "../ingjoo-core" }
+ingjoo-security = { path = "../ingjoo-security" }
+ingjoo-queue = { path = "../ingjoo-queue" }
 tokio.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 axum.workspace = true
 tower-http.workspace = true
 async-trait.workspace = true
+uuid.workspace = true
+futures-util.workspace = true
 
 sqlx = { workspace = true, optional = true }
 argon2 = { workspace = true, optional = true }
@@ -34,14 +39,12 @@ jsonwebtoken = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
-uuid = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 lettre = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
 
 [dependencies.aws-sdk-s3]
 workspace = true
@@ -50,3 +53,12 @@ optional = true
 [dependencies.aws-config]
 workspace = true
 optional = true
+
+[dev-dependencies]
+ingjoo-core = { path = "../ingjoo-core" }
+ingjoo-macros = { path = "../ingjoo-macros" }
+tokio.workspace = true
+serde_json.workspace = true
+tower.workspace = true
+http.workspace = true
+tempfile = "3"

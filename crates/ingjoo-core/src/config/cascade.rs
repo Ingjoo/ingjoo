@@ -1,5 +1,4 @@
-use anyhow::Result;
-
+use crate::db::error::StoreResult;
 use crate::db::traits::ModuleSettingStore;
 
 pub struct CascadeConfig;
@@ -10,7 +9,7 @@ impl CascadeConfig {
         module: &str,
         key: &str,
         scopes: &[(&str, Option<&str>)],
-    ) -> Result<Option<String>> {
+    ) -> StoreResult<Option<String>> {
         for (scope, scope_id) in scopes {
             let val = store.get_module_setting(scope, *scope_id, module, key).await?;
             if val.is_some() {
@@ -24,7 +23,7 @@ impl CascadeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ids::UserId;
+    use crate::db::error::StoreResult;
     use crate::db::models::ModuleSetting;
     use async_trait::async_trait;
 
@@ -46,14 +45,14 @@ mod tests {
 
     #[async_trait]
     impl ModuleSettingStore for MockSettings {
-        async fn list_module_settings(&self, _scope: &str, _scope_id: Option<&str>, _module: Option<&str>) -> Result<Vec<ModuleSetting>> { Ok(vec![]) }
-        async fn get_module_setting(&self, scope: &str, scope_id: Option<&str>, module: &str, key: &str) -> Result<Option<String>> {
+        async fn list_module_settings(&self, _scope: &str, _scope_id: Option<&str>, _module: Option<&str>) -> StoreResult<Vec<ModuleSetting>> { Ok(vec![]) }
+        async fn get_module_setting(&self, scope: &str, scope_id: Option<&str>, module: &str, key: &str) -> StoreResult<Option<String>> {
             let k = (scope.to_string(), scope_id.map(String::from), module.to_string(), key.to_string());
             Ok(self.data.get(&k).cloned())
         }
-        async fn set_module_setting(&self, _id: &str, _scope: &str, _scope_id: Option<&str>, _module: &str, _key: &str, _value: &str) -> Result<ModuleSetting> { unimplemented!() }
-        async fn delete_module_setting(&self, _id: &str) -> Result<bool> { unimplemented!() }
-        async fn get_effective_setting(&self, module: &str, key: &str, collection_id: Option<&str>) -> Result<Option<String>> {
+        async fn set_module_setting(&self, _id: &str, _scope: &str, _scope_id: Option<&str>, _module: &str, _key: &str, _value: &str) -> StoreResult<ModuleSetting> { unimplemented!() }
+        async fn delete_module_setting(&self, _id: &str) -> StoreResult<bool> { unimplemented!() }
+        async fn get_effective_setting(&self, module: &str, key: &str, collection_id: Option<&str>) -> StoreResult<Option<String>> {
             let scopes: Vec<(&str, Option<&str>)> = if let Some(cid) = collection_id {
                 vec![("document_collection", Some(cid)), ("system", None)]
             } else {

@@ -2,10 +2,13 @@
 name = "ingjoo-macros"
 version.workspace = true
 edition.workspace = true
-description = "莺竹框架派生宏 — ingjoo derive macros (预留)"
+description = "莺竹框架派生宏 — ingjoo derive macros"
 license = "MIT"
 
 [lib]
 proc-macro = true
 
 [dependencies]
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }

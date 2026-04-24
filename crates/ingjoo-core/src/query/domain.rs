@@ -16,6 +16,8 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 use std::fmt;
 
+use crate::Dialect;
+
 /// Domain AST — 过滤表达式的抽象语法树
 #[derive(Clone, Debug, PartialEq)]
 pub enum Domain {
@@ -184,6 +186,10 @@ impl Domain {
 
 impl Domain {
     pub fn to_sql(&self, alias: Option<&str>) -> SqlCondition {
+        self.to_sql_with_dialect(alias, None)
+    }
+
+    pub fn to_sql_with_dialect(&self, alias: Option<&str>, dialect: Option<&Dialect>) -> SqlCondition {
         match self {
             Domain::Leaf { field, op, value } => {
                 let col = if let Some(a) = alias {
@@ -191,13 +197,13 @@ impl Domain {
                 } else {
                     field.clone()
                 };
-                op_to_sql(&col, op, value)
+                op_to_sql(&col, op, value, dialect)
             }
             Domain::And(domains) => {
                 let mut combined = SqlCondition::empty();
                 let mut first = true;
                 for d in domains {
-                    let cond = d.to_sql(alias);
+                    let cond = d.to_sql_with_dialect(alias, dialect);
                     if !cond.clause.is_empty() {
                         if !first {
                             combined.clause.push_str(" AND ");
@@ -215,7 +221,7 @@ impl Domain {
                 let mut combined = SqlCondition::empty();
                 let mut first = true;
                 for d in domains {
-                    let cond = d.to_sql(alias);
+                    let cond = d.to_sql_with_dialect(alias, dialect);
                     if !cond.clause.is_empty() {
                         if !first {
                             combined.clause.push_str(" OR ");
@@ -230,7 +236,7 @@ impl Domain {
                 combined
             }
             Domain::Not(inner) => {
-                let cond = inner.to_sql(alias);
+                let cond = inner.to_sql_with_dialect(alias, dialect);
                 if cond.clause.is_empty() {
                     cond
                 } else {
@@ -254,7 +260,8 @@ impl Domain {
     }
 }
 
-fn op_to_sql(col: &str, op: &DomainOp, value: &DomainValue) -> SqlCondition {
+fn op_to_sql(col: &str, op: &DomainOp, value: &DomainValue, dialect: Option<&Dialect>) -> SqlCondition {
+    let is_postgres = dialect.is_some_and(|d| matches!(d, Dialect::Postgres));
     match op {
         DomainOp::Equal => match value {
             DomainValue::Null => SqlCondition::expr(format!("{} IS NULL", col)),
@@ -269,9 +276,21 @@ fn op_to_sql(col: &str, op: &DomainOp, value: &DomainValue) -> SqlCondition {
         DomainOp::LessEqual => SqlCondition::bind(format!("{} <= ?", col), value),
         DomainOp::GreaterEqual => SqlCondition::bind(format!("{} >= ?", col), value),
         DomainOp::Like => SqlCondition::bind(format!("{} LIKE ?", col), value),
-        DomainOp::ILike => SqlCondition::bind(format!("{} LIKE ? COLLATE NOCASE", col), value),
+        DomainOp::ILike => {
+            if is_postgres {
+                SqlCondition::bind(format!("{} ILIKE ?", col), value)
+            } else {
+                SqlCondition::bind(format!("{} LIKE ? COLLATE NOCASE", col), value)
+            }
+        }
         DomainOp::NotLike => SqlCondition::bind(format!("{} NOT LIKE ?", col), value),
-        DomainOp::NotILike => SqlCondition::bind(format!("{} NOT LIKE ? COLLATE NOCASE", col), value),
+        DomainOp::NotILike => {
+            if is_postgres {
+                SqlCondition::bind(format!("{} NOT ILIKE ?", col), value)
+            } else {
+                SqlCondition::bind(format!("{} NOT LIKE ? COLLATE NOCASE", col), value)
+            }
+        }
         DomainOp::In => match value {
             DomainValue::List(items) if items.is_empty() => SqlCondition::expr("1=0".to_string()),
             DomainValue::List(items) => {
@@ -288,7 +307,7 @@ fn op_to_sql(col: &str, op: &DomainOp, value: &DomainValue) -> SqlCondition {
             _ => SqlCondition::bind(format!("{} = ?", col), value),
         },
         DomainOp::NotIn => {
-            let inner = op_to_sql(col, &DomainOp::In, value);
+            let inner = op_to_sql(col, &DomainOp::In, value, dialect);
             if inner.clause == "1=0" {
                 SqlCondition::expr("1=1".to_string())
             } else {
@@ -491,6 +510,33 @@ mod tests {
         let json = r#"["title", "ilike", "%rust%"]"#;
         let domain = Domain::from_json(json).unwrap();
         let sql = domain.to_sql(None);
+        assert_eq!(sql.clause, "title LIKE ? COLLATE NOCASE");
+        assert_eq!(sql.params, vec!["%rust%"]);
+    }
+
+    #[test]
+    fn test_ilike_postgres() {
+        let json = r#"["title", "ilike", "%rust%"]"#;
+        let domain = Domain::from_json(json).unwrap();
+        let sql = domain.to_sql_with_dialect(None, Some(&Dialect::Postgres));
+        assert_eq!(sql.clause, "title ILIKE ?");
+        assert_eq!(sql.params, vec!["%rust%"]);
+    }
+
+    #[test]
+    fn test_not_ilike_postgres() {
+        let json = r#"["title", "not ilike", "%spam%"]"#;
+        let domain = Domain::from_json(json).unwrap();
+        let sql = domain.to_sql_with_dialect(None, Some(&Dialect::Postgres));
+        assert_eq!(sql.clause, "title NOT ILIKE ?");
+        assert_eq!(sql.params, vec!["%spam%"]);
+    }
+
+    #[test]
+    fn test_ilike_sqlite_explicit() {
+        let json = r#"["title", "ilike", "%rust%"]"#;
+        let domain = Domain::from_json(json).unwrap();
+        let sql = domain.to_sql_with_dialect(None, Some(&Dialect::Sqlite));
         assert_eq!(sql.clause, "title LIKE ? COLLATE NOCASE");
         assert_eq!(sql.params, vec!["%rust%"]);
     }
