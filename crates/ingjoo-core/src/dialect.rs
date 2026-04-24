@@ -145,7 +145,8 @@ impl Dialect {
 
     pub fn prepare(&self, sql: &str) -> String {
         let sql = self.replace_standalone_datetime_now(sql);
-        sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", self.serial_pk())
+        let sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", self.serial_pk());
+        self.format_sql(&sql)
     }
 
     fn replace_standalone_datetime_now(&self, sql: &str) -> String {
