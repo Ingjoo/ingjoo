@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ingjoo-core",
+    "crates/ingjoo-security",
+    "crates/ingjoo-cache",
+    "crates/ingjoo-infra",
+    "crates/ingjoo-bin",
+    "crates/ingjoo-macros",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+axum = { version = "0.8", features = ["multipart", "ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres", "any", "json", "chrono", "uuid"] }
+async-trait = "0.1"
+moka = { version = "0.12", features = ["sync"] }
+argon2 = "0.5"
+jsonwebtoken = "9"
+sha2 = "0.10"
+hex = "0.4"
+hmac = "0.12"
+rand = "0.8"
+base64 = "0.22"
+image = { version = "0.25", default-features = false, features = ["png"] }
+lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls-tls", "smtp-transport", "builder", "hostname"] }
+reqwest = { version = "0.12", features = ["json"] }
+aws-sdk-s3 = "1"
+aws-config = { version = "1", features = ["behavior-version-latest"] }

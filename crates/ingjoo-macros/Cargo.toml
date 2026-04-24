@@ -1,0 +1,11 @@
+[package]
+name = "ingjoo-macros"
+version.workspace = true
+edition.workspace = true
+description = "莺竹框架派生宏 — ingjoo derive macros (预留)"
+license = "MIT"
+
+[lib]
+proc-macro = true
+
+[dependencies]
