@@ -9,6 +9,7 @@ use axum::response::Response;
 use crate::extractors::CurrentUser;
 use crate::AppState;
 
+/// 管理员权限守卫中间件，要求 CurrentUser.is_admin()
 pub async fn require_admin(
     State(_state): State<Arc<AppState>>,
     request: Request,

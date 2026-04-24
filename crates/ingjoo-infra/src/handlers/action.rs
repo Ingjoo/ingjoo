@@ -7,6 +7,7 @@ use axum::Json;
 use serde::Deserialize;
 use sqlx::Row;
 
+use ingjoo_core::db::traits::IngjooStore;
 use ingjoo_core::ActionDescriptor;
 use ingjoo_core::ActionType;
 use ingjoo_core::ViewType;
@@ -19,12 +20,19 @@ use crate::AppState;
 const ACTION_COLUMNS: &str =
     "id, name, type, res_model, view_mode, view_ids, domain, context, page_limit, target, search_view_id, url, help, group_ids";
 
-fn require_admin(user: &CurrentUser) -> Result<(), AppError> {
-    if user.is_admin() {
-        Ok(())
-    } else {
-        Err(AppError::Forbidden("需要管理员权限".into()))
+async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
+    if !user.is_admin() {
+        let _ = store.create_audit_log(
+            Some(&user.user_id),
+            "admin_required_denied",
+            "actions",
+            None,
+            None,
+            None,
+        ).await;
+        return Err(AppError::Forbidden("需要管理员权限".into()));
     }
+    Ok(())
 }
 
 // ==================== 行提取 ====================
@@ -174,7 +182,7 @@ pub async fn list_actions(
     Extension(current_user): Extension<CurrentUser>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<ActionDescriptor>>, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     let sql = state.dialect.prepare(&format!(
         "SELECT {} FROM ir_action ORDER BY name",
@@ -194,7 +202,7 @@ pub async fn create_action(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateActionRequest>,
 ) -> Result<(StatusCode, Json<ActionDescriptor>), AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     let id = uuid::Uuid::new_v4().to_string();
     let view_mode_str: String = req.view_mode.iter().map(|t| t.as_str()).collect::<Vec<_>>().join(",");
@@ -251,7 +259,7 @@ pub async fn update_action(
     Path(id): Path<String>,
     Json(req): Json<UpdateActionRequest>,
 ) -> Result<Json<ActionDescriptor>, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     let sql = state.dialect.prepare(&format!(
         "SELECT {} FROM ir_action WHERE id = ?",
@@ -367,7 +375,7 @@ pub async fn delete_action(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     let sql = state.dialect.prepare("DELETE FROM ir_action WHERE id = ?");
     let result = sqlx::query(&sql)

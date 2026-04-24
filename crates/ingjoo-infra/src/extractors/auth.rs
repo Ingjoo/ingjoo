@@ -8,6 +8,7 @@ use axum::response::{IntoResponse, Response};
 use crate::auth::AuthProvider;
 use crate::AppState;
 
+/// 从 Bearer token 解析出的当前用户信息
 #[derive(Clone, Debug)]
 pub struct CurrentUser {
     pub user_id: String,
@@ -16,10 +17,12 @@ pub struct CurrentUser {
 }
 
 impl CurrentUser {
+    /// 判断用户是否属于 admin 组
     pub fn is_admin(&self) -> bool {
         self.groups.iter().any(|g| g == "admin")
     }
 
+    /// 要求管理员权限，否则返回 Forbidden
     pub fn require_admin(&self) -> Result<(), crate::middleware::error::AppError> {
         if self.is_admin() {
             Ok(())
@@ -29,6 +32,7 @@ impl CurrentUser {
     }
 }
 
+/// 认证提取失败原因
 pub enum AuthRejection {
     MissingToken,
     InvalidToken,

@@ -2,6 +2,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use ingjoo_core::db::error::StoreError;
 
+/// HTTP 层错误类型，自动映射为状态码 + 消息响应
 pub enum AppError {
     Internal(anyhow::Error),
     NotFound(String),

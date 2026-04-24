@@ -1,3 +1,8 @@
+//! 扩展 trait 集合 — 可插拔的基础设施抽象
+//!
+//! 每个 trait 定义一种独立的扩展能力（审计、状态机、事件总线、搜索、支付等），
+//! 由 `ingjoo-infra` 或外部 crate 提供具体实现。
+
 pub mod audit;
 pub mod state_machine;
 pub mod event_bus;

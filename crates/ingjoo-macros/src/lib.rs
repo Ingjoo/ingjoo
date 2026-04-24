@@ -197,6 +197,9 @@ fn impl_ingjoo_model(input: &DeriveInput) -> syn::Result<TokenStream2> {
     })
 }
 
+/// 从结构体定义自动生成 [`ModelDescriptor`] 构建链。
+///
+/// 参见[模块级文档](self)了解支持的属性。
 #[proc_macro_derive(IngjooModel, attributes(ingjoo))]
 pub fn derive_ingjoo_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

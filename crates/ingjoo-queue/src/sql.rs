@@ -7,6 +7,7 @@ use sqlx::Row;
 
 use crate::{JobStatus, QueuedJob, Queue};
 
+/// 基于 SQL 数据库的持久化队列实现
 pub struct SqlQueue<'a> {
     pool: &'a Pool,
     dialect: &'a Dialect,

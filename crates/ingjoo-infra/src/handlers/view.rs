@@ -7,6 +7,7 @@ use axum::Json;
 use serde::Deserialize;
 use sqlx::Row;
 
+use ingjoo_core::db::traits::IngjooStore;
 use ingjoo_core::ViewDescriptor;
 use ingjoo_core::ViewType;
 
@@ -14,12 +15,19 @@ use crate::extractors::CurrentUser;
 use crate::middleware::error::AppError;
 use crate::AppState;
 
-fn require_admin(user: &CurrentUser) -> Result<(), AppError> {
-    if user.is_admin() {
-        Ok(())
-    } else {
-        Err(AppError::Forbidden("需要管理员权限".into()))
+async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
+    if !user.is_admin() {
+        let _ = store.create_audit_log(
+            Some(&user.user_id),
+            "admin_required_denied",
+            "views",
+            None,
+            None,
+            None,
+        ).await;
+        return Err(AppError::Forbidden("需要管理员权限".into()));
     }
+    Ok(())
 }
 
 pub const VIEW_COLUMNS: &str = "id, name, model, type, priority, arch, inherit_id, active, group_ids";
@@ -163,7 +171,7 @@ pub async fn create_view(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateViewRequest>,
 ) -> Result<(StatusCode, Json<ViewDescriptor>), AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     let id = uuid::Uuid::new_v4().to_string();
     let priority = req.priority.unwrap_or(16);
@@ -209,7 +217,7 @@ pub async fn update_view(
     Path(id): Path<String>,
     Json(req): Json<UpdateViewRequest>,
 ) -> Result<Json<ViewDescriptor>, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     // 查询现有记录
     let sql = state.dialect.prepare(&format!(
@@ -274,7 +282,7 @@ pub async fn delete_view(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    require_admin(&current_user)?;
+    require_admin(&current_user, &state.store).await?;
 
     let sql = state.dialect.prepare("DELETE FROM ir_view WHERE id = ?");
     let result = sqlx::query(&sql)

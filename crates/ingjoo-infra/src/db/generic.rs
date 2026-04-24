@@ -6,6 +6,7 @@ use ingjoo_core::{Dialect, PaginatedResult};
 use serde_json::{json, Value};
 use sqlx::Row;
 
+/// 动态模型通用 CRUD 存储 trait
 #[async_trait]
 pub trait GenericRecordStore: Send + Sync {
     async fn ensure_table(&self, model: &ModelDescriptor) -> StoreResult<()>;
@@ -156,12 +157,14 @@ fn extract_field_value(_model: &ModelDescriptor, data: &Value, field_name: &str)
     })
 }
 
+/// SQL 实现的通用动态模型存储
 pub struct GenericDb<'a> {
     pool: &'a ingjoo_core::pool::Pool,
     dialect: &'a Dialect,
 }
 
 impl<'a> GenericDb<'a> {
+    /// 创建通用存储实例
     pub fn new(pool: &'a ingjoo_core::pool::Pool, dialect: &'a Dialect) -> Self {
         Self { pool, dialect }
     }
@@ -360,6 +363,7 @@ impl<'a> GenericRecordStore for GenericDb<'a> {
 }
 
 impl<'a> GenericDb<'a> {
+    /// 带额外 SQL 过滤条件的分页查询（用于权限过滤等场景）
     pub async fn generic_list_with_filter(
         &self,
         model: &ModelDescriptor,
@@ -415,6 +419,7 @@ impl<'a> GenericDb<'a> {
         Ok(PaginatedResult::new(items, total, limit, offset))
     }
 
+    /// 带额外过滤条件读取单条记录
     pub async fn generic_read_with_filter(
         &self,
         model: &ModelDescriptor,

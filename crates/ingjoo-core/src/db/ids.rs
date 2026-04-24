@@ -1,3 +1,9 @@
+//! ID 类型定义 — 通过 `define_id!` 宏生成强类型的字符串 ID
+
+/// 定义强类型字符串 ID 的宏
+///
+/// 生成的类型实现 `Display`、`From<String>`、`From<&str>`、`AsRef<str>`、`Deref<Target=str>`
+/// 以及 `sqlx::Type`（transparent）和 `serde` 序列化。
 #[macro_export]
 macro_rules! define_id {
     ($name:ident) => {
@@ -12,6 +18,7 @@ macro_rules! define_id {
         pub struct $name(pub String);
 
         impl $name {
+            /// 从任意字符串创建 ID
             pub fn new(id: impl Into<String>) -> Self {
                 Self(id.into())
             }
@@ -46,5 +53,7 @@ macro_rules! define_id {
     };
 }
 
+/// 用户 ID
 define_id!(UserId);
+/// 用户组 ID
 define_id!(GroupId);

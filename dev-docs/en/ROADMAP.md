@@ -148,14 +148,14 @@ Attribute syntax:
 | # | Task | Priority | Depends On | Status |
 |---|------|----------|------------|--------|
 | T4.0 | **Menu + View + Action metadata system** | **P0** | T3.1 | ✅ |
-| T4.1 | Plugin/module hot-loading system | P1 | T3.1 | ❌ |
-| T4.2 | Public API rustdoc (`///` on all public items) | P1 | Phase 2 | ❌ |
-| T4.3 | Performance benchmarks (criterion) | P2 | Phase 2 | ❌ |
-| T4.4 | Full integration test suite | P2 | Phase 2 | ❌ |
-| T4.5 | `ingjoo-cli` management tool | P2 | Phase 2 | ❌ |
-| T4.6 | Multi-tenant collection isolation tests | P2 | T3.3 | ❌ |
-| T4.7 | Database connection pooling observability | P3 | — | ❌ |
-| T4.8 | Rate limiting middleware | P3 | Phase 1 | ❌ |
+| T4.1 | Plugin/module hot-loading system | P1 | T3.1 | ✅ |
+| T4.2 | Public API rustdoc (`///` on all public items) | P1 | Phase 2 | ✅ |
+| T4.3 | Performance benchmarks (criterion) | P2 | Phase 2 | ✅ |
+| T4.4 | Full integration test suite | P2 | Phase 2 | 🔄 |
+| T4.5 | `ingjoo-cli` management tool | P2 | Phase 2 | ✅ |
+| T4.6 | Multi-tenant collection isolation tests | P2 | T3.3 | ✅ |
+| T4.7 | Database connection pooling observability | P3 | — | ✅ |
+| T4.8 | Rate limiting middleware | P3 | Phase 1 | ✅ |
 
 ### T4.0 Metadata System — COMPLETE
 
@@ -200,16 +200,16 @@ PHASE 4 IN PROGRESS
 ├── T4.0 Menu+View+Action metadata — ✅ ir_menu/ir_view/ir_action + handlers + seed data
 
 HIGH IMPACT (Phase 4)
-├── T4.1 Plugin hot-loading
-├── T4.4 Full integration test suite
-└── T4.5 CLI management tool
+├── T4.1 Plugin hot-loading — ✅ Thread-safe Registry + PluginManifest + PluginManager + Admin API
+├── T4.2 Rustdoc — ✅ All public API documented
+├── T4.3 Benchmarks — ✅ criterion: Domain DSL / Registry / Cache (3 bench suites)
+├── T4.4 Full integration test suite — 🔄 Expanding
+├── T4.5 CLI management tool — ✅ clap with 5 params + env var support
+├── T4.6 Multi-tenant isolation tests — ✅ 6 unit + 5 integration tests
 
-LOWER PRIORITY
-├── T4.2 Rustdoc
-├── T4.3 Performance benchmarks
-├── T4.6 Multi-tenant isolation tests
-├── T4.7 Connection pool observability
-└── T4.8 Rate limiting middleware
+COMPLETED (Lower priority)
+├── T4.7 Pool observability — ✅ PoolOptions + PoolStats + health endpoint
+└── T4.8 Rate limiting — ✅ Configurable tiered limits (public/protected/admin)
 ```
 
 ---

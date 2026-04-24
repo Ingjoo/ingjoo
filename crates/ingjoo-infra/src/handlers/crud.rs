@@ -6,6 +6,7 @@ use axum::Extension;
 use axum::Json;
 use serde::Deserialize;
 
+use ingjoo_core::db::traits::IngjooStore;
 use ingjoo_core::query::domain::{Domain, SqlCondition};
 use ingjoo_security::{AccessOp, ModelAccess, RecordRule, SecurityPolicy};
 
@@ -23,13 +24,35 @@ pub struct ListParams {
 
 fn resolve_model(state: &AppState, model_name: &str) -> Result<ingjoo_core::module::ModelDescriptor, AppError> {
     state.registry.get(model_name)
-        .cloned()
         .ok_or_else(|| AppError::NotFound(format!("模型 '{}' 未注册", model_name)))
 }
 
 fn check_access(policy: &SecurityPolicy, model: &str, groups: &[String], op: AccessOp) -> Result<(), AppError> {
     let op_label = format!("{:?}", op).to_lowercase();
     if !policy.check_access_groups(model, groups, op) {
+        return Err(AppError::Forbidden(format!("无权对 '{}' 执行 {} 操作", model, op_label)));
+    }
+    Ok(())
+}
+
+async fn check_access_with_audit(
+    policy: &SecurityPolicy,
+    model: &str,
+    groups: &[String],
+    op: AccessOp,
+    store: &Arc<dyn IngjooStore>,
+    user_id: &str,
+) -> Result<(), AppError> {
+    let op_label = format!("{:?}", op).to_lowercase();
+    if !policy.check_access_groups(model, groups, op) {
+        let _ = store.create_audit_log(
+            Some(user_id),
+            "access_denied",
+            model,
+            None,
+            Some(serde_json::json!({ "op": op_label, "groups": groups })),
+            None,
+        ).await;
         return Err(AppError::Forbidden(format!("无权对 '{}' 执行 {} 操作", model, op_label)));
     }
     Ok(())
@@ -103,7 +126,7 @@ pub async fn crud_list(
 ) -> Result<Json<ingjoo_core::PaginatedResult<serde_json::Value>>, AppError> {
     let model = resolve_model(&state, &model_name)?;
     let policy = load_security_policy(&state, &current_user.groups).await?;
-    check_access(&policy, &model_name, &current_user.groups, AccessOp::Read)?;
+    check_access_with_audit(&policy, &model_name, &current_user.groups, AccessOp::Read, &state.store, &current_user.user_id).await?;
 
     let domain = params.domain.as_deref()
         .map(Domain::from_json)
@@ -129,16 +152,30 @@ pub async fn crud_read(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let model = resolve_model(&state, &model_name)?;
     let policy = load_security_policy(&state, &current_user.groups).await?;
-    check_access(&policy, &model_name, &current_user.groups, AccessOp::Read)?;
+    check_access_with_audit(&policy, &model_name, &current_user.groups, AccessOp::Read, &state.store, &current_user.user_id).await?;
 
     let record_filter = get_record_filter(
         &policy, &model_name, &current_user.groups, &current_user.user_id, AccessOp::Read, &state.dialect,
     );
 
     let generic = GenericDb::new(&state.pool, &state.dialect);
-    let record = generic.generic_read_with_filter(&model, &id, record_filter.as_ref()).await?
-        .ok_or_else(|| AppError::NotFound("记录不存在".into()))?;
-    Ok(Json(record))
+    let record = generic.generic_read_with_filter(&model, &id, record_filter.as_ref()).await?;
+    match record {
+        Some(r) => Ok(Json(r)),
+        None => {
+            if record_filter.is_some() {
+                let _ = state.store.create_audit_log(
+                    Some(&current_user.user_id),
+                    "record_filter_denied",
+                    &model_name,
+                    Some(&id),
+                    None,
+                    None,
+                ).await;
+            }
+            Err(AppError::NotFound("记录不存在".into()))
+        }
+    }
 }
 
 pub async fn crud_create(
@@ -149,7 +186,7 @@ pub async fn crud_create(
 ) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
     let model = resolve_model(&state, &model_name)?;
     let policy = load_security_policy(&state, &current_user.groups).await?;
-    check_access(&policy, &model_name, &current_user.groups, AccessOp::Create)?;
+    check_access_with_audit(&policy, &model_name, &current_user.groups, AccessOp::Create, &state.store, &current_user.user_id).await?;
 
     let generic = GenericDb::new(&state.pool, &state.dialect);
     let record = generic.generic_create(&model, &data, Some(&current_user.user_id)).await?;
@@ -164,16 +201,30 @@ pub async fn crud_update(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let model = resolve_model(&state, &model_name)?;
     let policy = load_security_policy(&state, &current_user.groups).await?;
-    check_access(&policy, &model_name, &current_user.groups, AccessOp::Write)?;
+    check_access_with_audit(&policy, &model_name, &current_user.groups, AccessOp::Write, &state.store, &current_user.user_id).await?;
 
     let record_filter = get_record_filter(
         &policy, &model_name, &current_user.groups, &current_user.user_id, AccessOp::Write, &state.dialect,
     );
 
     let generic = GenericDb::new(&state.pool, &state.dialect);
-    let existing = generic.generic_read_with_filter(&model, &id, record_filter.as_ref()).await?
-        .ok_or_else(|| AppError::NotFound("记录不存在或无权修改".into()))?;
-    drop(existing);
+    let existing = generic.generic_read_with_filter(&model, &id, record_filter.as_ref()).await?;
+    match existing {
+        Some(_) => {},
+        None => {
+            if record_filter.is_some() {
+                let _ = state.store.create_audit_log(
+                    Some(&current_user.user_id),
+                    "record_filter_denied",
+                    &model_name,
+                    Some(&id),
+                    None,
+                    None,
+                ).await;
+            }
+            return Err(AppError::NotFound("记录不存在或无权修改".into()));
+        }
+    }
 
     let record = generic.generic_update(&model, &id, &data, Some(&current_user.user_id)).await?
         .ok_or_else(|| AppError::NotFound("记录不存在".into()))?;
@@ -187,16 +238,30 @@ pub async fn crud_delete(
 ) -> Result<StatusCode, AppError> {
     let model = resolve_model(&state, &model_name)?;
     let policy = load_security_policy(&state, &current_user.groups).await?;
-    check_access(&policy, &model_name, &current_user.groups, AccessOp::Delete)?;
+    check_access_with_audit(&policy, &model_name, &current_user.groups, AccessOp::Delete, &state.store, &current_user.user_id).await?;
 
     let record_filter = get_record_filter(
         &policy, &model_name, &current_user.groups, &current_user.user_id, AccessOp::Delete, &state.dialect,
     );
 
     let generic = GenericDb::new(&state.pool, &state.dialect);
-    let existing = generic.generic_read_with_filter(&model, &id, record_filter.as_ref()).await?
-        .ok_or_else(|| AppError::NotFound("记录不存在或无权删除".into()))?;
-    drop(existing);
+    let existing = generic.generic_read_with_filter(&model, &id, record_filter.as_ref()).await?;
+    match existing {
+        Some(_) => {},
+        None => {
+            if record_filter.is_some() {
+                let _ = state.store.create_audit_log(
+                    Some(&current_user.user_id),
+                    "record_filter_denied",
+                    &model_name,
+                    Some(&id),
+                    None,
+                    None,
+                ).await;
+            }
+            return Err(AppError::NotFound("记录不存在或无权删除".into()));
+        }
+    }
 
     let deleted = generic.generic_delete(&model, &id).await?;
     if deleted {
@@ -213,6 +278,14 @@ pub async fn crud_ensure_table(
 ) -> Result<StatusCode, AppError> {
     let model = resolve_model(&state, &model_name)?;
     if !current_user.is_admin() {
+        let _ = state.store.create_audit_log(
+            Some(&current_user.user_id),
+            "admin_required_denied",
+            &model_name,
+            None,
+            None,
+            None,
+        ).await;
         return Err(AppError::Forbidden("需要管理员权限".into()));
     }
     let generic = GenericDb::new(&state.pool, &state.dialect);
@@ -225,7 +298,15 @@ pub async fn crud_models(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<ingjoo_core::module::ModelDescriptor>>, AppError> {
     if !current_user.is_admin() {
+        let _ = state.store.create_audit_log(
+            Some(&current_user.user_id),
+            "admin_required_denied",
+            "models",
+            None,
+            None,
+            None,
+        ).await;
         return Err(AppError::Forbidden("需要管理员权限".into()));
     }
-    Ok(Json(state.registry.list().into_iter().cloned().collect()))
+    Ok(Json(state.registry.list()))
 }
