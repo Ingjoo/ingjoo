@@ -1,6 +1,7 @@
 use anyhow::Result;
 use ingjoo_core::pool;
-use ingjoo_infra::{ScaffDb, ScaffStore};
+use ingjoo_core::ModelRegistry;
+use ingjoo_infra::{AppState, AuthConfig, JwtAuthProvider, IngjooDb, IngjooStore};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -14,14 +15,29 @@ async fn main() -> Result<()> {
 
     pool::install_drivers();
     let (pool, dialect) = pool::connect_pool(&db_url).await?;
-    ScaffDb::run_migrations(&pool, &dialect).await?;
+    IngjooDb::run_migrations(&pool, &dialect).await?;
 
-    let scaff_store: Arc<dyn ScaffStore> = Arc::new(ScaffDb::new(pool.clone()));
+    let scaff_store: Arc<dyn IngjooStore> = Arc::new(IngjooDb::with_dialect(pool.clone(), dialect));
+    let auth_config = AuthConfig::new("ingjoo-default-secret-change-me");
+    let auth_provider = JwtAuthProvider::new(&auth_config);
+    let registry = Arc::new(ModelRegistry::new());
 
-    tracing::info!("ingjoo-bin started — 莺竹框架: 模块如竹，随需生长");
+    let state = Arc::new(AppState::new(
+        scaff_store,
+        auth_provider,
+        registry,
+        Arc::new(pool),
+        dialect,
+    ));
+
+    let app = ingjoo_infra::router::base_router(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 3000));
+    tracing::info!("ingjoo-bin started — 莺竹框架: 模块如竹，随需生长");
     tracing::info!("Listening on {}", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }

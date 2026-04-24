@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-pub struct ScaffConfig {
+pub struct IngjooConfig {
     pub jwt_secret: String,
     pub storage_path: PathBuf,
     #[cfg(feature = "sms")]
@@ -10,7 +10,8 @@ pub struct ScaffConfig {
     pub email: Option<crate::email::EmailConfig>,
 }
 
-impl ScaffConfig {
+impl IngjooConfig {
+    #[allow(unused_variables)]
     pub fn from_settings(
         jwt_secret: String,
         storage_path: PathBuf,

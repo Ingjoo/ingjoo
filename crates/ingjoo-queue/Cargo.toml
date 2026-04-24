@@ -1,0 +1,28 @@
+[package]
+name = "ingjoo-queue"
+version.workspace = true
+edition.workspace = true
+description = "莺竹框架队列系统 — 内存/SQL 持久化队列、重试策略、工作池"
+license = "MIT"
+keywords = ["ingjoo", "queue", "job", "worker"]
+categories = ["web-programming", "asynchronous"]
+
+[dependencies]
+ingjoo-core = { path = "../ingjoo-core" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+async-trait.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+sqlx.workspace = true
+rand.workspace = true
+cron.workspace = true
+
+[dev-dependencies]
+ingjoo-core = { path = "../ingjoo-core" }
+ingjoo-infra = { path = "../ingjoo-infra" }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+tempfile = "3"

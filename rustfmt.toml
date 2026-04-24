@@ -1,0 +1,14 @@
+# rustfmt 配置
+
+edition = "2021"
+max_width = 120
+use_small_heuristics = "Max"
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+reorder_modules = true
+trailing_comma = "Vertical"
+match_arm_leading_pipes = "Preserve"
+force_multiline_blocks = false
+fn_single_line = false
+where_single_line = false

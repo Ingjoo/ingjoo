@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::ids::UserId;
+use super::ids::{GroupId, UserId};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
@@ -137,4 +137,98 @@ pub struct SetModuleSetting {
     pub module: String,
     pub key: String,
     pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Group {
+    pub id: GroupId,
+    pub name: String,
+    pub display_name: Option<String>,
+    pub comment: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct GroupImplied {
+    pub group_id: GroupId,
+    pub implied_group_id: GroupId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct UserGroup {
+    pub user_id: UserId,
+    pub group_id: GroupId,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpsertGroupRequest {
+    pub name: String,
+    pub display_name: Option<String>,
+    pub comment: Option<String>,
+    pub implied_group_ids: Vec<GroupId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ModelAccessRow {
+    pub id: String,
+    pub group_id: GroupId,
+    pub model: String,
+    pub perm_read: bool,
+    pub perm_write: bool,
+    pub perm_create: bool,
+    pub perm_delete: bool,
+    pub perm_import: bool,
+    pub perm_export: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpsertModelAccessRequest {
+    pub group_id: GroupId,
+    pub model: String,
+    pub perm_read: bool,
+    pub perm_write: bool,
+    pub perm_create: bool,
+    pub perm_delete: bool,
+    #[serde(default)]
+    pub perm_import: bool,
+    #[serde(default)]
+    pub perm_export: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct RecordRuleRow {
+    pub id: String,
+    pub name: String,
+    pub group_id: GroupId,
+    pub model: String,
+    pub domain: String,
+    pub perm_read: bool,
+    pub perm_write: bool,
+    pub perm_create: bool,
+    pub perm_delete: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct AuditLog {
+    pub id: String,
+    pub user_id: Option<String>,
+    pub action: String,
+    pub resource: String,
+    pub resource_id: Option<String>,
+    pub detail: Option<String>,
+    pub ip: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpsertRecordRuleRequest {
+    pub name: String,
+    pub group_id: GroupId,
+    pub model: String,
+    pub domain: String,
+    pub perm_read: bool,
+    pub perm_write: bool,
+    pub perm_create: bool,
+    pub perm_delete: bool,
 }

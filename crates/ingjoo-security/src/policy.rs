@@ -6,6 +6,7 @@
 
 use anyhow::Result;
 use ingjoo_core::query::domain::{Domain, SqlCondition};
+use ingjoo_core::Dialect;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -60,11 +61,18 @@ impl SecurityPolicy {
         self.record_rules.push(rule);
     }
 
-    /// Layer 1: 检查角色是否有权限执行操作
     pub fn check_access(&self, model: &str, role: &str, op: AccessOp) -> bool {
+        let groups = vec![role.to_string()];
+        self.check_access_groups(model, &groups, op)
+    }
+
+    pub fn check_access_groups(&self, model: &str, groups: &[String], op: AccessOp) -> bool {
+        if groups.is_empty() {
+            return false;
+        }
         for access in &self.model_accesses {
-            if access.model == model && access.role == role {
-                return match op {
+            if access.model == model && groups.iter().any(|g| g == &access.role) {
+                let allowed = match op {
                     AccessOp::Read => access.read,
                     AccessOp::Write => access.write,
                     AccessOp::Create => access.create,
@@ -72,20 +80,29 @@ impl SecurityPolicy {
                     AccessOp::Import => access.import,
                     AccessOp::Export => access.export,
                 };
+                if allowed {
+                    return true;
+                }
             }
         }
         // 未定义规则 → admin 全部放行，其他角色拒绝
-        role == "admin"
+        groups.iter().any(|g| g == "admin")
     }
 
-    /// Layer 2: 获取记录级过滤 Domain
-    ///
-    /// 返回的 SqlCondition 用于追加到查询的 WHERE 子句
     pub fn record_filter(&self, model: &str, role: &str, _user_id: &str, op: &AccessOp) -> SqlCondition {
+        let groups = vec![role.to_string()];
+        self.record_filter_groups(model, &groups, _user_id, op)
+    }
+
+    pub fn record_filter_groups(&self, model: &str, groups: &[String], _user_id: &str, op: &AccessOp) -> SqlCondition {
+        self.record_filter_groups_with_dialect(model, groups, _user_id, op, None)
+    }
+
+    pub fn record_filter_groups_with_dialect(&self, model: &str, groups: &[String], _user_id: &str, op: &AccessOp, dialect: Option<&Dialect>) -> SqlCondition {
         let mut domains: Vec<Domain> = Vec::new();
 
         for rule in &self.record_rules {
-            if rule.model != model || rule.role != role {
+            if rule.model != model || !groups.iter().any(|g| g == &rule.role) {
                 continue;
             }
             let applicable = match op {
@@ -103,9 +120,9 @@ impl SecurityPolicy {
         if domains.is_empty() {
             SqlCondition::empty()
         } else if domains.len() == 1 {
-            domains.remove(0).to_sql(None)
+            domains.remove(0).to_sql_with_dialect(None, dialect)
         } else {
-            Domain::And(domains).to_sql(None)
+            Domain::Or(domains).to_sql_with_dialect(None, dialect)
         }
     }
 
@@ -165,6 +182,12 @@ pub struct RecordRuleDef {
 /// 从数据库构建 SecurityPolicy
 pub struct SecurityBuilder {
     policy: SecurityPolicy,
+}
+
+impl Default for SecurityBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SecurityBuilder {
