@@ -1,0 +1,23 @@
+[package]
+name = "ingjoo-core"
+version.workspace = true
+edition.workspace = true
+description = "莺竹框架核心 — Dialect, Pool, Domain DSL, 身份模型, Store traits, 级联配置"
+license = "MIT"
+keywords = ["ingjoo", "framework", "domain", "crud", "dialect"]
+categories = ["web-programming", "database"]
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+sqlx.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

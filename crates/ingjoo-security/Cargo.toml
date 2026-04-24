@@ -1,0 +1,18 @@
+[package]
+name = "ingjoo-security"
+version.workspace = true
+edition.workspace = true
+description = "莺竹框架安全引擎 — RBAC 三层权限策略 (模型级/记录级/集合隔离)"
+license = "MIT"
+keywords = ["ingjoo", "rbac", "security", "access-control"]
+categories = ["authentication", "web-programming"]
+
+[dependencies]
+ingjoo-core = { path = "../ingjoo-core" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }

@@ -1,0 +1,20 @@
+[package]
+name = "ingjoo-bin"
+version.workspace = true
+edition.workspace = true
+description = "莺竹框架开发入口 — axum 可执行二进制"
+license = "MIT"
+
+[[bin]]
+name = "ingjoo-bin"
+path = "src/main.rs"
+
+[dependencies]
+ingjoo-core = { path = "../ingjoo-core" }
+ingjoo-infra = { path = "../ingjoo-infra", features = ["db", "auth"] }
+tokio.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+axum.workspace = true
+sqlx.workspace = true

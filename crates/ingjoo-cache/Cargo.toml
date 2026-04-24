@@ -1,0 +1,11 @@
+[package]
+name = "ingjoo-cache"
+version.workspace = true
+edition.workspace = true
+description = "莺竹框架缓存 — Moka 泛型缓存统一封装"
+license = "MIT"
+keywords = ["ingjoo", "cache", "moka"]
+categories = ["caching"]
+
+[dependencies]
+moka.workspace = true
