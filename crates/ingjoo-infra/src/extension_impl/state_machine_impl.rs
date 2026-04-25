@@ -228,7 +228,7 @@ mod tests {
     #[tokio::test]
     async fn test_db_state_machine_constructs() {
         let pool = sqlx::AnyPool::connect_lazy("sqlite::memory:").unwrap();
-        let _sm = DbStateMachine::new(pool.into(), Dialect::Sqlite);
+        let _sm = DbStateMachine::new(pool, Dialect::Sqlite);
     }
 
     #[tokio::test]

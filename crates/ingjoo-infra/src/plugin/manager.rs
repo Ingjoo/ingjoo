@@ -154,7 +154,6 @@ impl PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ingjoo_core::module::ModelDescriptor;
 
     fn test_registry() -> Arc<ModelRegistry> {
         Arc::new(ModelRegistry::new())

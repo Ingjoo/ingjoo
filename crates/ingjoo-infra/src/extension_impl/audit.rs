@@ -161,11 +161,9 @@ impl AuditStore for DbAuditStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ingjoo_core::extension::audit::AuditQuery;
-
     #[tokio::test]
     async fn test_db_audit_store_constructs() {
         let pool = sqlx::AnyPool::connect_lazy("sqlite::memory:").unwrap();
-        let _store = DbAuditStore::new(pool.into(), Dialect::Sqlite);
+        let _store = DbAuditStore::new(pool, Dialect::Sqlite);
     }
 }

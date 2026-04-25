@@ -75,6 +75,7 @@ async fn main() -> Result<()> {
         .with_signature(build_signature())
         .with_relation_loader(build_relation_loader(pool.clone(), dialect))
         .with_translation(build_translation(pool.clone(), dialect))
+        .with_search(build_search(pool.clone(), dialect))
         .with_state_machine(build_state_machine(pool, dialect))
         .with_text_splitter(build_text_splitter())
     );
@@ -104,7 +105,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-use ingjoo_core::extension::{AuditStore, ContentFilter, DataMask, SignatureVerifier, RelationLoader, TranslationStore, StateMachine, TextSplitter};
+use ingjoo_core::extension::{AuditStore, ContentFilter, DataMask, SignatureVerifier, RelationLoader, TranslationStore, StateMachine, TextSplitter, SearchEngine};
 use ingjoo_infra::extension_noop::*;
 
 #[cfg(feature = "db")]
@@ -177,6 +178,16 @@ fn build_state_machine(pool: ingjoo_core::pool::Pool, dialect: ingjoo_core::Dial
 #[cfg(not(feature = "db"))]
 fn build_state_machine(_pool: ingjoo_core::pool::Pool, _dialect: ingjoo_core::Dialect) -> Arc<dyn StateMachine> {
     Arc::new(NoopStateMachine)
+}
+
+#[cfg(feature = "db")]
+fn build_search(pool: ingjoo_core::pool::Pool, dialect: ingjoo_core::Dialect) -> Arc<dyn SearchEngine> {
+    Arc::new(ingjoo_infra::extension_impl::DbSearchEngine::new(pool, dialect))
+}
+
+#[cfg(not(feature = "db"))]
+fn build_search(_pool: ingjoo_core::pool::Pool, _dialect: ingjoo_core::Dialect) -> Arc<dyn SearchEngine> {
+    Arc::new(NoopSearchEngine)
 }
 
 fn build_text_splitter() -> Arc<dyn TextSplitter> {

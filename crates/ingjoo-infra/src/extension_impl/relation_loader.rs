@@ -143,6 +143,6 @@ mod tests {
     #[tokio::test]
     async fn test_db_relation_loader_constructs() {
         let pool = sqlx::AnyPool::connect_lazy("sqlite::memory:").unwrap();
-        let _loader = DbRelationLoader::new(pool.into(), Dialect::Sqlite);
+        let _loader = DbRelationLoader::new(pool, Dialect::Sqlite);
     }
 }

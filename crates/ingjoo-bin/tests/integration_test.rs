@@ -119,6 +119,7 @@ async fn get_admin_token(app: &Router, state: &Arc<AppState>) -> String {
         .unwrap()
 }
 
+#[allow(dead_code)]
 async fn get_user_token(app: &Router) -> String {
     let resp = app
         .clone()
@@ -1074,7 +1075,7 @@ async fn test_user_groups_admin() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let groups: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(groups.as_array().unwrap().len() >= 1);
+    assert!(!groups.as_array().unwrap().is_empty());
 }
 
 // ── 模型权限 CRUD (admin) ──
@@ -1126,7 +1127,7 @@ async fn test_model_access_crud_admin() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(list.as_array().unwrap().len() >= 1);
+    assert!(!list.as_array().unwrap().is_empty());
 
     // GET
     let resp = app
@@ -1224,7 +1225,7 @@ async fn test_record_rules_crud_admin() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(list.as_array().unwrap().len() >= 1);
+    assert!(!list.as_array().unwrap().is_empty());
 
     // GET
     let resp = app
@@ -1338,7 +1339,7 @@ async fn test_generic_crud_full_flow() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(list["items"].as_array().unwrap().len() >= 1);
+    assert!(!list["items"].as_array().unwrap().is_empty());
 
     // READ
     let resp = app
@@ -1568,7 +1569,7 @@ async fn test_plugin_unload() {
 
 #[tokio::test]
 async fn test_plugin_requires_admin() {
-    let (app, state) = setup_app_with_plugins().await;
+    let (app, _state) = setup_app_with_plugins().await;
 
     // 注册普通用户（非 admin）
     let resp = app

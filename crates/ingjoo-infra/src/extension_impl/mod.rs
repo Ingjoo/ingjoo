@@ -5,6 +5,7 @@ pub mod text_splitter;
 pub mod vector_inmemory;
 pub mod sanitizer;
 pub mod document_loader;
+pub mod search_engine;
 
 #[cfg(feature = "content-filter")]
 pub mod content_filter;
@@ -32,6 +33,7 @@ pub use text_splitter::CharTextSplitter;
 pub use vector_inmemory::InMemoryVectorStore;
 pub use sanitizer::HtmlInputSanitizer;
 pub use document_loader::FsDocumentLoader;
+pub use search_engine::DbSearchEngine;
 
 #[cfg(feature = "content-filter")]
 pub use content_filter::KeywordContentFilter;

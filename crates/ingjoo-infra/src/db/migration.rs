@@ -352,6 +352,32 @@ fn all_migrations() -> Vec<Migration> {
                 CREATE INDEX IF NOT EXISTS idx_ir_state_record_model ON ir_state_record(model)"#,
             ),
         },
+        Migration {
+            version: 10,
+            name: "search_index",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_search_index (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    model TEXT NOT NULL,
+                    record_id TEXT NOT NULL,
+                    content TEXT NOT NULL DEFAULT '',
+                    data TEXT NOT NULL DEFAULT '{}',
+                    UNIQUE(model, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_search_index_model ON ir_search_index(model)"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_search_index (
+                    id SERIAL PRIMARY KEY,
+                    model VARCHAR NOT NULL,
+                    record_id VARCHAR NOT NULL,
+                    content TEXT NOT NULL DEFAULT '',
+                    data TEXT NOT NULL DEFAULT '{}',
+                    UNIQUE(model, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_search_index_model ON ir_search_index(model)"#,
+            ),
+        },
     ]
 }
 

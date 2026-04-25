@@ -93,7 +93,7 @@ mod tests {
     fn short_document_unchanged() {
         let splitter = CharTextSplitter::new(100, 20);
         let doc = make_doc("hello world");
-        let result = splitter.split(&[doc.clone()]);
+        let result = splitter.split(std::slice::from_ref(&doc));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].content, "hello world");
         assert_eq!(result[0].id, "test");
