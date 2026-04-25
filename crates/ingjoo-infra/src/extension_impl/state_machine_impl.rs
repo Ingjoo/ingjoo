@@ -183,10 +183,156 @@ impl StateMachine for DbStateMachine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ingjoo_core::extension::state_machine::StateMachine;
+
+    async fn setup() -> DbStateMachine {
+        let tmp = tempfile::Builder::new()
+            .prefix("state_machine_test_")
+            .suffix(".db")
+            .tempfile()
+            .unwrap();
+        let db_path = tmp.path().to_str().unwrap().to_string();
+        std::mem::forget(tmp);
+
+        ingjoo_core::pool::install_drivers();
+        let db_url = format!("sqlite://{}?mode=rwc", db_path);
+        let (pool, dialect) = ingjoo_core::pool::connect_pool(&db_url).await.unwrap();
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS ir_state_machine (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                model TEXT NOT NULL UNIQUE,
+                states TEXT NOT NULL DEFAULT '[]',
+                initial_state TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ir_state_transition (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                model TEXT NOT NULL,
+                from_state TEXT NOT NULL,
+                to_state TEXT NOT NULL,
+                label TEXT NOT NULL DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS ir_state_record (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                model TEXT NOT NULL,
+                record_id TEXT NOT NULL,
+                current_state TEXT NOT NULL,
+                UNIQUE(model, record_id)
+            )"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        DbStateMachine::new(pool, dialect)
+    }
 
     #[tokio::test]
     async fn test_db_state_machine_constructs() {
         let pool = sqlx::AnyPool::connect_lazy("sqlite::memory:").unwrap();
         let _sm = DbStateMachine::new(pool.into(), Dialect::Sqlite);
+    }
+
+    #[tokio::test]
+    async fn state_machine_register_and_get_initial() {
+        let sm = setup().await;
+        sm.register_machine(
+            "order",
+            vec!["draft".into(), "confirmed".into(), "done".into()],
+            vec![StateTransition {
+                from: "draft".into(), to: "confirmed".into(), label: "确认".into(),
+            }],
+            "draft".into(),
+        ).await.unwrap();
+
+        let state = sm.get_current_state("order", "O001").await.unwrap();
+        assert_eq!(state, "draft");
+    }
+
+    #[tokio::test]
+    async fn state_machine_transition_flow() {
+        let sm = setup().await;
+        sm.register_machine(
+            "order",
+            vec!["draft".into(), "confirmed".into(), "done".into(), "cancelled".into()],
+            vec![
+                StateTransition { from: "draft".into(), to: "confirmed".into(), label: "确认".into() },
+                StateTransition { from: "confirmed".into(), to: "done".into(), label: "完成".into() },
+                StateTransition { from: "draft".into(), to: "cancelled".into(), label: "取消".into() },
+            ],
+            "draft".into(),
+        ).await.unwrap();
+
+        let new = sm.transition("order", "O001", "confirmed", HashMap::new()).await.unwrap();
+        assert_eq!(new, "confirmed");
+
+        let current = sm.get_current_state("order", "O001").await.unwrap();
+        assert_eq!(current, "confirmed");
+
+        let new2 = sm.transition("order", "O001", "done", HashMap::new()).await.unwrap();
+        assert_eq!(new2, "done");
+    }
+
+    #[tokio::test]
+    async fn state_machine_invalid_transition_rejected() {
+        let sm = setup().await;
+        sm.register_machine(
+            "order",
+            vec!["draft".into(), "done".into()],
+            vec![StateTransition { from: "draft".into(), to: "done".into(), label: "完成".into() }],
+            "draft".into(),
+        ).await.unwrap();
+
+        sm.get_current_state("order", "O001").await.unwrap();
+        let result = sm.transition("order", "O001", "cancelled", HashMap::new()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn state_machine_available_transitions() {
+        let sm = setup().await;
+        sm.register_machine(
+            "order",
+            vec!["draft".into(), "confirmed".into(), "cancelled".into()],
+            vec![
+                StateTransition { from: "draft".into(), to: "confirmed".into(), label: "确认".into() },
+                StateTransition { from: "draft".into(), to: "cancelled".into(), label: "取消".into() },
+            ],
+            "draft".into(),
+        ).await.unwrap();
+
+        sm.get_current_state("order", "O001").await.unwrap();
+        let transitions = sm.get_available_transitions("order", "O001").await.unwrap();
+        assert_eq!(transitions.len(), 2);
+
+        let labels: Vec<&str> = transitions.iter().map(|t| t.label.as_str()).collect();
+        assert!(labels.contains(&"确认"));
+        assert!(labels.contains(&"取消"));
+    }
+
+    #[tokio::test]
+    async fn state_machine_machine_not_found() {
+        let sm = setup().await;
+        let result = sm.get_current_state("nonexistent", "O001").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn state_machine_register_idempotent() {
+        let sm = setup().await;
+        sm.register_machine(
+            "order",
+            vec!["draft".into(), "confirmed".into()],
+            vec![StateTransition { from: "draft".into(), to: "confirmed".into(), label: "确认".into() }],
+            "draft".into(),
+        ).await.unwrap();
+
+        sm.register_machine(
+            "order",
+            vec!["new".into(), "processed".into()],
+            vec![StateTransition { from: "new".into(), to: "processed".into(), label: "处理".into() }],
+            "new".into(),
+        ).await.unwrap();
+
+        let state = sm.get_current_state("order", "O001").await.unwrap();
+        assert_eq!(state, "new");
     }
 }
