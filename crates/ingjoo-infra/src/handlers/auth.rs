@@ -228,11 +228,33 @@ pub async fn update_preferences(
     Ok(Json(prefs))
 }
 
+pub async fn get_me(
+    Extension(current_user): Extension<crate::extractors::CurrentUser>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<UserPublic>, AppError> {
+    let user_id = UserId::new(current_user.user_id);
+    let user = state
+        .store
+        .get_user_by_id(&user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("用户不存在".into()))?;
+    Ok(Json(UserPublic::from(&user)))
+}
+
 pub async fn logout(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RefreshRequest>,
 ) -> Result<StatusCode, AppError> {
     let token_hash = state.auth.refresh_token_hash(&req.refresh_token);
+    // 先检查 token 是否存在，不存在返回错误
+    let exists = state
+        .store
+        .get_refresh_token(&token_hash)
+        .await?
+        .is_some();
+    if !exists {
+        return Err(AppError::Unauthorized("无效的刷新令牌".into()));
+    }
     state.store.delete_refresh_token(&token_hash).await?;
     Ok(StatusCode::NO_CONTENT)
 }

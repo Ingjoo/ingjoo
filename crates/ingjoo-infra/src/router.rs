@@ -48,6 +48,7 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route("/api/captcha", get(handlers::captcha::generate_captcha).post(handlers::captcha::verify_captcha));
 
     let protected_routes = Router::new()
+        .route("/api/auth/me", get(handlers::auth::get_me))
         .route(
             "/api/auth/profile",
             get(handlers::auth::get_profile).put(handlers::auth::update_profile),
