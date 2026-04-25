@@ -1,7 +1,7 @@
 # 改进路线图
 
-> 最后更新：2026-04-24
-> 当前版本：v0.1.0 — 阶段 1-3 已完成
+> 最后更新：2026-04-25
+> 当前版本：v0.1.0 — 阶段 1-5 已完成
 
 ## 现状总览
 
@@ -183,6 +183,22 @@ ingjoo-infra/src/
 
 ---
 
+## 阶段 5：扩展激活 ✅ 已完成
+
+> 目标：激活已有扩展组件、接入安全头、补全 noop 覆盖、集成缓存。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T5.1 | 安全响应头中间件激活 | **P0** | ✅ | `security_headers_middleware` 接入路由 — X-Content-Type-Options、X-Frame-Options、CSP 等 |
+| T5.2 | 5 个缺失 trait 的 noop 实现 | **P0** | ✅ | NoopStateMachine、NoopSearchEngine、NoopPaymentProvider、NoopRelationLoader、NoopTranslationStore |
+| T5.3 | 扩展实现的 feature flag | **P0** | ✅ | Cargo.toml 中 `content-filter`、`data-mask`、`vector-pg`、`signature` feature + aes-gcm 依赖 |
+| T5.4 | FrameworkCache 集成到 AppState | **P1** | ✅ | `cache: Arc<FrameworkCache<SecurityPolicy, ()>>` 加入 AppState，load_security_policy() 缓存策略，权限变更时失效缓存 |
+| T5.5 | ROADMAP 更新 | **P2** | ✅ | 中英文 ROADMAP 均已更新至阶段 5 |
+
+**退出标准**：✅ 所有扩展 trait 有 noop 降级，安全头在每次响应生效，SecurityPolicy 加载走缓存，feature-gated 实现可编译。
+
+---
+
 ## 额外已完成项（不在原 ROADMAP 中）
 
 | 任务 | 描述 |
@@ -196,20 +212,18 @@ ingjoo-infra/src/
 ## 优先级矩阵（下一步）
 
 ```
-阶段 4 进行中
-├── T4.0 菜单+视图+动作元数据 — ✅ ir_menu/ir_view/ir_action + handler + 种子数据
+阶段 5 已完成
+├── T5.1 安全头中间件 — ✅ 接入路由
+├── T5.2 noop 覆盖 — ✅ 14/17 trait 有 noop 降级（3 个始终启用）
+├── T5.3 feature flag — ✅ content-filter、data-mask、vector-pg、signature
+├── T5.4 缓存集成 — ✅ FrameworkCache 接入 AppState + SecurityPolicy 加载
+└── T5.5 ROADMAP — ✅ 已更新
 
-高影响（阶段 4）
-├── T4.1 插件热加载 — ✅ 线程安全 Registry + PluginManifest + PluginManager + 管理 API
-├── T4.2 rustdoc — ✅ 全 crate 公共 API 文档注释
-├── T4.3 性能基准 — ✅ criterion: Domain DSL / Registry / Cache 三组基准
-├── T4.4 完整集成测试 — 🔄 扩展中
-├── T4.5 CLI 管理工具 — ✅ clap 5 参数 + env var 支持
-├── T4.6 多租户隔离测试 — ✅ 6 单元 + 5 集成测试
-
-已完成（低优先级）
-├── T4.7 连接池可观测 — ✅ PoolOptions + PoolStats + health 端点
-└── T4.8 限流中间件 — ✅ 可配置分层限流 (public/protected/admin)
+已完成的阶段
+├── 阶段 1：让框架能跑 — ✅
+├── 阶段 2：让框架可靠 — ✅
+├── 阶段 3：让框架名副其实 — ✅
+└── 阶段 4：让框架可用于生产 — ✅
 ```
 
 ---
@@ -233,8 +247,8 @@ ingjoo-infra/src/
      │        │                │            │
 ┌────▼───┐ ┌──▼────────┐ ┌────▼─────┐ ┌───▼──────┐
 │security│ │   cache   │ │   core   │ │  queue   │
-│ ✅     │ │ ✅ 未使用 │ │ ✅      │ │ ✅ 完成  │
-│已接线  │ │           │ │          │ │ (25测试) │
+│ ✅     │ │ ✅ 已接线 │ │ ✅      │ │ ✅ 完成  │
+│已接线  │ │缓存策略   │ │          │ │ (25测试) │
 └────┬───┘ └────┬──────┘ └────┬─────┘ └───┬──────┘
      │          │              │           │
      └──────────┴──────┬───────┴───────────┘

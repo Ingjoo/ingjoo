@@ -67,6 +67,7 @@ pub async fn create_model_access(
         perm_export: req.perm_export,
     };
     let access = state.store.create_model_access(&access).await?;
+    state.cache.invalidate_scope("policy");
     Ok((StatusCode::CREATED, Json(access)))
 }
 
@@ -101,6 +102,7 @@ pub async fn update_model_access(
     };
     let access = state.store.update_model_access(&id, &access).await?
         .ok_or_else(|| AppError::NotFound("权限规则不存在".into()))?;
+    state.cache.invalidate_scope("policy");
     Ok(Json(access))
 }
 
@@ -112,6 +114,7 @@ pub async fn delete_model_access(
     require_admin(&current_user, &state.store).await?;
     let deleted = state.store.delete_model_access(&id).await?;
     if deleted {
+        state.cache.invalidate_scope("policy");
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(AppError::NotFound("权限规则不存在".into()))
@@ -149,6 +152,7 @@ pub async fn create_record_rule(
         perm_delete: req.perm_delete,
     };
     let rule = state.store.create_record_rule(&rule).await?;
+    state.cache.invalidate_scope("policy");
     Ok((StatusCode::CREATED, Json(rule)))
 }
 
@@ -183,6 +187,7 @@ pub async fn update_record_rule(
     };
     let rule = state.store.update_record_rule(&id, &rule).await?
         .ok_or_else(|| AppError::NotFound("记录规则不存在".into()))?;
+    state.cache.invalidate_scope("policy");
     Ok(Json(rule))
 }
 
@@ -194,6 +199,7 @@ pub async fn delete_record_rule(
     require_admin(&current_user, &state.store).await?;
     let deleted = state.store.delete_record_rule(&id).await?;
     if deleted {
+        state.cache.invalidate_scope("policy");
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(AppError::NotFound("记录规则不存在".into()))

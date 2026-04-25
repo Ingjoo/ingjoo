@@ -5,9 +5,11 @@ use crate::auth::JwtAuthProvider;
 use crate::db::seed;
 use crate::plugin::PluginManager;
 use crate::IngjooStore;
+use ingjoo_cache::FrameworkCache;
 use ingjoo_core::pool::Pool;
 use ingjoo_core::Dialect;
 use ingjoo_core::ModelRegistry;
+use ingjoo_security::SecurityPolicy;
 use tokio::sync::broadcast;
 
 type EventSender = broadcast::Sender<String>;
@@ -50,6 +52,8 @@ pub struct AppState {
     pub plugin_manager: Option<Arc<PluginManager>>,
     /// 限流配置
     pub rate_limit: RateLimitConfig,
+    /// 权限策略缓存
+    pub cache: Arc<FrameworkCache<SecurityPolicy, ()>>,
 }
 
 impl AppState {
@@ -71,6 +75,7 @@ impl AppState {
             start_time: Instant::now(),
             plugin_manager: None,
             rate_limit: RateLimitConfig::default(),
+            cache: Arc::new(FrameworkCache::new()),
         }
     }
 

@@ -1,7 +1,7 @@
 # Improvement Roadmap
 
-> Last updated: 2026-04-24
-> Status: v0.1.0 — Phase 1-2 complete, Phase 3 complete
+> Last updated: 2026-04-25
+> Status: v0.1.0 — Phase 1-4 complete, Phase 5 complete
 
 ## Current State Summary
 
@@ -183,6 +183,44 @@ Design decisions:
 
 ---
 
+## Phase 5: Extension Activation ✅ COMPLETE
+
+> Goal: Activate existing extension components, add security headers, complete noop coverage, integrate cache.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T5.1 | Security headers middleware activation | **P0** | ✅ | `security_headers_middleware` wired into router — X-Content-Type-Options, X-Frame-Options, CSP, etc. |
+| T5.2 | Noop implementations for all 5 remaining traits | **P0** | ✅ | NoopStateMachine, NoopSearchEngine, NoopPaymentProvider, NoopRelationLoader, NoopTranslationStore |
+| T5.3 | Feature flags for extension implementations | **P0** | ✅ | `content-filter`, `data-mask`, `vector-pg`, `signature` features in Cargo.toml + aes-gcm dep |
+| T5.4 | FrameworkCache integration into AppState | **P1** | ✅ | `cache: Arc<FrameworkCache<SecurityPolicy, ()>>` in AppState, SecurityPolicy caching in load_security_policy(), cache invalidation on permission mutations |
+| T5.5 | ROADMAP update | **P2** | ✅ | Both en/zh ROADMAPs updated with Phase 5 |
+
+**Exit criteria**: ✅ All extension traits have noop fallbacks, security headers active on every response, SecurityPolicy loading cached, feature-gated implementations compilable.
+
+### Extension Trait Coverage (Phase 5 final state)
+
+| Trait | Noop | Real Impl | Feature Gate |
+|-------|------|-----------|-------------|
+| `LlmProvider` | ✅ NoopLlmProvider | — | — |
+| `VectorStore` | ✅ NoopVectorStore | InMemoryVectorStore (always), PgVectorStore | `vector-pg` |
+| `DocumentLoader` | ✅ NoopDocumentLoader | — | — |
+| `TextSplitter` | ✅ NoopTextSplitter | — | — |
+| `DataMask` | ✅ NoopDataMask | AesDataMask | `data-mask` |
+| `ContentFilter` | ✅ NoopContentFilter | KeywordContentFilter | `content-filter` |
+| `InputSanitizer` | ✅ NoopInputSanitizer | — | — |
+| `SignatureVerifier` | ✅ NoopSignatureVerifier | HmacSignatureVerifier | `signature` |
+| `AuditStore` | ✅ NoopAuditStore | DbAuditStore | `db` |
+| `StateMachine` | ✅ NoopStateMachine | — | — |
+| `SearchEngine` | ✅ NoopSearchEngine | — | — |
+| `PaymentProvider` | ✅ NoopPaymentProvider | — | — |
+| `RelationLoader` | ✅ NoopRelationLoader | — | — |
+| `TranslationStore` | ✅ NoopTranslationStore | — | — |
+| `EventBus` | — | BroadcastEventBus | always |
+| `IdGenerator` | — | DefaultIdGenerator | always |
+| `Lock` | — | InMemoryLock | always |
+
+---
+
 ## Additional Completed Items (not in original ROADMAP)
 
 | Task | Description |
@@ -196,20 +234,18 @@ Design decisions:
 ## Priority Matrix (Next Steps)
 
 ```
-PHASE 4 IN PROGRESS
-├── T4.0 Menu+View+Action metadata — ✅ ir_menu/ir_view/ir_action + handlers + seed data
+PHASE 5 COMPLETE
+├── T5.1 Security headers — ✅ Wired into router
+├── T5.2 Noop coverage — ✅ 14/17 traits have noop fallbacks (3 always-on impls)
+├── T5.3 Feature flags — ✅ content-filter, data-mask, vector-pg, signature
+├── T5.4 Cache integration — ✅ FrameworkCache wired to AppState + SecurityPolicy loading
+└── T5.5 ROADMAP — ✅ Updated
 
-HIGH IMPACT (Phase 4)
-├── T4.1 Plugin hot-loading — ✅ Thread-safe Registry + PluginManifest + PluginManager + Admin API
-├── T4.2 Rustdoc — ✅ All public API documented
-├── T4.3 Benchmarks — ✅ criterion: Domain DSL / Registry / Cache (3 bench suites)
-├── T4.4 Full integration test suite — 🔄 Expanding
-├── T4.5 CLI management tool — ✅ clap with 5 params + env var support
-├── T4.6 Multi-tenant isolation tests — ✅ 6 unit + 5 integration tests
-
-COMPLETED (Lower priority)
-├── T4.7 Pool observability — ✅ PoolOptions + PoolStats + health endpoint
-└── T4.8 Rate limiting — ✅ Configurable tiered limits (public/protected/admin)
+PREVIOUS PHASES (ALL COMPLETE)
+├── Phase 1: Make It Run — ✅
+├── Phase 2: Make It Reliable — ✅
+├── Phase 3: Make It Real — ✅
+└── Phase 4: Make It Production-Ready — ✅
 ```
 
 ---
@@ -233,8 +269,8 @@ COMPLETED (Lower priority)
      │        │                │            │
 ┌────▼───┐ ┌──▼────────┐ ┌────▼─────┐ ┌───▼──────┐
 │security│ │   cache   │ │   core   │ │  queue   │
-│ ✅     │ │ ✅ unused │ │ ✅      │ │ ✅       │
-│ wired  │ │           │ │          │ │ (25 tests)│
+│ ✅     │ │ ✅ wired  │ │ ✅      │ │ ✅       │
+│ wired  │ │ to Policy │ │          │ │ (25 tests)│
 └────┬───┘ └────┬──────┘ └────┬─────┘ └───┬──────┘
      │          │              │           │
      └──────────┴──────┬───────┴───────────┘

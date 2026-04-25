@@ -58,10 +58,19 @@ async fn check_access_with_audit(
     Ok(())
 }
 
-/// 从数据库加载当前用户的权限策略
+/// 从数据库加载当前用户的权限策略（带缓存）
 async fn load_security_policy(state: &AppState, groups: &[String]) -> Result<SecurityPolicy, AppError> {
     if groups.is_empty() {
         return Ok(SecurityPolicy::new());
+    }
+
+    // 按排序后的 groups 构建缓存键，确保相同组合命中同一缓存
+    let mut sorted_groups = groups.to_vec();
+    sorted_groups.sort();
+    let cache_key = sorted_groups.join(":");
+
+    if let Some(cached) = state.cache.get_scope_access("policy", &cache_key) {
+        return Ok(cached);
     }
 
     // 并行加载 model_access + record_rules
@@ -98,6 +107,8 @@ async fn load_security_policy(state: &AppState, groups: &[String]) -> Result<Sec
             perm_delete: row.perm_delete,
         });
     }
+
+    state.cache.put_scope_access("policy", &cache_key, policy.clone());
 
     Ok(policy)
 }

@@ -7,6 +7,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use crate::handlers;
+use crate::middleware::headers::security_headers_middleware;
 use crate::middleware::permission::require_admin;
 use crate::middleware::ratelimit::{rate_limit_middleware, RateLimiter};
 use crate::middleware::security::auth_middleware;
@@ -108,6 +109,7 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .merge(crud_routes)
         .merge(metadata_read_routes)
         .merge(metadata_admin_routes)
+        .layer(middleware::from_fn(security_headers_middleware))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
