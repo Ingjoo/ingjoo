@@ -37,6 +37,7 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route("/api/health", get(handlers::health::health_check))
         .route("/api/auth/register", post(handlers::auth::register))
         .route("/api/auth/login", post(handlers::auth::login))
+        .route("/api/auth/logout", post(handlers::auth::logout))
         .route("/api/auth/refresh", post(handlers::auth::refresh))
         .route("/ws", any(handlers::ws::ws_handler))
         .route_layer(middleware::from_fn(rate_limit_middleware))
