@@ -270,6 +270,88 @@ fn all_migrations() -> Vec<Migration> {
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)"#,
             ),
         },
+        Migration {
+            version: 8,
+            name: "create_ir_translation_table",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_translation (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    lang TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    field TEXT NOT NULL,
+                    record_id TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    UNIQUE(lang, model, field, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_translation_model ON ir_translation(model);
+                CREATE INDEX IF NOT EXISTS idx_ir_translation_lang_model ON ir_translation(lang, model)"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_translation (
+                    id SERIAL PRIMARY KEY,
+                    lang VARCHAR NOT NULL,
+                    model VARCHAR NOT NULL,
+                    field VARCHAR NOT NULL,
+                    record_id VARCHAR NOT NULL,
+                    value TEXT NOT NULL,
+                    UNIQUE(lang, model, field, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_translation_model ON ir_translation(model);
+                CREATE INDEX IF NOT EXISTS idx_ir_translation_lang_model ON ir_translation(lang, model)"#,
+            ),
+        },
+        Migration {
+            version: 9,
+            name: "create_ir_state_machine_tables",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_state_machine (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    model TEXT NOT NULL UNIQUE,
+                    states TEXT NOT NULL DEFAULT '[]',
+                    initial_state TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS ir_state_transition (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    model TEXT NOT NULL,
+                    from_state TEXT NOT NULL,
+                    to_state TEXT NOT NULL,
+                    label TEXT NOT NULL DEFAULT ''
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_state_transition_model ON ir_state_transition(model);
+                CREATE TABLE IF NOT EXISTS ir_state_record (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    model TEXT NOT NULL,
+                    record_id TEXT NOT NULL,
+                    current_state TEXT NOT NULL,
+                    UNIQUE(model, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_state_record_model ON ir_state_record(model)"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_state_machine (
+                    id SERIAL PRIMARY KEY,
+                    model VARCHAR NOT NULL UNIQUE,
+                    states TEXT NOT NULL DEFAULT '[]',
+                    initial_state VARCHAR NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS ir_state_transition (
+                    id SERIAL PRIMARY KEY,
+                    model VARCHAR NOT NULL,
+                    from_state VARCHAR NOT NULL,
+                    to_state VARCHAR NOT NULL,
+                    label VARCHAR NOT NULL DEFAULT ''
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_state_transition_model ON ir_state_transition(model);
+                CREATE TABLE IF NOT EXISTS ir_state_record (
+                    id SERIAL PRIMARY KEY,
+                    model VARCHAR NOT NULL,
+                    record_id VARCHAR NOT NULL,
+                    current_state VARCHAR NOT NULL,
+                    UNIQUE(model, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_state_record_model ON ir_state_record(model)"#,
+            ),
+        },
     ]
 }
 

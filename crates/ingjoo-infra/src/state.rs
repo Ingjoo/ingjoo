@@ -13,6 +13,7 @@ use ingjoo_core::extension::{
     AuditStore, ContentFilter, DataMask, DocumentLoader, InputSanitizer,
     LlmProvider, PaymentProvider, RelationLoader, SearchEngine, SignatureVerifier,
     StateMachine, TextSplitter, TranslationStore, VectorStore,
+    EventBus, IdGenerator, Lock,
 };
 use ingjoo_core::pool::Pool;
 use ingjoo_core::Dialect;
@@ -97,6 +98,14 @@ pub struct AppState {
     pub translation: Arc<dyn TranslationStore>,
     /// 向量存储
     pub vector: Arc<dyn VectorStore>,
+
+    // ── 常驻扩展 trait（无 noop，始终有真实实现） ──
+    /// 事件总线
+    pub event_bus: Arc<dyn EventBus>,
+    /// ID 生成器
+    pub id_generator: Arc<dyn IdGenerator>,
+    /// 分布式锁
+    pub lock: Arc<dyn Lock>,
 }
 
 impl AppState {
@@ -138,6 +147,10 @@ impl AppState {
             relation_loader: Arc::new(NoopRelationLoader),
             translation: Arc::new(NoopTranslationStore),
             vector: Arc::new(NoopVectorStore),
+
+            event_bus: Arc::new(crate::extension_impl::BroadcastEventBus::new(256)),
+            id_generator: Arc::new(crate::extension_impl::DefaultIdGenerator::new()),
+            lock: Arc::new(crate::extension_impl::InMemoryLock::new()),
         }
     }
 
@@ -231,6 +244,21 @@ impl AppState {
 
     pub fn with_vector(mut self, store: Arc<dyn VectorStore>) -> Self {
         self.vector = store;
+        self
+    }
+
+    pub fn with_event_bus(mut self, bus: Arc<dyn EventBus>) -> Self {
+        self.event_bus = bus;
+        self
+    }
+
+    pub fn with_id_generator(mut self, gen: Arc<dyn IdGenerator>) -> Self {
+        self.id_generator = gen;
+        self
+    }
+
+    pub fn with_lock(mut self, lock: Arc<dyn Lock>) -> Self {
+        self.lock = lock;
         self
     }
 }
