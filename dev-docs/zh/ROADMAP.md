@@ -1,7 +1,7 @@
 # 改进路线图
 
-> 最后更新：2026-04-25
-> 当前版本：v0.1.0 — 阶段 1-7.5 已完成，阶段 8 进行中
+> 最后更新：2026-04-26
+> 当前版本：v0.1.0 — 阶段 1-8 已完成
 
 ## 现状总览
 
@@ -245,9 +245,9 @@ ingjoo-infra/src/
 
 ---
 
-## 阶段 8：DbSearchEngine + 集成测试 🔧 进行中
+## 阶段 8：DbSearchEngine + 集成测试 + QA ✅ 已完成
 
-> 目标：实现 DB 后端全文搜索引擎，接入 HTTP 搜索端点，编写端到端集成测试。
+> 目标：实现 DB 后端全文搜索引擎，接入 HTTP 搜索端点，QA 验证，修复发现的问题。
 
 | # | 任务 | 优先级 | 状态 | 交付物 |
 |---|------|--------|------|--------|
@@ -256,7 +256,11 @@ ingjoo-infra/src/
 | T8.3 | UTF-8 修复 | **P0** | ✅ | `extract_highlights` char 边界对齐（`floor_char_boundary`/`ceil_char_boundary`） |
 | T8.4 | Clippy 清零 | **P0** | ✅ | 0 警告（derive_test dead_code + integration_test is_empty） |
 | T8.5 | 搜索集成测试 | **P0** | ✅ | 3 个测试：匹配/无匹配/空查询（380 个测试总计） |
-| T8.6 | 文档同步 | **P1** | 🔧 | ROADMAP + AGENTS.md |
+| T8.6 | 文档同步 | **P1** | ✅ | ROADMAP + AGENTS.md + QA 报告 |
+| T8.7 | QA 系统化测试 | **P0** | ✅ | 18 个端点/页面测试，健康评分 58/100 |
+| T8.8 | QA 修复：logout 路由注册 | **P0** | ✅ | `POST /api/auth/logout` 路由注册 + 失效 token 校验 |
+| T8.9 | QA 修复：/api/auth/me 端点 | **P0** | ✅ | 新增 `get_me` handler，返回当前用户 `UserPublic` |
+| T8.10 | 种子数据激活 | **P1** | ✅ | `seed_metadata()` 调用接入 `run_migrations()` |
 
 ---
 
@@ -267,6 +271,27 @@ ingjoo-infra/src/
 | Postgres 兼容 | `Dialect` 支持 SQLite + Postgres 双后端（placeholder、时间函数、自增主键、DDL 分割） |
 | Group 权限系统 | `groups` + `group_implied` + `user_groups` 表，完整的分组管理 CRUD API |
 | 记录级权限过滤 | CRUD handler 已接入 `SecurityPolicy`，从 DB 实时加载 model_access + record_rule |
+| PG boolean 适配 | `Dialect::bool_true()`/`bool_false()` 在 menu/view/action handler 中（7 处 SQL） |
+| Captcha 验证码 | `handlers/captcha.rs` — 生成/验证 captcha 图片（feature-gated `captcha`） |
+| 用户偏好 API | `GET/PUT /api/auth/preferences` — theme/language/notification_channels 持久化 |
+| 修改密码 API | `POST /api/auth/change-password` — 验证当前密码 + 更新 |
+| 当前用户 API | `GET /api/auth/me` — 返回当前用户 `UserPublic`（前端刷新验证用） |
+| 安全 logout | `POST /api/auth/logout` — 删除 refresh token + 失效 token 二次调用校验 |
+| 种子数据激活 | `seed_metadata()` 接入 `run_migrations()` — 菜单/视图/动作自动填充 |
+
+---
+
+## 阶段 9：前端对接 🔧 待开始
+
+> 目标：修复前端与后端 API 的对接问题，提高 QA 健康评分。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T9.1 | /register 页面修复 | **P0** | 📋 | 注册表单组件，非登录表单复用 |
+| T9.2 | Auth token 持久化 | **P0** | 📋 | localStorage/cookie 存储 JWT，页面刷新保持登录 |
+| T9.3 | /api/auth/me 前端对接 | **P0** | 📋 | 页面加载时调用 /me 验证 token，恢复用户状态 |
+| T9.4 | 通知 API 后端实现 | **P1** | 📋 | notification CRUD 端点 + 未读计数 |
+| T9.5 | /admin, /search 页面实现 | **P2** | 📋 | 基础管理后台 + 全文搜索页面 |
 
 ---
 
@@ -279,14 +304,24 @@ ingjoo-infra/src/
 ├── T7.5.3 state.rs 真实默认值 — ✅ sanitizer/document_loader/text_splitter
 └── T7.5.4 集成测试 — ✅ 7 个 translation + 7 个 state_machine 测试
 
-阶段 8 进行中（380 个测试，0 失败，0 个 clippy 警告）
-├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索，ir_search_index 表（10 个单元测试）
-├── T8.2 搜索接线 — ✅ build_search() + with_search() 在 main.rs 中
-├── T8.3 UTF-8 修复 — ✅ extract_highlights char 边界对齐
+阶段 8 已完成（349 个测试，0 clippy 警告）
+├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索
+├── T8.2 搜索接线 — ✅ build_search() + with_search()
+├── T8.3 UTF-8 修复 — ✅ char 边界对齐
 ├── T8.4 Clippy 清零 — ✅ 0 警告
-├── T8.5 搜索集成测试 — ✅ 3 个测试（匹配/无匹配/空查询）
-└── T8.6 文档同步 — 🔧 ROADMAP + AGENTS.md
-└── T7.5.4 集成测试 — ✅ 7 个 translation + 7 个 state_machine 测试
+├── T8.5 搜索集成测试 — ✅ 3 个测试
+├── T8.6 文档同步 — ✅ ROADMAP + AGENTS.md
+├── T8.7 QA 测试 — ✅ 18 端点/页面，健康评分 58/100
+├── T8.8 Logout 路由 — ✅ 注册 + 失效校验
+├── T8.9 /api/auth/me — ✅ 当前用户信息
+└── T8.10 种子数据 — ✅ seed_metadata() 接入 run_migrations()
+
+阶段 9 待开始（前端对接）
+├── T9.1 /register 页面 — 📋 注册表单
+├── T9.2 Auth 持久化 — 📋 localStorage/cookie
+├── T9.3 /me 前端对接 — 📋 token 验证恢复
+├── T9.4 通知 API — 📋 后端实现
+└── T9.5 admin/search 页面 — 📋 基础页面
 
 阶段 7 已完成
 ├── T7.1 EventBus — ✅ tokio broadcast
