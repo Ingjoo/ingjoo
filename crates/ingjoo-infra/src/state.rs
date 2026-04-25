@@ -132,14 +132,14 @@ impl AppState {
             rate_limit: RateLimitConfig::default(),
             cache: Arc::new(FrameworkCache::new()),
 
-            // 扩展 trait — 默认 noop
+            // 扩展 trait — 有真实实现的用真实默认，其余 noop
             audit: Arc::new(NoopAuditStore),
             content_filter: Arc::new(NoopContentFilter),
             data_mask: Arc::new(NoopDataMask),
-            document_loader: Arc::new(NoopDocumentLoader),
-            text_splitter: Arc::new(NoopTextSplitter),
+            document_loader: Arc::new(crate::extension_impl::FsDocumentLoader::default()),
+            text_splitter: Arc::new(crate::extension_impl::CharTextSplitter::default()),
             llm: Arc::new(NoopLlmProvider),
-            sanitizer: Arc::new(NoopInputSanitizer),
+            sanitizer: Arc::new(crate::extension_impl::HtmlInputSanitizer::default()),
             signature: Arc::new(NoopSignatureVerifier),
             state_machine: Arc::new(NoopStateMachine),
             search: Arc::new(NoopSearchEngine),
