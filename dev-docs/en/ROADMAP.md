@@ -1,21 +1,21 @@
 # Improvement Roadmap
 
 > Last updated: 2026-04-25
-> Status: v0.1.0 — Phase 1-4 complete, Phase 5 complete
+> Status: v0.1.0 — Phase 1-6 complete, Phase 7 complete, Phase 7.5 complete
 
 ## Current State Summary
 
 | Crate | Lines | Tests | Maturity | Status |
 |-------|-------|-------|----------|--------|
 | `ingjoo-core` | 2,137 | 68 | **Mature** | Domain DSL, Store traits, Dialect — production-ready |
-| `ingjoo-infra` | 5,539 | 60 | **Mature** | Full DB impl, auth, storage, handlers, middleware, router |
+| `ingjoo-infra` | 5,900 | 125 | **Mature** | Full DB impl, auth, storage, handlers, middleware, router, 14 extension impls |
 | `ingjoo-security` | 478 | 16 | **Mature** | 3-layer RBAC engine — wired to CRUD handlers |
 | `ingjoo-cache` | 216 | 5 | **Complete** | Moka-based caching — working |
 | `ingjoo-queue` | 1,168 | 25 | **Complete** | In-memory + SQL queue, WorkerPool, retry policy, cron scheduler |
 | `ingjoo-bin` | 306 | 7 | **Working** | Full axum router with integration tests passing |
 | `ingjoo-macros` | 180 | 4 | **Working** | `#[derive(IngjooModel)]` proc macro for ModelDescriptor generation |
 
-**Total**: ~10,024 lines, 334 tests, 64 source files.
+**Total**: ~10,500 lines, 370 tests, 66 source files.
 
 ---
 
@@ -216,6 +216,35 @@ Design decisions:
 
 ---
 
+## Phase 7: Extension Implementation ✅ COMPLETE
+
+> Goal: Implement real DB-backed extension traits to replace noop stubs — EventBus, IdGenerator, Lock, RelationLoader, TranslationStore, StateMachine, CharTextSplitter. Wire into state.rs and main.rs.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T7.1 | EventBus (in-process broadcast) | **P0** | ✅ | `event_bus_impl.rs` — tokio broadcast channel, async subscriber dispatch |
+| T7.2 | IdGenerator (UUID v4) | **P0** | ✅ | `id_generator_impl.rs` — uuid::Uuid::new_v4() |
+| T7.3 | Lock (DB advisory lock) | **P0** | ✅ | `lock_impl.rs` — SQLite-based mutex with expiration |
+| T7.4 | DbRelationLoader | **P1** | ✅ | `relation_loader_impl.rs` — batch load Many2one relations with display_name |
+| T7.5 | DbTranslationStore | **P1** | ✅ | `translation.rs` — ir_translation table, set/get/batch/remove/list_languages |
+| T7.6 | DbStateMachine | **P1** | ✅ | `state_machine_impl.rs` — ir_state_machine/transition/record tables, register/transition/query |
+| T7.7 | CharTextSplitter | **P1** | ✅ | `text_splitter_impl.rs` — character-count chunking with overlap |
+| T7.8 | Migrations v8/v9 | **P0** | ✅ | DDL for ir_translation, ir_state_machine, ir_state_transition, ir_state_record |
+| T7.9 | state.rs wiring + main.rs | **P0** | ✅ | Real defaults for all implemented traits, feature-gated in main.rs |
+
+**Exit criteria**: ✅ 6 extension traits have DB-backed implementations, CharTextSplitter implemented, 370 tests passing, 0 clippy warnings.
+
+### Phase 7.5: Additional Extension Implementations ✅ COMPLETE
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T7.5.1 | HtmlInputSanitizer | **P1** | ✅ | `sanitizer.rs` — tag whitelist, content suppression for blocked tags, attribute stripping |
+| T7.5.2 | FsDocumentLoader | **P1** | ✅ | `document_loader.rs` — recursive file scanning, 10MB limit, metadata extraction |
+| T7.5.3 | state.rs real defaults | **P0** | ✅ | sanitizer/document_loader/text_splitter use real impls instead of noop |
+| T7.5.4 | Integration tests | **P0** | ✅ | 7 translation + 7 state_machine tests using tempfile-based SQLite |
+
+---
+
 ## Additional Completed Items (not in original ROADMAP)
 
 | Task | Description |
@@ -229,6 +258,23 @@ Design decisions:
 ## Priority Matrix (Next Steps)
 
 ```
+PHASE 7.5 COMPLETE (370 tests, 0 failures, 0 clippy warnings)
+├── T7.5.1 HtmlInputSanitizer — ✅ tag whitelist + content suppression
+├── T7.5.2 FsDocumentLoader — ✅ recursive file scanning, 10MB limit
+├── T7.5.3 state.rs real defaults — ✅ sanitizer/document_loader/text_splitter
+└── T7.5.4 Integration tests — ✅ 7 translation + 7 state_machine tests
+
+PHASE 7 COMPLETE
+├── T7.1 EventBus — ✅ tokio broadcast
+├── T7.2 IdGenerator — ✅ UUID v4
+├── T7.3 Lock — ✅ SQLite advisory lock
+├── T7.4 DbRelationLoader — ✅ batch Many2one
+├── T7.5 DbTranslationStore — ✅ ir_translation CRUD
+├── T7.6 DbStateMachine — ✅ register/transition/query
+├── T7.7 CharTextSplitter — ✅ char-count chunking
+├── T7.8 Migrations v8/v9 — ✅ DDL
+└── T7.9 Wiring — ✅ state.rs + main.rs
+
 PHASE 6 COMPLETE
 ├── T6.1 AppState trait wiring — ✅ 14 fields + noop defaults + builder methods
 ├── T6.2 Conditional compilation — ✅ feature-gated build_xxx() + ingjoo-bin feature forwarding

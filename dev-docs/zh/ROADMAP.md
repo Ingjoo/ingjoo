@@ -1,21 +1,21 @@
 # 改进路线图
 
 > 最后更新：2026-04-25
-> 当前版本：v0.1.0 — 阶段 1-5 已完成
+> 当前版本：v0.1.0 — 阶段 1-7.5 已完成
 
 ## 现状总览
 
 | Crate | 代码行数 | 测试数 | 成熟度 | 状态 |
 |-------|---------|--------|--------|------|
 | `ingjoo-core` | 2,137 | 68 | **成熟** | Domain DSL、Store trait、Dialect — 可用于生产 |
-| `ingjoo-infra` | 5,539 | 60 | **成熟** | DB 实现、认证、存储、handler、中间件、路由 |
+| `ingjoo-infra` | 5,900 | 125 | **成熟** | DB 实现、认证、存储、handler、中间件、路由、14 个扩展实现 |
 | `ingjoo-security` | 478 | 16 | **成熟** | 三层 RBAC 引擎，已接线到 CRUD handler |
 | `ingjoo-cache` | 216 | 5 | **完整** | Moka 缓存可用 |
 | `ingjoo-queue` | 1,168 | 25 | **已完成** | 内存/SQL 双后端队列、WorkerPool、重试策略、Cron 调度器 |
 | `ingjoo-bin` | 306 | 7 | **可用** | 完整 axum 路由、集成测试通过 |
 | `ingjoo-macros` | 180 | 4 | **可用** | `#[derive(IngjooModel)]` 派生宏，自动生成 ModelDescriptor |
 
-**合计**：约 10,024 行代码，334 个测试，64 个源文件。
+**合计**：约 10,500 行代码，370 个测试，66 个源文件。
 
 ---
 
@@ -216,6 +216,35 @@ ingjoo-infra/src/
 
 ---
 
+## 阶段 7：扩展实现 ✅ 已完成
+
+> 目标：实现真实的 DB 后端扩展 trait，替换 noop 桩 — EventBus、IdGenerator、Lock、RelationLoader、TranslationStore、StateMachine、CharTextSplitter。接入 state.rs 和 main.rs。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T7.1 | EventBus（进程内广播） | **P0** | ✅ | `event_bus_impl.rs` — tokio broadcast channel，异步订阅者分发 |
+| T7.2 | IdGenerator（UUID v4） | **P0** | ✅ | `id_generator_impl.rs` — uuid::Uuid::new_v4() |
+| T7.3 | Lock（DB 顾问锁） | **P0** | ✅ | `lock_impl.rs` — 基于 SQLite 的互斥锁，带过期时间 |
+| T7.4 | DbRelationLoader | **P1** | ✅ | `relation_loader_impl.rs` — 批量加载 Many2one 关系及 display_name |
+| T7.5 | DbTranslationStore | **P1** | ✅ | `translation.rs` — ir_translation 表，set/get/batch/remove/list_languages |
+| T7.6 | DbStateMachine | **P1** | ✅ | `state_machine_impl.rs` — ir_state_machine/transition/record 表，注册/转换/查询 |
+| T7.7 | CharTextSplitter | **P1** | ✅ | `text_splitter_impl.rs` — 字符计数分块，带重叠 |
+| T7.8 | 迁移 v8/v9 | **P0** | ✅ | ir_translation、ir_state_machine、ir_state_transition、ir_state_record DDL |
+| T7.9 | state.rs 接线 + main.rs | **P0** | ✅ | 所有已实现 trait 使用真实默认值，main.rs 中 feature-gated |
+
+**退出标准**：✅ 6 个扩展 trait 有 DB 后端实现，CharTextSplitter 已实现，370 个测试通过，0 个 clippy 警告。
+
+### 阶段 7.5：额外扩展实现 ✅ 已完成
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T7.5.1 | HtmlInputSanitizer | **P1** | ✅ | `sanitizer.rs` — 标签白名单、被阻标签内容抑制、属性剥离 |
+| T7.5.2 | FsDocumentLoader | **P1** | ✅ | `document_loader.rs` — 递归文件扫描，10MB 限制，元数据提取 |
+| T7.5.3 | state.rs 真实默认值 | **P0** | ✅ | sanitizer/document_loader/text_splitter 使用真实实现替代 noop |
+| T7.5.4 | 集成测试 | **P0** | ✅ | 7 个 translation + 7 个 state_machine 测试（基于 tempfile SQLite） |
+
+---
+
 ## 额外已完成项（不在原 ROADMAP 中）
 
 | 任务 | 描述 |
@@ -229,6 +258,23 @@ ingjoo-infra/src/
 ## 优先级矩阵（下一步）
 
 ```
+阶段 7.5 已完成（370 个测试，0 失败，0 个 clippy 警告）
+├── T7.5.1 HtmlInputSanitizer — ✅ 标签白名单 + 内容抑制
+├── T7.5.2 FsDocumentLoader — ✅ 递归文件扫描，10MB 限制
+├── T7.5.3 state.rs 真实默认值 — ✅ sanitizer/document_loader/text_splitter
+└── T7.5.4 集成测试 — ✅ 7 个 translation + 7 个 state_machine 测试
+
+阶段 7 已完成
+├── T7.1 EventBus — ✅ tokio broadcast
+├── T7.2 IdGenerator — ✅ UUID v4
+├── T7.3 Lock — ✅ SQLite 顾问锁
+├── T7.4 DbRelationLoader — ✅ 批量 Many2one
+├── T7.5 DbTranslationStore — ✅ ir_translation CRUD
+├── T7.6 DbStateMachine — ✅ 注册/转换/查询
+├── T7.7 CharTextSplitter — ✅ 字符计数分块
+├── T7.8 迁移 v8/v9 — ✅ DDL
+└── T7.9 接线 — ✅ state.rs + main.rs
+
 阶段 6 已完成
 ├── T6.1 AppState 扩展 trait — ✅ 14 个字段 + noop 默认 + builder 方法
 ├── T6.2 条件编译 — ✅ feature-gated build_xxx() + ingjoo-bin feature 转发
