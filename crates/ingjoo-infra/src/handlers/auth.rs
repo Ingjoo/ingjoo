@@ -47,7 +47,7 @@ pub async fn register(
     }
     let groups = state.store.resolve_all_groups(&user.id).await.unwrap_or_else(|_| vec!["user".to_string()]);
 
-    let access_token = state.auth.create_access_token(&user.id.0, &user.role, &groups)?;
+    let access_token = state.auth.create_access_token(&user.id.0, &user.role, &groups, None)?;
     let refresh_token = state.auth.create_refresh_token();
     let token_hash = state.auth.refresh_token_hash(&refresh_token);
     let expires_at = state.auth.refresh_expires_at();
@@ -87,7 +87,7 @@ pub async fn login(
         return Err(AppError::Unauthorized("邮箱或密码错误".into()));
     }
     let groups = state.store.resolve_all_groups(&user.id).await.unwrap_or_else(|_| vec![user.role.clone()]);
-    let access_token = state.auth.create_access_token(&user.id.0, &user.role, &groups)?;
+    let access_token = state.auth.create_access_token(&user.id.0, &user.role, &groups, req.database.as_deref())?;
     let refresh_token = state.auth.create_refresh_token();
     let token_hash = state.auth.refresh_token_hash(&refresh_token);
     let expires_at = state.auth.refresh_expires_at();
@@ -125,7 +125,7 @@ pub async fn refresh(
         .ok_or_else(|| AppError::Unauthorized("用户不存在".into()))?;
     state.store.delete_refresh_token(&token_hash).await?;
     let groups = state.store.resolve_all_groups(&user.id).await.unwrap_or_else(|_| vec![user.role.clone()]);
-    let access_token = state.auth.create_access_token(&user.id.0, &user.role, &groups)?;
+    let access_token = state.auth.create_access_token(&user.id.0, &user.role, &groups, None)?;
     let new_refresh = state.auth.create_refresh_token();
     let new_hash = state.auth.refresh_token_hash(&new_refresh);
     let expires_at = state.auth.refresh_expires_at();

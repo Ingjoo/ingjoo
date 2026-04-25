@@ -6,6 +6,8 @@ use axum::extract::Request;
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
+use serde_json::json;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
@@ -82,7 +84,11 @@ pub async fn rate_limit_middleware(
     if !limiter.check(&key).await {
         return (
             StatusCode::TOO_MANY_REQUESTS,
-            "请求过于频繁，请稍后再试",
+            Json(json!({
+                "error": "请求过于频繁，请稍后再试",
+                "code": "RATE_LIMITED",
+                "status": 429,
+            })),
         )
             .into_response();
     }

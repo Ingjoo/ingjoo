@@ -63,18 +63,32 @@ ingjoo/
     │   └── src/
     │       ├── lib.rs          #   Feature-gated 模块导出
     │       ├── config.rs       #   基础设施配置
-    │       ├── router.rs       #   axum 路由 (CORS + Trace)
+    │       ├── state.rs        #   AppState（含 14 个扩展 trait + cache）
+    │       ├── router.rs       #   axum 路由 (CORS + Trace + 安全头)
     │       ├── auth/mod.rs     #   JWT 认证 + Argon2 密码
     │       ├── db/
     │       │   ├── mod.rs      #   Store trait 的 sqlx 实现
+    │       │   ├── database_manager.rs  #   多数据库管理（DatabaseManager）
     │       │   ├── mock.rs     #   Mock 数据库 (测试用)
     │       │   └── models.rs   #   Re-export core 模型
     │       ├── email/mod.rs    #   SMTP 邮件发送
     │       ├── sms/mod.rs      #   短信发送 (腾讯云)
     │       ├── storage/mod.rs  #   文件存储 (本地/S3)
     │       ├── captcha/mod.rs  #   图片验证码
+    │       ├── handlers/
+    │       │   ├── auth.rs     #   认证 handler (注册/登录/刷新/资料)
+    │       │   ├── crud.rs     #   通用 CRUD handler (动态模型)
+    │       │   ├── database.rs #   数据库管理 handler
+    │       │   ├── attachment.rs # 附件上传 handler
+    │       │   ├── menu.rs     #   菜单管理 handler
+    │       │   ├── view.rs     #   视图管理 handler
+    │       │   ├── action.rs   #   动作管理 handler
+    │       │   ├── schedule.rs #   定时任务 handler
+    │       │   └── permission.rs # 权限管理 handler
     │       └── middleware/
     │           ├── mod.rs
+    │           ├── database_selector.rs  #   多数据库选择中间件
+    │           ├── security.rs  #   安全策略中间件
     │           └── error.rs   #   AppError → HTTP 状态码映射
     │
     ├── ingjoo-macros/          # 过程宏 (预留，当前为空壳)
@@ -112,7 +126,7 @@ ingjoo-core ──────────────────────�
 
 | 模块 | 职责 |
 |------|------|
-| `db/traits.rs` | Store trait 层次结构：`UserStore`, `TokenStore`, `ScaffStore` 等 8 个原子 trait + 1 个聚合 trait |
+| `db/traits.rs` | Store trait 层次结构：`UserStore`, `TokenStore`, `IngjooStore` 等 8 个原子 trait + 1 个聚合 trait + `GroupStore`/`AccessStore` |
 | `db/models.rs` | 数据模型 (`User`, `Attachment`, `ModuleSetting`) + DTO (`UserPublic`, `RegisterRequest`) |
 | `db/ids.rs` | `define_id!` 宏 — 类型安全 ID（`UserId` 等） |
 | `query/domain.rs` | Domain DSL — 13 种操作符的声明式查询表达式 → SQL WHERE 编译器 |
@@ -172,7 +186,7 @@ Handler 函数
     │         SecurityPolicy.collection_isolation() (集合级)
     │
     ▼
-Arc<dyn ScaffStore> (trait object)
+Arc<dyn IngjooStore> (trait object)
     │
     ▼
 Db (sqlx 实现)
@@ -188,15 +202,15 @@ SQLite / PostgreSQL
 UserStore ───────┐
 TokenStore ──────┤
 CaptchaStore ────┤
-SmsCodeStore ────┼──→ ScaffStore (聚合 trait, blanket impl)
+SmsCodeStore ────┼──→ IngjooStore (聚合 trait, blanket impl)
 SettingsStore ───┤        │
-PreferenceStore ─┤        └──→ ScaffTransaction (+ 事务方法)
+PreferenceStore ─┤        └──→ IngjooTransaction (+ 事务方法)
 AttachmentStore ─┤
 ModuleSettingStore┘
 ```
 
 - 每个存储能力一个独立 trait
-- `ScaffStore` 聚合所有 trait，作为 `Arc<dyn ScaffStore>` 使用
+- `IngjooStore` 聚合所有 trait，作为 `Arc<dyn IngjooStore>` 使用
 - 添加新能力：定义新 trait → 加入聚合约束列表 → 在 `Db` 上实现
 
 ## 数据库模式
@@ -265,7 +279,7 @@ cargo build --features ingjoo-infra/full
 
 ## 测试
 
-- **85 个测试**，全部为内联单元测试（`#[cfg(test)] mod tests`）
+- **334 个测试**，全部为内联单元测试（`#[cfg(test)] mod tests`）
 - 同步测试用 `#[test]`，异步用 `#[tokio::test]`
 - 无集成测试目录
 - Mock 通过手写 struct + `#[async_trait]` impl 实现

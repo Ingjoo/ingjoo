@@ -9,9 +9,18 @@ license = "MIT"
 name = "ingjoo-bin"
 path = "src/main.rs"
 
+[features]
+default = ["db", "auth"]
+db = ["ingjoo-infra/db"]
+auth = ["ingjoo-infra/auth"]
+content-filter = ["ingjoo-infra/content-filter"]
+data-mask = ["ingjoo-infra/data-mask"]
+signature = ["ingjoo-infra/signature"]
+full = ["db", "auth", "content-filter", "data-mask", "signature"]
+
 [dependencies]
 ingjoo-core = { path = "../ingjoo-core" }
-ingjoo-infra = { path = "../ingjoo-infra", features = ["db", "auth"] }
+ingjoo-infra = { path = "../ingjoo-infra" }
 tokio.workspace = true
 anyhow.workspace = true
 tracing.workspace = true

@@ -2,19 +2,19 @@ use std::sync::Arc;
 
 use axum::extract::Request;
 use axum::extract::State;
-use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 
 use crate::auth::AuthProvider;
 use crate::extractors::CurrentUser;
+use crate::middleware::error::AppError;
 use crate::AppState;
 
 pub async fn auth_middleware(
     State(state): State<Arc<AppState>>,
     mut request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, AppError> {
     let auth_header = request
         .headers()
         .get(axum::http::header::AUTHORIZATION)
@@ -28,14 +28,15 @@ pub async fn auth_middleware(
                         user_id: claims.sub,
                         role: claims.role,
                         groups: claims.groups,
+                        database: claims.database,
                     },
-                    Err(_) => return Err(StatusCode::UNAUTHORIZED),
+                    Err(_) => return Err(AppError::Unauthorized("未认证".into())),
                 }
             } else {
-                return Err(StatusCode::UNAUTHORIZED);
+                return Err(AppError::Unauthorized("未认证".into()));
             }
         }
-        None => return Err(StatusCode::UNAUTHORIZED),
+        None => return Err(AppError::Unauthorized("未认证".into())),
     };
 
     request.extensions_mut().insert(current_user);

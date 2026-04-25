@@ -59,7 +59,13 @@ impl From<sqlx::Error> for StoreError {
             sqlx::Error::RowNotFound => StoreError::NotFound("record".into()),
             sqlx::Error::Database(db_err) => {
                 let msg = db_err.message().to_string();
-                if msg.contains("UNIQUE constraint") {
+                // SQLite: "UNIQUE constraint failed: users.email"
+                // PostgreSQL: "duplicate key value violates unique constraint"
+                // PG error code: 23505
+                let is_unique = msg.contains("UNIQUE constraint")
+                    || msg.contains("duplicate key")
+                    || db_err.code().map(|c| c == "23505").unwrap_or(false);
+                if is_unique {
                     StoreError::UniqueViolation {
                         table: String::new(),
                         column: String::new(),

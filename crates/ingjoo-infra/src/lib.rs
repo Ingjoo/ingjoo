@@ -37,6 +37,8 @@ pub use db::ids::UserId;
 pub use db::traits::{StoreError, StoreResult, UserStore, TokenStore, CaptchaStore, SmsCodeStore, SettingsStore, PreferenceStore, AttachmentStore, ModuleSettingStore, IngjooStore, IngjooTransaction};
 #[cfg(feature = "db")]
 pub use db::Db as IngjooDb;
+#[cfg(feature = "db")]
+pub use db::database_manager::DatabaseManager;
 #[cfg(all(feature = "db", feature = "mock"))]
 pub use db::mock::MockIngjooDb;
 #[cfg(feature = "auth")]

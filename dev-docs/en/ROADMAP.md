@@ -15,7 +15,7 @@
 | `ingjoo-bin` | 306 | 7 | **Working** | Full axum router with integration tests passing |
 | `ingjoo-macros` | 180 | 4 | **Working** | `#[derive(IngjooModel)]` proc macro for ModelDescriptor generation |
 
-**Total**: ~10,024 lines, 185 tests, 64 source files.
+**Total**: ~10,024 lines, 334 tests, 64 source files.
 
 ---
 
@@ -197,27 +197,22 @@ Design decisions:
 
 **Exit criteria**: ✅ All extension traits have noop fallbacks, security headers active on every response, SecurityPolicy loading cached, feature-gated implementations compilable.
 
-### Extension Trait Coverage (Phase 5 final state)
+---
 
-| Trait | Noop | Real Impl | Feature Gate |
-|-------|------|-----------|-------------|
-| `LlmProvider` | ✅ NoopLlmProvider | — | — |
-| `VectorStore` | ✅ NoopVectorStore | InMemoryVectorStore (always), PgVectorStore | `vector-pg` |
-| `DocumentLoader` | ✅ NoopDocumentLoader | — | — |
-| `TextSplitter` | ✅ NoopTextSplitter | — | — |
-| `DataMask` | ✅ NoopDataMask | AesDataMask | `data-mask` |
-| `ContentFilter` | ✅ NoopContentFilter | KeywordContentFilter | `content-filter` |
-| `InputSanitizer` | ✅ NoopInputSanitizer | — | — |
-| `SignatureVerifier` | ✅ NoopSignatureVerifier | HmacSignatureVerifier | `signature` |
-| `AuditStore` | ✅ NoopAuditStore | DbAuditStore | `db` |
-| `StateMachine` | ✅ NoopStateMachine | — | — |
-| `SearchEngine` | ✅ NoopSearchEngine | — | — |
-| `PaymentProvider` | ✅ NoopPaymentProvider | — | — |
-| `RelationLoader` | ✅ NoopRelationLoader | — | — |
-| `TranslationStore` | ✅ NoopTranslationStore | — | — |
-| `EventBus` | — | BroadcastEventBus | always |
-| `IdGenerator` | — | DefaultIdGenerator | always |
-| `Lock` | — | InMemoryLock | always |
+## Phase 6: Production Readiness ✅ COMPLETE
+
+> Goal: Wire all 14 extension traits into AppState, feature-gated conditional compilation in main.rs, audit logging in CRUD handlers, cache integration tests, all-features compilation verification.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T6.1 | AppState extension trait wiring | **P0** | ✅ | `state.rs` — 14 `Arc<dyn Trait>` fields + noop defaults + 14 `with_xxx()` builder methods |
+| T6.2 | main.rs conditional compilation | **P0** | ✅ | `ingjoo-bin/Cargo.toml` feature forwarding + `build_audit()`/`build_content_filter()`/`build_data_mask()`/`build_signature()` functions |
+| T6.3 | CRUD handler audit logging | **P0** | ✅ | Audit log write after successful create/update/delete via `state.audit.create_audit_log()` (fire-and-forget) |
+| T6.4 | Cache integration tests | **P1** | ✅ | 3 tests: put+get hit, different key isolation, invalidate clears all |
+| T6.5 | `--all-features` compilation fix | **P0** | ✅ | Re-export `GroupId`, `Group`, `GroupImplied`, `ModelAccessRow`, `RecordRuleRow`, `GroupStore`, `AccessStore` from infra's `ids.rs`/`models.rs`/`traits.rs` |
+| T6.6 | ROADMAP + progress report update | **P2** | ✅ | Both en/zh ROADMAPs + progress report |
+
+**Exit criteria**: ✅ 14 extension traits wired into AppState, main.rs selects implementations by feature, CRUD audit logging active, cache tests passing, `cargo check --workspace --all-features` zero errors.
 
 ---
 
@@ -234,18 +229,20 @@ Design decisions:
 ## Priority Matrix (Next Steps)
 
 ```
-PHASE 5 COMPLETE
-├── T5.1 Security headers — ✅ Wired into router
-├── T5.2 Noop coverage — ✅ 14/17 traits have noop fallbacks (3 always-on impls)
-├── T5.3 Feature flags — ✅ content-filter, data-mask, vector-pg, signature
-├── T5.4 Cache integration — ✅ FrameworkCache wired to AppState + SecurityPolicy loading
-└── T5.5 ROADMAP — ✅ Updated
+PHASE 6 COMPLETE
+├── T6.1 AppState trait wiring — ✅ 14 fields + noop defaults + builder methods
+├── T6.2 Conditional compilation — ✅ feature-gated build_xxx() + ingjoo-bin feature forwarding
+├── T6.3 Audit logging — ✅ CRUD success fire-and-forget audit
+├── T6.4 Cache tests — ✅ 3 integration tests (put/get/invalidate)
+├── T6.5 --all-features — ✅ Re-exports completed, zero errors
+└── T6.6 ROADMAP — ✅ Updated
 
 PREVIOUS PHASES (ALL COMPLETE)
 ├── Phase 1: Make It Run — ✅
 ├── Phase 2: Make It Reliable — ✅
 ├── Phase 3: Make It Real — ✅
-└── Phase 4: Make It Production-Ready — ✅
+├── Phase 4: Make It Extensible — ✅
+└── Phase 5: Extension Activation — ✅
 ```
 
 ---

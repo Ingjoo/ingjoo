@@ -69,6 +69,8 @@ pub struct RegisterRequest {
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
+    #[serde(default)]
+    pub database: Option<String>,
 }
 
 /// 更新用户资料请求（所有字段可选，仅更新非 None 的字段）

@@ -18,15 +18,17 @@ cargo build
 ## Test
 
 ```bash
-# Run all tests (85 tests across 3 crates)
+# Run all tests (334 tests across 7 crates)
 cargo test
 
 # Test a specific crate
 cargo test -p ingjoo-core
 cargo test -p ingjoo-security
 cargo test -p ingjoo-cache
-
-# Note: ingjoo-infra has zero tests currently
+cargo test -p ingjoo-infra
+cargo test -p ingjoo-queue
+cargo test -p ingjoo-macros
+cargo test -p ingjoo-bin
 ```
 
 ## Database Setup
@@ -55,7 +57,7 @@ The Dialect system auto-detects the database type from the URL scheme (`sqlite:`
 cargo run -p ingjoo-bin
 ```
 
-**Current behavior**: Connects to the database, runs migrations, binds to port 3000, but does **not** start an HTTP server. The binary is a skeleton — see ROADMAP.md Phase 1 for the plan to build it out.
+**Current behavior**: Connects to the database, runs migrations, starts HTTP server on port 3000 with full API routes (auth, CRUD, permissions, menus, views, actions, schedules, WebSocket).
 
 ## Environment Variables
 
@@ -115,14 +117,14 @@ ingjoo/
 |-----------|--------|------------|
 | Domain DSL | ✅ Working | `Domain::parse(r#"[["name", "=", "test"]]"#)` → SQL condition |
 | Dialect abstraction | ✅ Working | `Dialect::Sqlite` / `Dialect::Postgres` for DDL + placeholder conversion |
-| Store traits | ✅ Working | `Arc<dyn ScaffStore>` — 8 async traits for data access |
+| Store traits | ✅ Working | `Arc<dyn IngjooStore>` — 8 async traits for data access |
 | Security policy engine | ✅ Working | `SecurityPolicy::check_access(model, role, op)` |
 | Cache | ✅ Working | `FrameworkCache::new()` — scope, user, settings caches |
 | JWT auth provider | ✅ Working | `JwtAuthProvider::new(config)` — hash/verify/create tokens |
 | Mock DB | ✅ Working | `MockScaffDb::new()` — full in-memory implementation |
-| HTTP server | ❌ Not built | `ingjoo-bin` has no axum routes |
-| Dynamic model registration | ❌ Not built | `module/mod.rs` is 12 lines |
-| Derive macros | ❌ Not built | `ingjoo-macros` is empty |
+| HTTP server | ✅ Working | Full axum routes — auth, CRUD, permissions, menus, views, actions, schedules, WebSocket |
+| Dynamic model registration | ✅ Working | `ModelRegistry` + `GenericDb` — runtime schema, auto-DDL, CRUD |
+| Derive macros | ✅ Working | `#[derive(IngjooModel)]` — auto-generates `ModelDescriptor` |
 
 ## Development Workflow
 

@@ -54,7 +54,7 @@ impl AuditStore for DbAuditStore {
         let id = uuid::Uuid::new_v4().to_string();
         let detail_str = detail
             .as_ref()
-            .map(|v| serde_json::to_string(v))
+            .map(serde_json::to_string)
             .transpose()?
             .unwrap_or_default();
 
@@ -124,7 +124,7 @@ impl AuditStore for DbAuditStore {
 
         let limit = query.limit.unwrap_or(100);
         let offset = query.offset.unwrap_or(0);
-        sql.push_str(&format!(" LIMIT ? OFFSET ?"));
+        sql.push_str(" LIMIT ? OFFSET ?");
 
         let prepared = self.sql(&sql);
         let mut q = sqlx::query(&prepared);

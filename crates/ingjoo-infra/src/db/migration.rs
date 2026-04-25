@@ -298,15 +298,16 @@ pub async fn run_pending_migrations(pool: &Pool, dialect: &Dialect) -> Result<()
         if let Some(sql) = sql {
             let prepared = dialect.prepare(sql);
             let stmts = Dialect::split_ddl(&prepared);
-            for stmt in stmts {
+            for (i, stmt) in stmts.iter().enumerate() {
                 let result = sqlx::query(stmt)
                     .execute(pool)
                     .await;
                 if let Err(ref e) = result {
                     let msg = e.to_string();
                     if msg.contains("duplicate column name") || msg.contains("no such column") || msg.contains("already exists") {
-                        tracing::debug!("迁移 v{} 跳过（状态已符合）: {}", migration.version, msg);
+                        tracing::debug!("迁移 v{} stmt[{}] 跳过: {}", migration.version, i, msg);
                     } else {
+                        tracing::error!("迁移 v{} stmt[{}] 失败: {} | SQL: {}", migration.version, i, msg, &stmt[..stmt.len().min(200)]);
                         result?;
                     }
                 }
@@ -314,15 +315,19 @@ pub async fn run_pending_migrations(pool: &Pool, dialect: &Dialect) -> Result<()
         }
 
         // 记录已执行
-        sqlx::query(
-            &dialect.prepare(
+        let insert_sql = dialect.prepare(
                 "INSERT INTO _migration_versions (version, name) VALUES (?, ?)",
-            ),
-        )
+            );
+        let result = sqlx::query(&insert_sql)
         .bind(migration.version)
         .bind(migration.name)
         .execute(pool)
-        .await?;
+        .await;
+
+        if let Err(ref e) = result {
+            tracing::debug!("迁移 v{} 记录失败: {}", migration.version, e);
+        }
+        result?;
 
         tracing::info!("已执行迁移 v{}: {}", migration.version, migration.name);
     }

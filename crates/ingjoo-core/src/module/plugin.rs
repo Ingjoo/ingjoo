@@ -1,6 +1,7 @@
 //! 插件清单 — 定义插件声明式注册所需的全部元数据
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use crate::module::{ModelDescriptor, MenuDescriptor, ViewDescriptor, ActionDescriptor};
 
 /// 插件状态
@@ -59,6 +60,11 @@ pub struct PluginManifest {
     /// 插件提供的动作
     #[serde(default)]
     pub actions: Vec<ActionDescriptor>,
+    /// 初始种子记录 — 模型名 → 记录列表
+    ///
+    /// 加载插件时自动插入，使用 INSERT OR IGNORE / ON CONFLICT DO NOTHING 保证幂等。
+    #[serde(default)]
+    pub records: Option<HashMap<String, Vec<serde_json::Value>>>,
 }
 
 /// 已加载插件的运行时信息
@@ -80,6 +86,8 @@ pub struct PluginInfo {
     pub view_count: usize,
     /// 提供的动作数量
     pub action_count: usize,
+    /// 提供的种子记录模型数量
+    pub record_model_count: usize,
 }
 
 impl PluginManifest {
@@ -111,6 +119,7 @@ impl PluginManifest {
             menu_count: self.menus.len(),
             view_count: self.views.len(),
             action_count: self.actions.len(),
+            record_model_count: self.records.as_ref().map(|r| r.len()).unwrap_or(0),
         }
     }
 }
@@ -166,11 +175,13 @@ mod tests {
             menus: vec![],
             views: vec![],
             actions: vec![],
+            records: None,
         };
         let json = original.to_json().unwrap();
         let restored = PluginManifest::from_json(&json).unwrap();
         assert_eq!(restored.name, original.name);
         assert_eq!(restored.models.len(), 1);
+        assert!(restored.records.is_none());
     }
 
     #[test]
@@ -186,16 +197,55 @@ mod tests {
             menus: vec![],
             views: vec![],
             actions: vec![],
+            records: Some({
+                let mut m = HashMap::new();
+                m.insert("customer".to_string(), vec![serde_json::json!({"name": "Acme"})]);
+                m
+            }),
         };
         let info = manifest.to_info(PluginState::Active);
         assert_eq!(info.name, "crm");
         assert_eq!(info.model_count, 2);
         assert_eq!(info.state, PluginState::Active);
+        assert_eq!(info.record_model_count, 1);
     }
 
     #[test]
     fn test_invalid_json() {
         let result = PluginManifest::from_json("not json");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_manifest_with_records_deserialization() {
+        let json = r#"{
+            "name": "blog",
+            "version": "1.0.0",
+            "models": [
+                {"name": "article", "table_name": "articles", "fields": [
+                    {"name": "title", "field_type": "text"}
+                ]}
+            ],
+            "records": {
+                "article": [
+                    {"title": "第一篇文章", "status": "draft"},
+                    {"title": "第二篇文章", "status": "published"}
+                ]
+            }
+        }"#;
+        let manifest = PluginManifest::from_json(json).unwrap();
+        assert_eq!(manifest.name, "blog");
+        let records = manifest.records.unwrap();
+        assert_eq!(records.len(), 1);
+        let articles = records.get("article").unwrap();
+        assert_eq!(articles.len(), 2);
+        assert_eq!(articles[0]["title"], "第一篇文章");
+    }
+
+    #[test]
+    fn test_manifest_records_optional() {
+        let json = r#"{"name": "minimal", "version": "1.0.0", "models": []}"#;
+        let manifest = PluginManifest::from_json(json).unwrap();
+        assert!(manifest.records.is_none());
     }
 }

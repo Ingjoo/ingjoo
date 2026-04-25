@@ -15,7 +15,7 @@
 | `ingjoo-bin` | 306 | 7 | **可用** | 完整 axum 路由、集成测试通过 |
 | `ingjoo-macros` | 180 | 4 | **可用** | `#[derive(IngjooModel)]` 派生宏，自动生成 ModelDescriptor |
 
-**合计**：约 10,024 行代码，185 个测试，64 个源文件。
+**合计**：约 10,024 行代码，334 个测试，64 个源文件。
 
 ---
 
@@ -199,6 +199,23 @@ ingjoo-infra/src/
 
 ---
 
+## 阶段 6：生产就绪 ✅ 已完成
+
+> 目标：将 14 个扩展 trait 接入 AppState、条件编译 main.rs、审计日志接入 CRUD、缓存测试、全特性编译验证。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T6.1 | AppState 接入 14 个扩展 trait 字段 | **P0** | ✅ | `state.rs` 新增 14 个 `Arc<dyn Trait>` 字段 + noop 默认 + 14 个 `with_xxx()` builder 方法 |
+| T6.2 | main.rs 条件编译（feature-gated 实现选择） | **P0** | ✅ | `ingjoo-bin/Cargo.toml` feature 转发 + `build_audit()`/`build_content_filter()`/`build_data_mask()`/`build_signature()` 函数 |
+| T6.3 | CRUD handler 审计日志 | **P0** | ✅ | create/update/delete 成功后写审计日志，`state.audit.create_audit_log()` fire-and-forget |
+| T6.4 | 缓存集成测试 | **P1** | ✅ | 3 个测试：put+get 命中、不同 key 隔离、invalidate 清除 |
+| T6.5 | `--all-features` 编译修复 | **P0** | ✅ | 补全 `ids.rs`/`models.rs`/`traits.rs` 的 re-export（GroupId、Group、GroupImplied、ModelAccessRow、RecordRuleRow、GroupStore、AccessStore） |
+| T6.6 | ROADMAP + 进度报告更新 | **P2** | ✅ | 中英文 ROADMAP + 进度报告 |
+
+**退出标准**：✅ 14 个扩展 trait 全部接入 AppState，main.rs 按 feature 选择实现，CRUD 审计日志生效，缓存测试通过，`cargo check --workspace --all-features` 零错误。
+
+---
+
 ## 额外已完成项（不在原 ROADMAP 中）
 
 | 任务 | 描述 |
@@ -212,18 +229,21 @@ ingjoo-infra/src/
 ## 优先级矩阵（下一步）
 
 ```
-阶段 5 已完成
-├── T5.1 安全头中间件 — ✅ 接入路由
-├── T5.2 noop 覆盖 — ✅ 14/17 trait 有 noop 降级（3 个始终启用）
-├── T5.3 feature flag — ✅ content-filter、data-mask、vector-pg、signature
-├── T5.4 缓存集成 — ✅ FrameworkCache 接入 AppState + SecurityPolicy 加载
-└── T5.5 ROADMAP — ✅ 已更新
+阶段 6 已完成
+├── T6.1 AppState 扩展 trait — ✅ 14 个字段 + noop 默认 + builder 方法
+├── T6.2 条件编译 — ✅ feature-gated build_xxx() + ingjoo-bin feature 转发
+├── T6.3 审计日志 — ✅ CRUD 成功后 fire-and-forget 审计
+├── T6.4 缓存测试 — ✅ 3 个集成测试 (put/get/invalidate)
+├── T6.5 --all-features — ✅ 补全 re-export，零错误
+└── T6.6 ROADMAP — ✅ 已更新
 
 已完成的阶段
 ├── 阶段 1：让框架能跑 — ✅
 ├── 阶段 2：让框架可靠 — ✅
 ├── 阶段 3：让框架名副其实 — ✅
-└── 阶段 4：让框架可用于生产 — ✅
+├── 阶段 4：让框架可扩展 — ✅
+├── 阶段 5：扩展激活 — ✅
+└── 阶段 6：生产就绪 — ✅
 ```
 
 ---

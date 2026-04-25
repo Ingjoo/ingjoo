@@ -5,7 +5,7 @@ mod tests {
     use axum::body::Body;
     use axum::Router;
     use http::StatusCode;
-    use ingjoo_infra::{AppState, AuthConfig, JwtAuthProvider, MockIngjooDb, IngjooStore};
+    use ingjoo_infra::{AppState, AuthConfig, JwtAuthProvider, MockIngjooDb, IngjooStore, DatabaseManager};
     use ingjoo_core::ModelRegistry;
     use tower::ServiceExt;
 
@@ -18,7 +18,7 @@ mod tests {
         let (pool, dialect) = rt.block_on(
             ingjoo_core::pool::connect_pool("sqlite::memory:")
         ).unwrap();
-        let state = Arc::new(AppState::new(store, auth, registry, Arc::new(pool), dialect));
+        let state = Arc::new(AppState::new(store, auth, registry, Arc::new(pool.clone()), dialect, Arc::new(DatabaseManager::new(pool.clone(), dialect))));
         ingjoo_infra::router::base_router(state)
     }
 
