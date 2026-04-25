@@ -106,7 +106,11 @@ async fn main() -> Result<()> {
 }
 
 use ingjoo_core::extension::{AuditStore, ContentFilter, DataMask, SignatureVerifier, RelationLoader, TranslationStore, StateMachine, TextSplitter, SearchEngine};
-use ingjoo_infra::extension_noop::*;
+#[allow(unused_imports)]
+use ingjoo_infra::extension_noop::{
+    NoopAuditStore, NoopContentFilter, NoopDataMask, NoopRelationLoader, NoopSearchEngine,
+    NoopSignatureVerifier, NoopStateMachine, NoopTranslationStore,
+};
 
 #[cfg(feature = "db")]
 fn build_audit(pool: ingjoo_core::pool::Pool, dialect: ingjoo_core::Dialect) -> Arc<dyn AuditStore> {

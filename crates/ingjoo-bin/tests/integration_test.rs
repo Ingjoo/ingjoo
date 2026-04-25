@@ -2261,3 +2261,94 @@ async fn test_cache_scope_invalidation() {
     assert!(state.cache.get_scope_access("policy", "admin").is_none());
     assert!(state.cache.get_scope_access("policy", "user").is_none());
 }
+
+// ── 搜索端点集成测试 ──
+
+#[tokio::test]
+async fn test_search_returns_matching_records() {
+    let (app, state) = setup_app_with_models(vec![
+        ingjoo_core::module::ModelDescriptor::new("search_article", "search_articles")
+            .required_field("title", ingjoo_core::FieldType::Text)
+            .field("body", ingjoo_core::FieldType::Text),
+    ]).await;
+    let admin = get_admin_token(&app, &state).await;
+
+    // ensure 表
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/search_article/ensure", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // 创建两条记录
+    let resp = app.clone().oneshot(auth_request(
+        "POST", "/api/data/search_article",
+        &admin, Some(r#"{"title":"Rust 编程入门","body":"Rust 是一门系统级编程语言"}"#),
+    )).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let resp = app.clone().oneshot(auth_request(
+        "POST", "/api/data/search_article",
+        &admin, Some(r#"{"title":"Python 数据分析","body":"Python 适合数据处理"}"#),
+    )).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // 搜索 "Rust"
+    let resp = app.clone().oneshot(auth_request(
+        "GET", "/api/data/search_article/search?q=Rust", &admin, None,
+    )).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let results = json["results"].as_array().unwrap();
+    assert_eq!(results.len(), 1);
+    assert!(results[0]["title"].as_str().unwrap().contains("Rust"));
+
+    // 搜索 "编程" — 匹配第一条的 title
+    let resp = app.clone().oneshot(auth_request(
+        "GET", "/api/data/search_article/search?q=%E7%BC%96%E7%A8%8B", &admin, None,
+    )).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(!json["results"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_search_no_match_returns_empty() {
+    let (app, state) = setup_app_with_models(vec![
+        ingjoo_core::module::ModelDescriptor::new("search_empty", "search_empty_table")
+            .required_field("title", ingjoo_core::FieldType::Text),
+    ]).await;
+    let admin = get_admin_token(&app, &state).await;
+
+    // ensure + 创建一条
+    app.clone().oneshot(auth_request("POST", "/api/data/search_empty/ensure", &admin, None)).await.unwrap();
+    app.clone().oneshot(auth_request(
+        "POST", "/api/data/search_empty",
+        &admin, Some(r#"{"title":"hello world"}"#),
+    )).await.unwrap();
+
+    // 搜索不存在的关键词
+    let resp = app.clone().oneshot(auth_request(
+        "GET", "/api/data/search_empty/search?q=nonexistent_keyword_xyz", &admin, None,
+    )).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["results"].as_array().unwrap().is_empty());
+    assert_eq!(json["total"].as_i64().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn test_search_empty_query_returns_400() {
+    let (app, state) = setup_app_with_models(vec![
+        ingjoo_core::module::ModelDescriptor::new("search_bad", "search_bad_table")
+            .required_field("title", ingjoo_core::FieldType::Text),
+    ]).await;
+    let admin = get_admin_token(&app, &state).await;
+
+    app.clone().oneshot(auth_request("POST", "/api/data/search_bad/ensure", &admin, None)).await.unwrap();
+
+    let resp = app.clone().oneshot(auth_request(
+        "GET", "/api/data/search_bad/search?q=", &admin, None,
+    )).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}

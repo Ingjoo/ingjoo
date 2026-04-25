@@ -3,12 +3,14 @@ use ingjoo_cache::moka_cache::FrameworkCache;
 
 /// 测量用简单类型 — 满足 M: Clone + Send + Sync + 'static
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 struct BenchMember {
     role: String,
 }
 
 /// 测量用简单类型 — 满足 U: Clone + Send + Sync + 'static
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 struct BenchUser {
     id: String,
     email: String,

@@ -1,7 +1,7 @@
 # 改进路线图
 
 > 最后更新：2026-04-25
-> 当前版本：v0.1.0 — 阶段 1-7.5 已完成
+> 当前版本：v0.1.0 — 阶段 1-7.5 已完成，阶段 8 进行中
 
 ## 现状总览
 
@@ -15,7 +15,7 @@
 | `ingjoo-bin` | 306 | 7 | **可用** | 完整 axum 路由、集成测试通过 |
 | `ingjoo-macros` | 180 | 4 | **可用** | `#[derive(IngjooModel)]` 派生宏，自动生成 ModelDescriptor |
 
-**合计**：约 10,500 行代码，370 个测试，66 个源文件。
+**合计**：约 23,700 行代码，380 个测试，66+ 个源文件。
 
 ---
 
@@ -245,6 +245,21 @@ ingjoo-infra/src/
 
 ---
 
+## 阶段 8：DbSearchEngine + 集成测试 🔧 进行中
+
+> 目标：实现 DB 后端全文搜索引擎，接入 HTTP 搜索端点，编写端到端集成测试。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T8.1 | DbSearchEngine 实现 | **P0** | ✅ | `search_engine.rs` — SQL LIKE 全文搜索，ir_search_index 表，v10 迁移 |
+| T8.2 | 搜索接线 | **P0** | ✅ | `build_search()` + `with_search()` 在 main.rs 中 feature-gated |
+| T8.3 | UTF-8 修复 | **P0** | ✅ | `extract_highlights` char 边界对齐（`floor_char_boundary`/`ceil_char_boundary`） |
+| T8.4 | Clippy 清零 | **P0** | ✅ | 0 警告（derive_test dead_code + integration_test is_empty） |
+| T8.5 | 搜索集成测试 | **P0** | ✅ | 3 个测试：匹配/无匹配/空查询（380 个测试总计） |
+| T8.6 | 文档同步 | **P1** | 🔧 | ROADMAP + AGENTS.md |
+
+---
+
 ## 额外已完成项（不在原 ROADMAP 中）
 
 | 任务 | 描述 |
@@ -262,6 +277,15 @@ ingjoo-infra/src/
 ├── T7.5.1 HtmlInputSanitizer — ✅ 标签白名单 + 内容抑制
 ├── T7.5.2 FsDocumentLoader — ✅ 递归文件扫描，10MB 限制
 ├── T7.5.3 state.rs 真实默认值 — ✅ sanitizer/document_loader/text_splitter
+└── T7.5.4 集成测试 — ✅ 7 个 translation + 7 个 state_machine 测试
+
+阶段 8 进行中（380 个测试，0 失败，0 个 clippy 警告）
+├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索，ir_search_index 表（10 个单元测试）
+├── T8.2 搜索接线 — ✅ build_search() + with_search() 在 main.rs 中
+├── T8.3 UTF-8 修复 — ✅ extract_highlights char 边界对齐
+├── T8.4 Clippy 清零 — ✅ 0 警告
+├── T8.5 搜索集成测试 — ✅ 3 个测试（匹配/无匹配/空查询）
+└── T8.6 文档同步 — 🔧 ROADMAP + AGENTS.md
 └── T7.5.4 集成测试 — ✅ 7 个 translation + 7 个 state_machine 测试
 
 阶段 7 已完成
@@ -320,7 +344,7 @@ ingjoo-infra/src/
      └──────────┴──────┬───────┴───────────┘
                        │
                 ┌──────▼──────┐
-                │ ingjoo-infra│  ✅ 完整 (60 测试)
+                 │ ingjoo-infra│  ✅ 完整 (134 测试)
                 │(DB/认证/存储)│
                 └─────────────┘
 ```

@@ -38,6 +38,7 @@ struct SmsCodeEntry {
     phone: String,
     code: String,
     purpose: String,
+    #[allow(dead_code)]
     ip_address: Option<String>,
     expires_at: String,
     used: bool,
@@ -59,6 +60,12 @@ pub struct MockIngjooDb {
     model_accesses: Mutex<HashMap<String, ModelAccessRow>>,
     record_rules: Mutex<HashMap<String, RecordRuleRow>>,
     audit_logs: Arc<Mutex<Vec<AuditEntry>>>,
+}
+
+impl Default for MockIngjooDb {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockIngjooDb {
@@ -202,7 +209,7 @@ impl UserStore for MockIngjooDb {
         let q = query.to_lowercase();
         let results: Vec<crate::db::models::UserPublic> = users.values()
             .filter(|u| u.name.to_lowercase().contains(&q) || u.email.to_lowercase().contains(&q))
-            .map(|u| crate::db::models::UserPublic::from(u))
+            .map(crate::db::models::UserPublic::from)
             .take(limit as usize)
             .collect();
         Ok(results)
@@ -529,8 +536,8 @@ impl AttachmentStore for MockIngjooDb {
         let mut list: Vec<Attachment> = attachments
             .values()
             .filter(|a| {
-                entity_type.map_or(true, |t| a.entity_type.as_deref() == Some(t))
-                    && entity_id.map_or(true, |t| a.entity_id.as_deref() == Some(t))
+                entity_type.is_none_or( |t| a.entity_type.as_deref() == Some(t))
+                    && entity_id.is_none_or( |t| a.entity_id.as_deref() == Some(t))
             })
             .cloned()
             .collect();
@@ -597,8 +604,8 @@ impl ModuleSettingStore for MockIngjooDb {
             .values()
             .filter(|s| {
                 s.scope == scope
-                    && scope_id.map_or(true, |v| s.scope_id.as_deref() == Some(v))
-                    && module.map_or(true, |v| s.module == v)
+                    && scope_id.is_none_or( |v| s.scope_id.as_deref() == Some(v))
+                    && module.is_none_or( |v| s.module == v)
             })
             .cloned()
             .collect();
@@ -617,7 +624,7 @@ impl ModuleSettingStore for MockIngjooDb {
             .values()
             .find(|s| {
                 s.scope == scope
-                    && scope_id.map_or(true, |v| s.scope_id.as_deref() == Some(v))
+                    && scope_id.is_none_or( |v| s.scope_id.as_deref() == Some(v))
                     && s.module == module
                     && s.key == key
             })
@@ -810,7 +817,7 @@ impl AccessStore for MockIngjooDb {
     async fn list_model_accesses(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<ModelAccessRow>> {
         let ma = self.model_accesses.lock().await;
         let result: Vec<ModelAccessRow> = ma.values()
-            .filter(|a| group_id.map_or(true, |gid| a.group_id == *gid))
+            .filter(|a| group_id.is_none_or( |gid| a.group_id == *gid))
             .cloned().collect();
         Ok(result)
     }
@@ -842,7 +849,7 @@ impl AccessStore for MockIngjooDb {
     async fn list_record_rules(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<RecordRuleRow>> {
         let rr = self.record_rules.lock().await;
         let result: Vec<RecordRuleRow> = rr.values()
-            .filter(|r| group_id.map_or(true, |gid| r.group_id == *gid))
+            .filter(|r| group_id.is_none_or( |gid| r.group_id == *gid))
             .cloned().collect();
         Ok(result)
     }
@@ -915,11 +922,11 @@ impl AuditStore for MockIngjooDb {
         let logs = self.audit_logs.lock().await;
         let mut result: Vec<AuditEntry> = logs.iter()
             .filter(|e| {
-                query.user_id.as_ref().map_or(true, |v| e.user_id.as_ref() == Some(v))
-                    && query.action.as_ref().map_or(true, |v| &e.action == v)
-                    && query.resource.as_ref().map_or(true, |v| &e.resource == v)
-                    && query.resource_id.as_ref().map_or(true, |v| e.resource_id.as_ref() == Some(v))
-                    && query.ip.as_ref().map_or(true, |v| e.ip.as_ref() == Some(v))
+                query.user_id.as_ref().is_none_or( |v| e.user_id.as_ref() == Some(v))
+                    && query.action.as_ref().is_none_or( |v| &e.action == v)
+                    && query.resource.as_ref().is_none_or( |v| &e.resource == v)
+                    && query.resource_id.as_ref().is_none_or( |v| e.resource_id.as_ref() == Some(v))
+                    && query.ip.as_ref().is_none_or( |v| e.ip.as_ref() == Some(v))
             })
             .cloned()
             .collect();

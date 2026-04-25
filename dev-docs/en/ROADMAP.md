@@ -1,7 +1,7 @@
 # Improvement Roadmap
 
 > Last updated: 2026-04-25
-> Status: v0.1.0 — Phase 1-6 complete, Phase 7 complete, Phase 7.5 complete
+> Status: v0.1.0 — Phase 1-7.5 complete, Phase 8 in progress
 
 ## Current State Summary
 
@@ -15,7 +15,7 @@
 | `ingjoo-bin` | 306 | 7 | **Working** | Full axum router with integration tests passing |
 | `ingjoo-macros` | 180 | 4 | **Working** | `#[derive(IngjooModel)]` proc macro for ModelDescriptor generation |
 
-**Total**: ~10,500 lines, 370 tests, 66 source files.
+**Total**: ~23,700 lines, 380 tests, 66+ source files.
 
 ---
 
@@ -264,6 +264,14 @@ PHASE 7.5 COMPLETE (370 tests, 0 failures, 0 clippy warnings)
 ├── T7.5.3 state.rs real defaults — ✅ sanitizer/document_loader/text_splitter
 └── T7.5.4 Integration tests — ✅ 7 translation + 7 state_machine tests
 
+PHASE 8 IN PROGRESS (380 tests, 0 failures, 0 clippy warnings)
+├── T8.1 DbSearchEngine — ✅ SQL LIKE search on ir_search_index (10 unit tests)
+├── T8.2 Search wiring — ✅ build_search() + with_search() in main.rs
+├── T8.3 UTF-8 fix — ✅ char boundary alignment in extract_highlights
+├── T8.4 Clippy clean — ✅ 0 warnings (derive_test dead_code + integration_test is_empty)
+├── T8.5 Search integration tests — ✅ 3 tests (match/no-match/empty-query)
+└── T8.6 Docs sync — 🔧 ROADMAP + AGENTS.md
+
 PHASE 7 COMPLETE
 ├── T7.1 EventBus — ✅ tokio broadcast
 ├── T7.2 IdGenerator — ✅ UUID v4
@@ -319,7 +327,7 @@ PREVIOUS PHASES (ALL COMPLETE)
      └──────────┴──────┬───────┴───────────┘
                        │
                 ┌──────▼──────┐
-                │  ingjoo-infra│  ✅ Complete (60 tests)
+                 │  ingjoo-infra│  ✅ Complete (134 tests)
                 │  (DB/Auth/  │
                 │   Storage)  │
                 └─────────────┘

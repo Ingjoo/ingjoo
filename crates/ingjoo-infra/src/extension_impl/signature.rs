@@ -14,6 +14,7 @@ type HmacSha256 = Hmac<Sha256>;
 /// 1. 检查时间戳是否在 tolerance 范围内（防重放）
 /// 2. 重新计算 HMAC-SHA256 签名
 /// 3. 常量时间比较签名（防时序攻击）
+///
 /// HMAC-SHA256 签名验证器
 pub struct HmacSignatureVerifier;
 
