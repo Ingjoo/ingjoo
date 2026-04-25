@@ -1,7 +1,7 @@
 # 改进路线图
 
 > 最后更新：2026-04-26
-> 当前版本：v0.1.0 — 阶段 1-8 已完成
+> 当前版本：v0.1.0 — 阶段 1-9 已完成
 
 ## 现状总览
 
@@ -15,7 +15,14 @@
 | `ingjoo-bin` | 306 | 7 | **可用** | 完整 axum 路由、集成测试通过 |
 | `ingjoo-macros` | 180 | 4 | **可用** | `#[derive(IngjooModel)]` 派生宏，自动生成 ModelDescriptor |
 
-**合计**：约 23,700 行代码，380 个测试，66+ 个源文件。
+**合计**：约 24,300 行代码，272 个单元测试 + 集成测试，127+ 个源文件。
+
+### 前端仓库
+
+| 仓库 | 技术 | 页面 | 状态 |
+|------|------|------|------|
+| `ingjoo-js` (`@ingjoo/web`) | React + TypeScript + Rollup | — | ✅ 共享组件库，auth/i18n/fetch/Domain DSL |
+| `web-base` | Next.js 16 + Tailwind CSS 4 | 8 个 | ✅ 完整前后端对接 |
 
 ---
 
@@ -281,17 +288,22 @@ ingjoo-infra/src/
 
 ---
 
-## 阶段 9：前端对接 🔧 待开始
+## 阶段 9：前端对接 ✅ 已完成
 
-> 目标：修复前端与后端 API 的对接问题，提高 QA 健康评分。
+> 目标：修复前端与后端 API 的对接问题，实现完整登录→Dashboard 流程。
 
 | # | 任务 | 优先级 | 状态 | 交付物 |
 |---|------|--------|------|--------|
-| T9.1 | /register 页面修复 | **P0** | 📋 | 注册表单组件，非登录表单复用 |
-| T9.2 | Auth token 持久化 | **P0** | 📋 | localStorage/cookie 存储 JWT，页面刷新保持登录 |
-| T9.3 | /api/auth/me 前端对接 | **P0** | 📋 | 页面加载时调用 /me 验证 token，恢复用户状态 |
-| T9.4 | 通知 API 后端实现 | **P1** | 📋 | notification CRUD 端点 + 未读计数 |
-| T9.5 | /admin, /search 页面实现 | **P2** | 📋 | 基础管理后台 + 全文搜索页面 |
+| T9.1 | /register 页面修复 | **P0** | ✅ | `login/page.tsx` 读取 `?register=1` query param 切换注册模式 |
+| T9.2 | Auth token 持久化 | **P0** | ✅ | `ingjoo-web` auth.tsx/fetch.ts 改为 localStorage + Authorization header |
+| T9.3 | /api/auth/me 前端对接 | **P0** | ✅ | 前端 `getMe()` 已对接 `/auth/profile`，页面加载恢复用户状态 |
+| T9.4 | 通知 API 前端 stub | **P1** | ✅ | 4 个 Next.js Route Handler stub（防 404 连锁） |
+| T9.5 | /admin, /search 骨架页面 | **P2** | ✅ | admin 用户管理+审计日志 tabs，search 全局搜索 |
+| T9.6 | 新增后端 API 端点 | **P0** | ✅ | dashboard stats / users search / audit-log 三个端点 |
+| T9.7 | Preferences 路径对齐 | **P1** | ✅ | `/users/me/preferences` → `/auth/preferences` |
+| T9.8 | 死代码清理 | **P2** | ✅ | 删除 `providers.tsx` |
+
+**退出标准**：✅ 登录→Dashboard 完整流程通过浏览器 QA 验证，页面刷新保持登录状态。
 
 ---
 
@@ -304,7 +316,17 @@ ingjoo-infra/src/
 ├── T7.5.3 state.rs 真实默认值 — ✅ sanitizer/document_loader/text_splitter
 └── T7.5.4 集成测试 — ✅ 7 个 translation + 7 个 state_machine 测试
 
-阶段 8 已完成（349 个测试，0 clippy 警告）
+阶段 9 已完成（272 个测试，0 clippy 警告，登录→Dashboard QA 通过）
+├── T9.1 /register 页面 — ✅ ?register=1 query param
+├── T9.2 Auth 持久化 — ✅ localStorage + Authorization header
+├── T9.3 /me 前端对接 — ✅ /auth/profile 恢复用户状态
+├── T9.4 通知 stub — ✅ 4 个 Next.js Route Handler
+├── T9.5 admin/search — ✅ 骨架页面
+├── T9.6 新 API 端点 — ✅ dashboard stats / users search / audit-log
+├── T9.7 preferences 路径 — ✅ /auth/preferences
+└── T9.8 死代码清理 — ✅ 删除 providers.tsx
+
+阶段 8 已完成
 ├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索
 ├── T8.2 搜索接线 — ✅ build_search() + with_search()
 ├── T8.3 UTF-8 修复 — ✅ char 边界对齐

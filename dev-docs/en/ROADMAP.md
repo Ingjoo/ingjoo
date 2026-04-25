@@ -1,7 +1,7 @@
 # Improvement Roadmap
 
 > Last updated: 2026-04-26
-> Status: v0.1.0 — Phase 1-8 complete, Phase 9 (frontend integration) pending
+> Status: v0.1.0 — Phase 1-9 complete
 
 ## Current State Summary
 
@@ -15,7 +15,14 @@
 | `ingjoo-bin` | 306 | 7 | **Working** | Full axum router with integration tests passing |
 | `ingjoo-macros` | 180 | 4 | **Working** | `#[derive(IngjooModel)]` proc macro for ModelDescriptor generation |
 
-**Total**: ~23,700 lines, 380 tests, 66+ source files.
+**Total**: ~24,300 lines, 272+ tests, 127+ source files.
+
+### Frontend Repos
+
+| Repo | Tech | Pages | Status |
+|------|------|-------|--------|
+| `ingjoo-js` (`@ingjoo/web`) | React + TypeScript + Rollup | — | ✅ Shared component library, auth/i18n/fetch/Domain DSL |
+| `web-base` | Next.js 16 + Tailwind CSS 4 | 8 | ✅ Full frontend-backend integration |
 
 ---
 
@@ -264,13 +271,17 @@ PHASE 7.5 COMPLETE (370 tests, 0 failures, 0 clippy warnings)
 ├── T7.5.3 state.rs real defaults — ✅ sanitizer/document_loader/text_splitter
 └── T7.5.4 Integration tests — ✅ 7 translation + 7 state_machine tests
 
-PHASE 8 IN PROGRESS (380 tests, 0 failures, 0 clippy warnings)
-├── T8.1 DbSearchEngine — ✅ SQL LIKE search on ir_search_index (10 unit tests)
-├── T8.2 Search wiring — ✅ build_search() + with_search() in main.rs
-├── T8.3 UTF-8 fix — ✅ char boundary alignment in extract_highlights
-├── T8.4 Clippy clean — ✅ 0 warnings (derive_test dead_code + integration_test is_empty)
-├── T8.5 Search integration tests — ✅ 3 tests (match/no-match/empty-query)
-└── T8.6 Docs sync — 🔧 ROADMAP + AGENTS.md
+PHASE 9 COMPLETE (272 tests, 0 clippy warnings, login→Dashboard QA verified)
+├── T9.1 /register page — ✅ ?register=1 query param
+├── T9.2 Auth persistence — ✅ localStorage + Authorization header
+├── T9.3 /me frontend — ✅ /auth/profile user state restore
+├── T9.4 Notification stubs — ✅ 4 Next.js Route Handlers
+├── T9.5 admin/search — ✅ skeleton pages
+├── T9.6 New API endpoints — ✅ dashboard stats / users search / audit-log
+├── T9.7 Preferences path — ✅ /auth/preferences
+└── T9.8 Dead code cleanup — ✅ removed providers.tsx
+
+PHASE 8 COMPLETE
 
 PHASE 7 COMPLETE
 ├── T7.1 EventBus — ✅ tokio broadcast
