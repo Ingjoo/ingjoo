@@ -230,6 +230,7 @@ impl Db {
 
         migration::run_pending_migrations(pool, dialect).await?;
         seed_default_groups(pool, dialect).await?;
+        seed::seed_metadata(pool, dialect).await?;
 
         Ok(())
     }

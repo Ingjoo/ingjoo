@@ -405,8 +405,8 @@ async fn fetch_views_by_ids(
     let placeholders = resolved_db.dialect.placeholders(view_ids.len(), 1);
     let ph_str = placeholders.join(",");
     let sql_str = format!(
-        "SELECT {} FROM ir_view WHERE id IN ({}) AND active = 1",
-        VIEW_COLUMNS, ph_str
+        "SELECT {} FROM ir_view WHERE id IN ({}) AND active = {}",
+        VIEW_COLUMNS, ph_str, resolved_db.dialect.bool_true()
     );
     let sql = resolved_db.dialect.prepare(&sql_str);
 
@@ -438,8 +438,8 @@ async fn fetch_views_by_model(
     res_model: &str,
 ) -> Result<serde_json::Value, AppError> {
     let sql = resolved_db.dialect.prepare(&format!(
-        "SELECT {} FROM ir_view WHERE model = ? AND active = 1 ORDER BY priority",
-        VIEW_COLUMNS
+        "SELECT {} FROM ir_view WHERE model = ? AND active = {} ORDER BY priority",
+        VIEW_COLUMNS, resolved_db.dialect.bool_true()
     ));
     let rows = sqlx::query(&sql)
         .bind(res_model)

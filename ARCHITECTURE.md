@@ -279,7 +279,7 @@ cargo build --features ingjoo-infra/full
 
 ## 测试
 
-- **334 个测试**，全部为内联单元测试（`#[cfg(test)] mod tests`）
+- **345 个单元/集成测试**（`#[cfg(test)] mod tests` + 集成测试文件）
 - 同步测试用 `#[test]`，异步用 `#[tokio::test]`
-- 无集成测试目录
-- Mock 通过手写 struct + `#[async_trait]` impl 实现
+- 集成测试在 `ingjoo-bin/tests/integration_test.rs`
+- Mock 通过 `MockIngjooDb` (Default impl) 实现

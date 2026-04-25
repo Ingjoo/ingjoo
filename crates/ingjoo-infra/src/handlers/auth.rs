@@ -4,7 +4,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Extension;
 use axum::Json;
-use ingjoo_core::{AuthToken, LoginRequest, RegisterRequest, UpdateProfileRequest, User, UserId, UserPublic};
+use ingjoo_core::{AuthToken, LoginRequest, RegisterRequest, UpdatePreferences, UpdateProfileRequest, User, UserPreferences, UserId, UserPublic};
 use serde::Deserialize;
 
 use crate::auth::AuthProvider;
@@ -175,4 +175,64 @@ pub async fn update_profile(
         .await?
         .ok_or_else(|| AppError::NotFound("用户不存在".into()))?;
     Ok(Json(UserPublic::from(&user)))
+}
+
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+pub async fn change_password(
+    Extension(current_user): Extension<crate::extractors::CurrentUser>,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<ChangePasswordRequest>,
+) -> Result<StatusCode, AppError> {
+    let user_id = UserId::new(current_user.user_id);
+    let user = state
+        .store
+        .get_user_by_id(&user_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("用户不存在".into()))?;
+    let hash = user
+        .password_hash
+        .as_ref()
+        .ok_or_else(|| AppError::Unauthorized("当前密码错误".into()))?;
+    if !state.auth.verify_password(&req.current_password, hash)? {
+        return Err(AppError::Unauthorized("当前密码错误".into()));
+    }
+    let new_hash = state.auth.hash_password(&req.new_password)?;
+    state
+        .store
+        .update_user_password(&user_id, &new_hash)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn get_preferences(
+    Extension(current_user): Extension<crate::extractors::CurrentUser>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<UserPreferences>, AppError> {
+    let user_id = UserId::new(current_user.user_id);
+    let prefs = state.store.get_user_preferences(&user_id).await?;
+    Ok(Json(prefs))
+}
+
+pub async fn update_preferences(
+    Extension(current_user): Extension<crate::extractors::CurrentUser>,
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<UpdatePreferences>,
+) -> Result<Json<UserPreferences>, AppError> {
+    let user_id = UserId::new(current_user.user_id);
+    let prefs = state.store.upsert_user_preferences(&user_id, &req).await?;
+    Ok(Json(prefs))
+}
+
+pub async fn logout(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RefreshRequest>,
+) -> Result<StatusCode, AppError> {
+    let token_hash = state.auth.refresh_token_hash(&req.refresh_token);
+    state.store.delete_refresh_token(&token_hash).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

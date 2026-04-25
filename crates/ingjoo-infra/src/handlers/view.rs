@@ -108,21 +108,22 @@ pub async fn list_views(
     State(_state): State<Arc<AppState>>,
     Query(params): Query<ViewQueryParams>,
 ) -> Result<Json<Vec<ViewDescriptor>>, AppError> {
+    let bt = resolved_db.dialect.bool_true();
     let (sql_str, has_model, has_type) = match (&params.model, &params.r#type) {
         (Some(_), Some(_)) => (
-            format!("SELECT {} FROM ir_view WHERE active = 1 AND model = ? AND type = ? ORDER BY priority", VIEW_COLUMNS),
+            format!("SELECT {} FROM ir_view WHERE active = {} AND model = ? AND type = ? ORDER BY priority", VIEW_COLUMNS, bt),
             true, true,
         ),
         (Some(_), None) => (
-            format!("SELECT {} FROM ir_view WHERE active = 1 AND model = ? ORDER BY type, priority", VIEW_COLUMNS),
+            format!("SELECT {} FROM ir_view WHERE active = {} AND model = ? ORDER BY type, priority", VIEW_COLUMNS, bt),
             true, false,
         ),
         (None, Some(_)) => (
-            format!("SELECT {} FROM ir_view WHERE active = 1 AND type = ? ORDER BY model, priority", VIEW_COLUMNS),
+            format!("SELECT {} FROM ir_view WHERE active = {} AND type = ? ORDER BY model, priority", VIEW_COLUMNS, bt),
             false, true,
         ),
         (None, None) => (
-            format!("SELECT {} FROM ir_view WHERE active = 1 ORDER BY model, type, priority", VIEW_COLUMNS),
+            format!("SELECT {} FROM ir_view WHERE active = {} ORDER BY model, type, priority", VIEW_COLUMNS, bt),
             false, false,
         ),
     };

@@ -42,10 +42,19 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route_layer(middleware::from_fn(rate_limit_middleware))
         .layer(axum::Extension(public_limiter));
 
+    #[cfg(feature = "captcha")]
+    let public_routes = public_routes
+        .route("/api/captcha", get(handlers::captcha::generate_captcha).post(handlers::captcha::verify_captcha));
+
     let protected_routes = Router::new()
         .route(
             "/api/auth/profile",
             get(handlers::auth::get_profile).put(handlers::auth::update_profile),
+        )
+        .route("/api/auth/change-password", post(handlers::auth::change_password))
+        .route(
+            "/api/auth/preferences",
+            get(handlers::auth::get_preferences).put(handlers::auth::update_preferences),
         )
         .route("/api/settings", get(handlers::settings::list_settings))
         .route("/api/settings/{key}", put(handlers::settings::set_setting))

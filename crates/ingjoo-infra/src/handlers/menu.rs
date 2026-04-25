@@ -67,7 +67,8 @@ pub async fn list_menus(
     State(_state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let sql = resolved_db.dialect.prepare(
-        "SELECT id, name, parent_id, sequence, action_id, web_icon, group_ids FROM ir_menu WHERE active = 1 ORDER BY sequence",
+        &format!("SELECT id, name, parent_id, sequence, action_id, web_icon, group_ids FROM ir_menu WHERE active = {} ORDER BY sequence",
+            resolved_db.dialect.bool_true()),
     );
     let rows = sqlx::query(&sql)
         .fetch_all(&*resolved_db.pool)

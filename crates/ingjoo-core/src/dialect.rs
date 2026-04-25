@@ -80,6 +80,22 @@ impl Dialect {
         }
     }
 
+    /// 布尔真值字面量（SQLite: `1`, Postgres: `TRUE`）
+    pub fn bool_true(&self) -> &'static str {
+        match self {
+            Self::Sqlite => "1",
+            Self::Postgres => "TRUE",
+        }
+    }
+
+    /// 布尔假值字面量（SQLite: `0`, Postgres: `FALSE`）
+    pub fn bool_false(&self) -> &'static str {
+        match self {
+            Self::Sqlite => "0",
+            Self::Postgres => "FALSE",
+        }
+    }
+
     /// 二进制列类型名
     pub fn blob_type(&self) -> &'static str {
         match self {
@@ -323,6 +339,26 @@ mod tests {
     #[test]
     fn boolean_type_postgres() {
         assert_eq!(Dialect::Postgres.boolean_type(), "BOOLEAN");
+    }
+
+    #[test]
+    fn bool_true_sqlite() {
+        assert_eq!(Dialect::Sqlite.bool_true(), "1");
+    }
+
+    #[test]
+    fn bool_true_postgres() {
+        assert_eq!(Dialect::Postgres.bool_true(), "TRUE");
+    }
+
+    #[test]
+    fn bool_false_sqlite() {
+        assert_eq!(Dialect::Sqlite.bool_false(), "0");
+    }
+
+    #[test]
+    fn bool_false_postgres() {
+        assert_eq!(Dialect::Postgres.bool_false(), "FALSE");
     }
 
     #[test]

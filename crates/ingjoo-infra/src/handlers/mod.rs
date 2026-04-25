@@ -1,6 +1,8 @@
 pub mod action;
 pub mod attachment;
 pub mod auth;
+#[cfg(feature = "captcha")]
+pub mod captcha;
 pub mod crud;
 pub mod database;
 pub mod groups;
