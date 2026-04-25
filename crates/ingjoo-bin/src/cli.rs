@@ -12,6 +12,12 @@ pub struct Cli {
     #[arg(long, default_value = "sqlite:./data/ingjoo.db?mode=rwc", env = "DATABASE_URL")]
     pub database_url: String,
 
+    /// 多数据库基础 URL 模板（启用后支持动态创建数据库连接）
+    /// SQLite 示例: "sqlite:./data/"（拼接后为 sqlite:./data/{name}.db）
+    /// PostgreSQL 示例: "postgres://user:pass@localhost/"
+    #[arg(long, env = "DATABASE_BASE_URL")]
+    pub database_base_url: Option<String>,
+
     /// JWT 签名密钥
     #[arg(long, default_value = "ingjoo-default-secret-change-me", env = "INGJOO_JWT_SECRET")]
     pub jwt_secret: String,

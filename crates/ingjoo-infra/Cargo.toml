@@ -9,7 +9,7 @@ categories = ["web-programming", "authentication"]
 
 [features]
 default = ["db", "auth"]
-full = ["db", "auth", "email", "sms", "captcha", "s3"]
+full = ["db", "auth", "email", "sms", "captcha", "s3", "content-filter", "data-mask", "vector-pg", "signature"]
 mock = []
 db = ["sqlx"]
 auth = ["argon2", "jsonwebtoken", "sha2", "chrono", "rand"]
@@ -17,10 +17,15 @@ email = ["lettre"]
 sms = ["reqwest", "hmac", "sha2", "hex", "chrono"]
 captcha = ["image", "rand", "base64"]
 s3 = ["aws-sdk-s3", "aws-config"]
+content-filter = []
+data-mask = ["aes-gcm", "base64", "rand"]
+vector-pg = ["sqlx"]
+signature = ["hmac", "sha2", "hex", "chrono"]
 
 [dependencies]
 ingjoo-core = { path = "../ingjoo-core" }
 ingjoo-security = { path = "../ingjoo-security" }
+ingjoo-cache = { path = "../ingjoo-cache" }
 ingjoo-queue = { path = "../ingjoo-queue" }
 tokio.workspace = true
 serde.workspace = true
@@ -45,6 +50,10 @@ base64 = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 lettre = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
+
+[dependencies.aes-gcm]
+workspace = true
+optional = true
 
 [dependencies.aws-sdk-s3]
 workspace = true

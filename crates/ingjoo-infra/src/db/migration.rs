@@ -270,6 +270,114 @@ fn all_migrations() -> Vec<Migration> {
                 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)"#,
             ),
         },
+        Migration {
+            version: 8,
+            name: "create_ir_translation_table",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_translation (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    lang TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    field TEXT NOT NULL,
+                    record_id TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    UNIQUE(lang, model, field, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_translation_model ON ir_translation(model);
+                CREATE INDEX IF NOT EXISTS idx_ir_translation_lang_model ON ir_translation(lang, model)"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_translation (
+                    id SERIAL PRIMARY KEY,
+                    lang VARCHAR NOT NULL,
+                    model VARCHAR NOT NULL,
+                    field VARCHAR NOT NULL,
+                    record_id VARCHAR NOT NULL,
+                    value TEXT NOT NULL,
+                    UNIQUE(lang, model, field, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_translation_model ON ir_translation(model);
+                CREATE INDEX IF NOT EXISTS idx_ir_translation_lang_model ON ir_translation(lang, model)"#,
+            ),
+        },
+        Migration {
+            version: 9,
+            name: "create_ir_state_machine_tables",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_state_machine (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    model TEXT NOT NULL UNIQUE,
+                    states TEXT NOT NULL DEFAULT '[]',
+                    initial_state TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS ir_state_transition (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    model TEXT NOT NULL,
+                    from_state TEXT NOT NULL,
+                    to_state TEXT NOT NULL,
+                    label TEXT NOT NULL DEFAULT ''
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_state_transition_model ON ir_state_transition(model);
+                CREATE TABLE IF NOT EXISTS ir_state_record (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    model TEXT NOT NULL,
+                    record_id TEXT NOT NULL,
+                    current_state TEXT NOT NULL,
+                    UNIQUE(model, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_state_record_model ON ir_state_record(model)"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_state_machine (
+                    id SERIAL PRIMARY KEY,
+                    model VARCHAR NOT NULL UNIQUE,
+                    states TEXT NOT NULL DEFAULT '[]',
+                    initial_state VARCHAR NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS ir_state_transition (
+                    id SERIAL PRIMARY KEY,
+                    model VARCHAR NOT NULL,
+                    from_state VARCHAR NOT NULL,
+                    to_state VARCHAR NOT NULL,
+                    label VARCHAR NOT NULL DEFAULT ''
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_state_transition_model ON ir_state_transition(model);
+                CREATE TABLE IF NOT EXISTS ir_state_record (
+                    id SERIAL PRIMARY KEY,
+                    model VARCHAR NOT NULL,
+                    record_id VARCHAR NOT NULL,
+                    current_state VARCHAR NOT NULL,
+                    UNIQUE(model, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_state_record_model ON ir_state_record(model)"#,
+            ),
+        },
+        Migration {
+            version: 10,
+            name: "search_index",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_search_index (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    model TEXT NOT NULL,
+                    record_id TEXT NOT NULL,
+                    content TEXT NOT NULL DEFAULT '',
+                    data TEXT NOT NULL DEFAULT '{}',
+                    UNIQUE(model, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_search_index_model ON ir_search_index(model)"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_search_index (
+                    id SERIAL PRIMARY KEY,
+                    model VARCHAR NOT NULL,
+                    record_id VARCHAR NOT NULL,
+                    content TEXT NOT NULL DEFAULT '',
+                    data TEXT NOT NULL DEFAULT '{}',
+                    UNIQUE(model, record_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_ir_search_index_model ON ir_search_index(model)"#,
+            ),
+        },
     ]
 }
 
@@ -298,15 +406,16 @@ pub async fn run_pending_migrations(pool: &Pool, dialect: &Dialect) -> Result<()
         if let Some(sql) = sql {
             let prepared = dialect.prepare(sql);
             let stmts = Dialect::split_ddl(&prepared);
-            for stmt in stmts {
+            for (i, stmt) in stmts.iter().enumerate() {
                 let result = sqlx::query(stmt)
                     .execute(pool)
                     .await;
                 if let Err(ref e) = result {
                     let msg = e.to_string();
                     if msg.contains("duplicate column name") || msg.contains("no such column") || msg.contains("already exists") {
-                        tracing::debug!("迁移 v{} 跳过（状态已符合）: {}", migration.version, msg);
+                        tracing::debug!("迁移 v{} stmt[{}] 跳过: {}", migration.version, i, msg);
                     } else {
+                        tracing::error!("迁移 v{} stmt[{}] 失败: {} | SQL: {}", migration.version, i, msg, &stmt[..stmt.len().min(200)]);
                         result?;
                     }
                 }
@@ -314,15 +423,19 @@ pub async fn run_pending_migrations(pool: &Pool, dialect: &Dialect) -> Result<()
         }
 
         // 记录已执行
-        sqlx::query(
-            &dialect.prepare(
+        let insert_sql = dialect.prepare(
                 "INSERT INTO _migration_versions (version, name) VALUES (?, ?)",
-            ),
-        )
+            );
+        let result = sqlx::query(&insert_sql)
         .bind(migration.version)
         .bind(migration.name)
         .execute(pool)
-        .await?;
+        .await;
+
+        if let Err(ref e) = result {
+            tracing::debug!("迁移 v{} 记录失败: {}", migration.version, e);
+        }
+        result?;
 
         tracing::info!("已执行迁移 v{}: {}", migration.version, migration.name);
     }

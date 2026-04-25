@@ -1,3 +1,4 @@
+pub mod database_manager;
 pub mod generic;
 pub mod ids;
 pub mod migration;
@@ -222,7 +223,8 @@ impl Db {
             CREATE INDEX IF NOT EXISTS idx_record_rule_model ON record_rule(model);
                 "#;
 
-        for stmt in Dialect::split_ddl(&dialect.prepare(ddl)) {
+        let prepared = dialect.prepare(ddl);
+        for stmt in Dialect::split_ddl(&prepared).iter() {
             sqlx::query(stmt).execute(pool).await?;
         }
 
@@ -240,16 +242,19 @@ async fn seed_default_groups(pool: &Pool, dialect: &Dialect) -> Result<()> {
         ("viewer", "viewer", "只读用户", "仅可查看和导出"),
     ];
     for (id, name, display_name, comment) in &groups {
-        sqlx::query(
-            &dialect.prepare("INSERT INTO groups (id, name, display_name, comment) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING")
-        ).bind(id).bind(name).bind(display_name).bind(comment)
+        let sql = dialect.prepare("INSERT INTO groups (id, name, display_name, comment) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING");
+        sqlx::query(&sql).bind(id).bind(name).bind(display_name).bind(comment)
          .execute(pool).await?;
     }
 
     let implications = [("admin", "user"), ("user", "viewer")];
+    let insert_ignore = match dialect {
+        Dialect::Sqlite => "INSERT OR IGNORE INTO group_implied (group_id, implied_group_id) VALUES (?, ?)",
+        _ => "INSERT INTO group_implied (group_id, implied_group_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+    };
     for (gid, implied) in &implications {
         sqlx::query(
-            &dialect.prepare("INSERT OR IGNORE INTO group_implied (group_id, implied_group_id) VALUES (?, ?)")
+            &dialect.prepare(insert_ignore)
         ).bind(gid).bind(implied)
          .execute(pool).await?;
     }
@@ -257,8 +262,12 @@ async fn seed_default_groups(pool: &Pool, dialect: &Dialect) -> Result<()> {
     let models = ["collection", "entry", "source", "project", "user"];
     seed::seed_model_access(pool, dialect, &models).await?;
 
+    let insert_rule = match dialect {
+        Dialect::Sqlite => "INSERT OR IGNORE INTO record_rule (id, name, model, group_id, domain, perm_read, perm_write, perm_create, perm_delete) VALUES ('rule_viewer_entry', 'viewer: only published entries', 'entry', 'viewer', '[\"status\", \"=\", \"published\"]', 1, 0, 0, 0)",
+        _ => "INSERT INTO record_rule (id, name, model, group_id, domain, perm_read, perm_write, perm_create, perm_delete) VALUES ('rule_viewer_entry', 'viewer: only published entries', 'entry', 'viewer', '[\"status\", \"=\", \"published\"]', 1, 0, 0, 0) ON CONFLICT (id) DO NOTHING",
+    };
     sqlx::query(
-        &dialect.prepare("INSERT OR IGNORE INTO record_rule (id, name, model, group_id, domain, perm_read, perm_write, perm_create, perm_delete) VALUES ('rule_viewer_entry', 'viewer: only published entries', 'entry', 'viewer', '[\"status\", \"=\", \"published\"]', 1, 0, 0, 0)")
+        &dialect.prepare(insert_rule)
     ).execute(pool).await?;
 
     Ok(())
@@ -577,45 +586,38 @@ impl Db {
     // ==================== Module Settings ====================
 
     pub async fn list_module_settings(&self, scope: &str, scope_id: Option<&str>, module: Option<&str>) -> StoreResult<Vec<ModuleSetting>> {
-        match (scope_id, module) {
-            (Some(sid), Some(m)) => {
+        let scope_id_val = scope_id.unwrap_or("");
+        match module {
+            Some(m) => {
                 sqlx::query_as::<_, ModuleSetting>(
                     &self.sql("SELECT * FROM module_settings WHERE scope = ? AND scope_id = ? AND module = ? ORDER BY key")
-                ).bind(scope).bind(sid).bind(m).fetch_all(&self.pool).await.map_err(Into::into)
+                ).bind(scope).bind(scope_id_val).bind(m).fetch_all(&self.pool).await.map_err(Into::into)
             }
-            (Some(sid), None) => {
+            None => {
                 sqlx::query_as::<_, ModuleSetting>(
                     &self.sql("SELECT * FROM module_settings WHERE scope = ? AND scope_id = ? ORDER BY module, key")
-                ).bind(scope).bind(sid).fetch_all(&self.pool).await.map_err(Into::into)
-            }
-            (None, Some(m)) => {
-                sqlx::query_as::<_, ModuleSetting>(
-                    &self.sql("SELECT * FROM module_settings WHERE scope = ? AND module = ? ORDER BY key")
-                ).bind(scope).bind(m).fetch_all(&self.pool).await.map_err(Into::into)
-            }
-            _ => {
-                sqlx::query_as::<_, ModuleSetting>(
-                    &self.sql("SELECT * FROM module_settings WHERE scope = ? ORDER BY module, key")
-                ).bind(scope).fetch_all(&self.pool).await.map_err(Into::into)
+                ).bind(scope).bind(scope_id_val).fetch_all(&self.pool).await.map_err(Into::into)
             }
         }
     }
 
     pub async fn get_module_setting(&self, scope: &str, scope_id: Option<&str>, module: &str, key: &str) -> StoreResult<Option<String>> {
+        let scope_id_val = scope_id.unwrap_or("");
         let row: Option<(String,)> = sqlx::query_as(
-            &self.sql("SELECT value FROM module_settings WHERE scope = ? AND scope_id IS ? AND module = ? AND key = ?")
-        ).bind(scope).bind(scope_id).bind(module).bind(key)
+            &self.sql("SELECT value FROM module_settings WHERE scope = ? AND scope_id = ? AND module = ? AND key = ?")
+        ).bind(scope).bind(scope_id_val).bind(module).bind(key)
          .fetch_optional(&self.pool).await?;
         Ok(row.map(|(v,)| v))
     }
 
     pub async fn set_module_setting(&self, id: &str, scope: &str, scope_id: Option<&str>, module: &str, key: &str, value: &str) -> StoreResult<ModuleSetting> {
+        let scope_id_val = scope_id.unwrap_or("");
         sqlx::query_as::<_, ModuleSetting>(
             &self.sql("INSERT INTO module_settings (id, scope, scope_id, module, key, value, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
              ON CONFLICT(scope, scope_id, module, key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')
              RETURNING *")
-        ).bind(id).bind(scope).bind(scope_id).bind(module).bind(key).bind(value)
+        ).bind(id).bind(scope).bind(scope_id_val).bind(module).bind(key).bind(value)
          .fetch_one(&self.pool).await.map_err(Into::into)
     }
 
@@ -881,7 +883,7 @@ impl Db {
     pub async fn get_model_access(&self, id: &str) -> StoreResult<Option<ModelAccessRow>> {
         let row = sqlx::query(&self.sql("SELECT * FROM model_access WHERE id = ?"))
             .bind(id).fetch_optional(&self.pool).await?;
-        Ok(row.as_ref().map(|r| Self::row_to_model_access(r)))
+        Ok(row.as_ref().map(Self::row_to_model_access))
     }
 
     pub async fn list_model_accesses(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<ModelAccessRow>> {
@@ -891,7 +893,7 @@ impl Db {
             None => sqlx::query(&self.sql("SELECT * FROM model_access ORDER BY model"))
                 .fetch_all(&self.pool).await?,
         };
-        Ok(rows.iter().map(|r| Self::row_to_model_access(r)).collect())
+        Ok(rows.iter().map(Self::row_to_model_access).collect())
     }
 
     pub async fn update_model_access(&self, id: &str, access: &ModelAccessRow) -> StoreResult<Option<ModelAccessRow>> {
@@ -926,7 +928,7 @@ impl Db {
     pub async fn get_record_rule(&self, id: &str) -> StoreResult<Option<RecordRuleRow>> {
         let row = sqlx::query(&self.sql("SELECT * FROM record_rule WHERE id = ?"))
             .bind(id).fetch_optional(&self.pool).await?;
-        Ok(row.as_ref().map(|r| Self::row_to_record_rule(r)))
+        Ok(row.as_ref().map(Self::row_to_record_rule))
     }
 
     pub async fn list_record_rules(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<RecordRuleRow>> {
@@ -936,7 +938,7 @@ impl Db {
             None => sqlx::query(&self.sql("SELECT * FROM record_rule ORDER BY model, name"))
                 .fetch_all(&self.pool).await?,
         };
-        Ok(rows.iter().map(|r| Self::row_to_record_rule(r)).collect())
+        Ok(rows.iter().map(Self::row_to_record_rule).collect())
     }
 
     pub async fn update_record_rule(&self, id: &str, rule: &RecordRuleRow) -> StoreResult<Option<RecordRuleRow>> {
@@ -970,7 +972,7 @@ impl Db {
             query = query.bind(name);
         }
         let rows = query.fetch_all(&self.pool).await?;
-        Ok(rows.iter().map(|r| Self::row_to_model_access(r)).collect())
+        Ok(rows.iter().map(Self::row_to_model_access).collect())
     }
 
     pub async fn get_record_rules_for_groups(&self, group_names: &[String]) -> StoreResult<Vec<RecordRuleRow>> {
@@ -988,7 +990,7 @@ impl Db {
             query = query.bind(name);
         }
         let rows = query.fetch_all(&self.pool).await?;
-        Ok(rows.iter().map(|r| Self::row_to_record_rule(r)).collect())
+        Ok(rows.iter().map(Self::row_to_record_rule).collect())
     }
 }
 

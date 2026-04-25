@@ -1,9 +1,10 @@
-# 阶段 4 进度报告
+# 阶段 5-6 进度报告
 
 **日期**: 2026-04-25  
-**状态**: ✅ 阶段 4 全部完成  
-**测试基线**: 218 → 293 (+75 新增)  
-**构建**: 0 errors, 0 failures
+**状态**: ✅ 阶段 5-6 全部完成  
+**测试基线**: 298 → 334 (+36 新增)  
+**构建**: 0 errors, 0 failures  
+**提交**: `b5a6de9` → `origin/dev`
 
 ---
 
@@ -11,247 +12,224 @@
 
 | 任务 | 优先级 | 状态 | 交付物摘要 |
 |------|--------|------|-----------|
-| T4.0 元数据系统 | P0 | ✅ 已完成（之前） | ir_menu / ir_view / ir_action + handlers + 种子数据 |
-| T4.1 插件热加载 | P1 | ✅ 已完成 | 线程安全 Registry + PluginManager + 4 API 端点 |
-| T4.2 Rustdoc | P1 | ✅ 已完成 | 全 crate 公共 API `///` 文档注释 |
-| T4.3 性能基准 | P2 | ✅ 已完成 | criterion 3 组 11 基准 |
-| T4.4 集成测试 | P2 | ✅ 已完成 | 55 个集成测试（8 个新增） |
-| T4.5 CLI 工具 | P2 | ✅ 已完成 | clap 5 参数 + 环境变量 |
-| T4.6 多租户测试 | P2 | ✅ 已完成 | 6 单元 + 5 集成测试 |
-| T4.7 连接池可观测 | P3 | ✅ 已完成 | PoolOptions + PoolStats + health 端点 |
-| T4.8 限流中间件 | P3 | ✅ 已完成 | 分层可配置限流 |
+| T5.1 安全头中间件激活 | P0 | ✅ 已完成 | `security_headers_middleware` 接入全局路由 |
+| T5.2 noop 扩展补全 | P0 | ✅ 已完成 | 5 个新 noop 实现 + 5 个测试 |
+| T5.3 feature flags | P0 | ✅ 已完成 | 4 个 feature + aes-gcm 依赖 |
+| T5.4 缓存集成 | P1 | ✅ 已完成 | FrameworkCache → AppState → SecurityPolicy 缓存 |
+| T5.5 ROADMAP 更新 | P2 | ✅ 已完成 | 中英文 ROADMAP Phase 5 section |
 
 ---
 
-## T4.1 插件/模块热加载系统
+## T5.1 安全响应头中间件激活
+
+### 改动
+
+| 文件 | 变更 |
+|------|------|
+| `ingjoo-infra/src/router.rs` | 导入 `security_headers_middleware`，全局 router 加 `.layer(middleware::from_fn(...))` |
+
+### 注入的安全头
+
+| 头 | 值 |
+|----|---|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `X-XSS-Protection` | `1; mode=block` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Content-Security-Policy` | `default-src 'self'` |
+
+> `headers.rs` 中间件代码在阶段 4 之前就已存在，但从未接入路由。Phase 5 完成接线。
+
+---
+
+## T5.2 扩展 trait noop 补全
+
+### 新增 noop 实现
+
+| Struct | Trait | 行为 |
+|--------|-------|------|
+| `NoopStateMachine` | `StateMachine` | get_current_state → 空, transition → InvalidTransition, register_machine → Ok |
+| `NoopSearchEngine` | `SearchEngine` | 全部返回 `"搜索服务未启用"` 错误 |
+| `NoopPaymentProvider` | `PaymentProvider` | 全部返回 `"支付服务未启用"` 错误 |
+| `NoopRelationLoader` | `RelationLoader` | load_one2many / load_many2one → 空 HashMap |
+| `NoopTranslationStore` | `TranslationStore` | get → None, set/remove → Ok, get_batch → 空, list_languages → 空 |
+
+### 扩展 trait 覆盖率（Phase 5 最终状态）
+
+| Trait | Noop | 真实实现 | Feature Gate |
+|-------|------|---------|-------------|
+| `LlmProvider` | ✅ | — | — |
+| `VectorStore` | ✅ | InMemoryVectorStore (always), PgVectorStore | `vector-pg` |
+| `DocumentLoader` | ✅ | — | — |
+| `TextSplitter` | ✅ | — | — |
+| `DataMask` | ✅ | AesDataMask | `data-mask` |
+| `ContentFilter` | ✅ | KeywordContentFilter | `content-filter` |
+| `InputSanitizer` | ✅ | — | — |
+| `SignatureVerifier` | ✅ | HmacSignatureVerifier | `signature` |
+| `AuditStore` | ✅ | DbAuditStore | `db` |
+| `StateMachine` | ✅ | — | — |
+| `SearchEngine` | ✅ | — | — |
+| `PaymentProvider` | ✅ | — | — |
+| `RelationLoader` | ✅ | — | — |
+| `TranslationStore` | ✅ | — | — |
+| `EventBus` | — | BroadcastEventBus | always |
+| `IdGenerator` | — | DefaultIdGenerator | always |
+| `Lock` | — | InMemoryLock | always |
+
+**14/17 trait 有 noop 降级**（3 个始终启用，无需 noop）
+
+### 新增测试（5 个）
+
+- `test_noop_state_machine` — get/transition/register 验证
+- `test_noop_search_engine_returns_error` — search 返回错误
+- `test_noop_payment_provider_returns_error` — create_intent 返回错误
+- `test_noop_relation_loader_returns_empty` — 两个方法返回空 map
+- `test_noop_translation_store_returns_none` — get 返回 None, get_batch 空, set/remove ok
+
+---
+
+## T5.3 Feature Flags
+
+### 新增 feature 定义
+
+| Feature | 依赖 | 启用的实现 |
+|---------|------|-----------|
+| `content-filter` | （无额外依赖） | KeywordContentFilter |
+| `data-mask` | aes-gcm, base64, rand | AesDataMask |
+| `vector-pg` | sqlx | PgVectorStore |
+| `signature` | hmac, sha2, hex, chrono | HmacSignatureVerifier |
+
+### 依赖变更
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| `aes-gcm` | 0.10 | AES-256-GCM 加密（data-mask feature） |
+| `ingjoo-cache` | workspace | FrameworkCache 缓存（非 optional） |
+
+### Feature 组合
+
+```toml
+default = ["db", "auth"]
+full    = ["db", "auth", "email", "sms", "captcha", "s3",
+           "content-filter", "data-mask", "vector-pg", "signature"]
+```
+
+---
+
+## T5.4 FrameworkCache 集成
 
 ### 架构
 
 ```
-JSON 清单文件 → PluginManifest → PluginManager → ModelRegistry
-                                    ↓
-                              GenericDb.ensure_table()  →  自动建表
+请求到达 CRUD handler
+    ↓
+load_security_policy(state, groups)
+    ↓
+cache.get_scope_access("policy", cache_key)  ──命中──→  直接返回缓存策略
+    ↓ 未命中
+DB: get_model_accesses_for_groups + get_record_rules_for_groups
+    ↓
+policy.add_model_access() / policy.add_record_rule()
+    ↓
+cache.put_scope_access("policy", cache_key, policy)  ──写入缓存
+    ↓
+返回策略
+
+--- 权限变更时 ---
+
+permission handler (create/update/delete access or rule)
+    ↓
+state.cache.invalidate_scope("policy")  ──清除全部策略缓存
 ```
 
 ### 改动文件
 
 | 文件 | 变更 |
 |------|------|
-| `ingjoo-core/src/module/registry.rs` | `HashMap` → `RwLock<HashMap>`，所有方法 `&self` |
-| `ingjoo-core/src/module/plugin.rs` | **新增**: PluginManifest / PluginInfo / PluginState 类型 |
-| `ingjoo-core/src/module/mod.rs` | 新增 `pub mod plugin` + re-exports |
-| `ingjoo-infra/src/plugin/manager.rs` | **新增**: PluginManager（load/unload/reload/list） |
-| `ingjoo-infra/src/handlers/plugin.rs` | **新增**: 4 个管理 API handler |
-| `ingjoo-infra/src/router.rs` | 注册 4 条 admin 路由 |
-| `ingjoo-infra/src/state.rs` | 新增 `plugin_manager: Option<Arc<PluginManager>>` |
-| `ingjoo-bin/src/main.rs` | PluginManager 初始化 + PLUGINS_DIR 自动加载 |
+| `ingjoo-infra/Cargo.toml` | 添加 `ingjoo-cache` 依赖 |
+| `ingjoo-infra/src/state.rs` | AppState 新增 `cache: Arc<FrameworkCache<SecurityPolicy, ()>>` 字段 |
+| `ingjoo-infra/src/handlers/crud.rs` | `load_security_policy()` 加缓存查询/写入 |
+| `ingjoo-infra/src/handlers/permission.rs` | 6 个 mutation handler 加缓存失效 |
 
-### API 端点
-
-| 方法 | 路径 | 权限 | 功能 |
-|------|------|------|------|
-| GET | `/api/admin/plugins` | admin | 列出已加载插件 |
-| POST | `/api/admin/plugins/load` | admin | 从目录加载插件 |
-| POST | `/api/admin/plugins/{name}/unload` | admin | 卸载插件 |
-| POST | `/api/admin/plugins/{name}/reload` | admin | 重载插件 |
-
-### 测试（5 个）
-- `test_plugin_list_empty` / `test_plugin_load_from_dir` / `test_plugin_unload`
-- `test_plugin_requires_admin` / `test_plugin_load_invalid_dir`
-
----
-
-## T4.2 公共 API Rustdoc
-
-全 crate 所有公开 trait、struct、enum、fn 添加 `///` 文档注释。
-`cargo doc --workspace` 零 missing-doc 警告。
-
----
-
-## T4.3 性能基准测试（criterion）
-
-### 基准组
-
-| 组 | 文件 | 场景数 | 样例延迟 |
-|----|------|--------|---------|
-| Domain DSL 解析 | `ingjoo-core/benches/domain_bench.rs` | 4 | simple_leaf ~1.1µs |
-| Domain DSL → SQL | 同上 | 3 | and_conditions ~1.9µs |
-| Domain 端到端 | 同上 | 1 | parse+compile ~1.8µs |
-| Registry 注册 | `ingjoo-core/benches/registry_bench.rs` | 4 | register ~700ns |
-| Cache 读写 | `ingjoo-cache/benches/cache_bench.rs` | 4 | put_get ~1.4µs |
-
-### 运行命令
-
-```bash
-cargo bench --workspace
-```
-
----
-
-## T4.4 完整集成测试套件
-
-从 42 个扩展到 55 个集成测试。
-
-### 新增测试（8 个）
-
-| 测试 | 覆盖场景 |
-|------|---------|
-| `test_health_has_pool_stats` | health 端点返回 pool 统计 |
-| `test_profile_update` | PUT profile 更新姓名 → GET 验证 |
-| `test_crud_update_record` | 动态模型记录更新 |
-| `test_crud_delete_record` | 动态模型记录删除 → 404 |
-| `test_view_nonadmin_forbidden` | 普通用户创建视图 → 403 |
-| `test_action_nonadmin_forbidden` | 普通用户创建动作 → 403 |
-| `test_rate_limit_protected_route` | 45 次快速请求 → 触发 429 |
-| `test_schedule_crud_full_flow` | 调度任务完整 CRUD |
-
-### 关键发现
-
-- cron 表达式需用 **6 字段格式**（`sec min hour dom month dow`），非传统 5 字段
-
----
-
-## T4.5 CLI 管理工具
-
-### 新增文件
-- `crates/ingjoo-bin/src/cli.rs` — clap derive Cli struct
-
-### 参数映射
-
-| CLI flag | 环境变量 | 默认值 |
-|----------|---------|--------|
-| `--bind` | `INGJOO_BIND` | `0.0.0.0:3000` |
-| `--database-url` | `DATABASE_URL` | `sqlite:./data/ingjoo.db?mode=rwc` |
-| `--jwt-secret` | `INGJOO_JWT_SECRET` | `ingjoo-default-secret-change-me` |
-| `--log-level` | `INGJOO_LOG` | `ingjoo_bin=info` |
-| `--plugins-dir` | `PLUGINS_DIR` | `./plugins` |
-
-### 使用示例
-
-```bash
-# 环境变量方式
-DATABASE_URL=sqlite:./data/prod.db INGJOO_JWT_SECRET=my-secret ./ingjoo-bin
-
-# CLI 参数方式
-./ingjoo-bin --bind 0.0.0.0:8080 --jwt-secret my-secret --log-level debug
-
-# 查看帮助
-./ingjoo-bin --help
-```
-
----
-
-## T4.6 多租户集合隔离测试
-
-### 单元测试（6 个，在 `policy.rs`）
-
-| 测试 | 场景 |
-|------|------|
-| `test_collection_isolation_multiple_collections` | 5 个集合 ID → `IN (?, ?, ?, ?, ?)` |
-| `test_collection_isolation_with_table_alias` | 别名 `t0.collection_id IN (...)` |
-| `test_collection_isolation_sql_injection_prevention` | 恶意输入作为参数化查询处理 |
-| `test_collection_isolation_special_characters` | Unicode / 特殊字符 |
-| `test_collection_isolation_single_id` | 单集合 |
-| `test_collection_isolation_alias_with_multiple_ids` | 别名 + 多 ID |
-
-### 集成测试（5 个，在 `integration_test.rs`）
-
-| 测试 | 场景 |
-|------|------|
-| `test_collection_isolation_crud_filter` | Domain 过滤隔离不同集合记录 |
-| `test_collection_isolation_cross_collection_denied` | 跨集合记录被过滤 |
-| `test_collection_isolation_with_domain_dsl` | 隐式 AND 复合条件 |
-| `test_collection_isolation_security_policy_layer3` | SecurityPolicy 层 3 集成验证 |
-| `test_collection_isolation_generic_db_filter` | GenericDb 直接 SqlCondition 过滤 |
-
----
-
-## T4.7 连接池可观测性
-
-### 改动
-
-| 文件 | 变更 |
-|------|------|
-| `ingjoo-core/src/pool.rs` | 新增 `connect_pool_with_options()` + `PoolStats` struct |
-| `ingjoo-infra/src/handlers/health.rs` | health 端点增加 `pool` 统计字段 |
-| `ingjoo-bin/src/main.rs` | 改用 `connect_pool_with_options()` |
-
-### 配置默认值
+### 缓存策略
 
 | 参数 | 值 |
 |------|---|
-| max_connections | 10 |
-| min_connections | 1 |
-| acquire_timeout | 30s |
-| idle_timeout | 600s |
-| max_lifetime | 1800s |
-
-### Health 端点响应示例
-
-```json
-{
-  "status": "ok",
-  "database": "connected",
-  "pool": {
-    "total_connections": 2,
-    "idle_connections": 1,
-    "active_connections": 1,
-    "max_connections": 10
-  },
-  "uptime_secs": 42
-}
-```
-
----
-
-## T4.8 限流中间件配置化
-
-### 改动
-
-| 文件 | 变更 |
-|------|------|
-| `ingjoo-infra/src/state.rs` | 新增 `RateLimitConfig` struct + AppState 字段 |
-| `ingjoo-infra/src/router.rs` | 分层限流：public / protected / admin / CRUD |
-| `ingjoo-infra/src/lib.rs` | 导出 `RateLimitConfig` |
-| `ingjoo-bin/src/main.rs` | 环境变量读取配置 |
-
-### 分层限流策略
-
-| 路由组 | 令牌容量 | 补充速率 | 配置来源 |
-|--------|---------|---------|---------|
-| Public（注册/登录） | 10 | 1.0/sec | 环境变量 `INGJOO_RATE_LIMIT_MAX` / `INGJOO_RATE_LIMIT_REFILL` |
-| Protected（认证用户） | 30 | 5.0/sec | 硬编码 |
-| Admin（管理操作） | 60 | 10.0/sec | 硬编码 |
-| CRUD（动态模型） | 30 | 5.0/sec | 硬编码 |
+| 缓存键 | `policy:{sorted_groups_joined_by_colon}` |
+| 分区 | `scope_access`（TTL 300s, max 1000） |
+| 失效触发 | 任何 access/rule 的 create/update/delete |
+| 失效范围 | 清除整个 `policy` scope（简单正确，后续可优化为精确失效） |
 
 ---
 
 ## 测试统计
 
-| 指标 | 之前 | 之后 | 变化 |
-|------|------|------|------|
-| 集成测试 | 42 | 55 | +13 |
-| 单元测试（多租户） | 3 | 9 | +6 |
-| 基准测试 | 0 | 11 | +11 |
-| 总测试数 | 218 | 293 | +75 |
-| 失败数 | 0 | 0 | — |
+| 指标 | 阶段 4 结束 | 阶段 5 结束 | 阶段 6 结束 | 变化 |
+|------|-----------|-----------|-----------|------|
+| noop 扩展测试 | 13 | 18 | 18 | — |
+| 总测试数 | 293 | 298 | 334 | +36 |
+| 失败数 | 0 | 0 | 0 | — |
 
 ---
 
-## 依赖变更
+## 阶段 6：生产就绪 ✅
 
-| 依赖 | 版本 | 用途 |
-|------|------|------|
-| `clap` | 4 (derive + env) | CLI 参数解析 |
-| `criterion` | 0.5 (html_reports) | 性能基准测试 |
+### 改动摘要
+
+| 任务 | 优先级 | 状态 | 交付物 |
+|------|--------|------|--------|
+| T6.1 AppState 接入 14 个扩展 trait | P0 | ✅ | `state.rs` — 14 个 `Arc<dyn Trait>` + noop 默认 + builder |
+| T6.2 main.rs 条件编译 | P0 | ✅ | feature-gated `build_audit()`/`build_content_filter()`/`build_data_mask()`/`build_signature()` |
+| T6.3 CRUD 审计日志 | P0 | ✅ | create/update/delete 后 fire-and-forget 审计 |
+| T6.4 缓存集成测试 | P1 | ✅ | 3 个测试 (put+get 命中, key 隔离, invalidate 清除) |
+| T6.5 `--all-features` 编译修复 | P0 | ✅ | 补全 re-export (GroupId, Group, GroupStore, AccessStore 等) |
+
+### 额外改动
+
+| 改动 | 说明 |
+|------|------|
+| 多数据库管理 | `DatabaseManager` + `database_selector` 中间件 |
+| Clippy 清理 | 16 条警告修复 (redundant closures, unused fn, auto-deref, complex type, Ok(?), format!) |
+| `build.sh` 修复 | 前端路径 `web-base` → `ingjoo-js` |
+| 文档更新 | ARCHITECTURE.md, QUICK-START.md, ROADMAP.md, PROGRESS-PLAN 同步至最新 |
 
 ---
 
-## 阶段 4 完成度
+## 阶段 5-6 完成度
 
 ```
-T4.0 ✅  T4.1 ✅  T4.2 ✅  T4.3 ✅  T4.4 ✅
-T4.5 ✅  T4.6 ✅  T4.7 ✅  T4.8 ✅
+T5.1 ✅  T5.2 ✅  T5.3 ✅  T5.4 ✅  T5.5 ✅
+T6.1 ✅  T6.2 ✅  T6.3 ✅  T6.4 ✅  T6.5 ✅  T6.6 ✅
 
-阶段 4：9/9 任务完成 ✅
+阶段 5：5/5 任务完成 ✅
+阶段 6：6/6 任务完成 ✅
+```
+
+---
+
+## 改动文件汇总
+
+| 文件 | 变更类型 | 行数 |
+|------|---------|------|
+| `Cargo.toml` (workspace) | +1 行 | aes-gcm 依赖 |
+| `crates/ingjoo-infra/Cargo.toml` | +11 行 | 4 feature flags + 2 依赖 |
+| `crates/ingjoo-infra/src/router.rs` | +2 行 | 安全头 layer |
+| `crates/ingjoo-infra/src/state.rs` | +5 行 | cache 字段 |
+| `crates/ingjoo-infra/src/handlers/crud.rs` | +13 行 | 策略缓存 |
+| `crates/ingjoo-infra/src/handlers/permission.rs` | +6 行 | 缓存失效 |
+| `crates/ingjoo-infra/src/extension_noop.rs` | +317 行 | 5 noop + 5 测试 |
+| `dev-docs/en/ROADMAP.md` | +72/-38 行 | Phase 5 section |
+| `dev-docs/zh/ROADMAP.md` | +50/-38 行 | Phase 5 section |
+
+**总计**: 9 个文件, +439/-38 行
+
+---
+
+## 阶段 5 完成度
+
+```
+T5.1 ✅  T5.2 ✅  T5.3 ✅  T5.4 ✅  T5.5 ✅
+
+阶段 5：5/5 任务完成 ✅
+阶段 6：6/6 任务完成 ✅
 ```

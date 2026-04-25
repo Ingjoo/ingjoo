@@ -81,8 +81,8 @@ mod tests {
         let gen = DefaultIdGenerator::new();
         let id1 = gen.generate("t");
         let id2 = gen.generate("t");
-        let n1: u64 = id1.split('_').last().unwrap().parse().unwrap();
-        let n2: u64 = id2.split('_').last().unwrap().parse().unwrap();
+        let n1: u64 = id1.split('_').next_back().unwrap().parse().unwrap();
+        let n2: u64 = id2.split('_').next_back().unwrap().parse().unwrap();
         assert!(n2 > n1);
     }
 

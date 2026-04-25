@@ -18,15 +18,17 @@ cargo build
 ## 测试
 
 ```bash
-# 运行全部测试（85 个，覆盖 3 个 crate）
+# 运行全部测试（334 个，覆盖 7 个 crate）
 cargo test
 
 # 测试指定 crate
 cargo test -p ingjoo-core
 cargo test -p ingjoo-security
 cargo test -p ingjoo-cache
-
-# 注意：ingjoo-infra 当前零测试
+cargo test -p ingjoo-infra
+cargo test -p ingjoo-queue
+cargo test -p ingjoo-macros
+cargo test -p ingjoo-bin
 ```
 
 ## 数据库配置
@@ -53,7 +55,7 @@ Dialect 系统自动从 URL scheme（`sqlite:` vs `postgres:`）检测数据库�
 cargo run -p ingjoo-bin
 ```
 
-**当前行为**：连接数据库、运行迁移、绑定 3000 端口，但**不启动 HTTP 服务**。该二进制仅为骨架——参见 `ROADMAP.md` 阶段 1 的构建计划。
+**当前行为**：连接数据库、运行迁移、在 3000 端口启动完整 HTTP 服务（含认证、CRUD、权限、菜单、视图、动作、定时任务、WebSocket 等 API 路由）。
 
 ## 环境变量
 
@@ -113,14 +115,14 @@ ingjoo/
 |------|------|---------|
 | Domain DSL | ✅ 可用 | `Domain::parse(r#"[["name", "=", "test"]]"#)` → SQL 条件 |
 | Dialect 抽象 | ✅ 可用 | `Dialect::Sqlite` / `Dialect::Postgres` 处理 DDL + 占位符转换 |
-| Store trait | ✅ 可用 | `Arc<dyn ScaffStore>` — 8 个异步数据访问 trait |
+| Store trait | ✅ 可用 | `Arc<dyn IngjooStore>` — 8 个异步数据访问 trait |
 | 安全策略引擎 | ✅ 可用 | `SecurityPolicy::check_access(model, role, op)` |
 | 缓存 | ✅ 可用 | `FrameworkCache::new()` — 作用域、用户、设置缓存 |
 | JWT 认证 | ✅ 可用 | `JwtAuthProvider::new(config)` — 哈希/验证/创建 token |
 | Mock DB | ✅ 可用 | `MockScaffDb::new()` — 完整内存实现 |
-| HTTP 服务 | ❌ 未实现 | `ingjoo-bin` 无 axum 路由 |
-| 动态模型注册 | ❌ 未实现 | `module/mod.rs` 仅 12 行 |
-| 派生宏 | ❌ 未实现 | `ingjoo-macros` 为空 |
+| HTTP 服务 | ✅ 可用 | 完整 axum 路由 — 认证、CRUD、权限、菜单、视图、动作、定时任务、WebSocket |
+| 动态模型注册 | ✅ 可用 | `ModelRegistry` + `GenericDb` — 运行时 schema、自动 DDL、CRUD |
+| 派生宏 | ✅ 可用 | `#[derive(IngjooModel)]` — 自动生成 ModelDescriptor |
 
 ## 开发工作流
 

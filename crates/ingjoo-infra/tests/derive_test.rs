@@ -3,6 +3,7 @@ use ingjoo_macros::IngjooModel;
 
 #[derive(IngjooModel)]
 #[ingjoo(table = "articles")]
+#[allow(dead_code)]
 struct Article {
     #[ingjoo(type = "text", required)]
     title: String,
@@ -40,6 +41,7 @@ fn derive_basic_fields() {
 
 #[derive(IngjooModel)]
 #[ingjoo(table = "products", audit)]
+#[allow(dead_code)]
 struct Product {
     #[ingjoo(type = "text", required, unique)]
     sku: String,
@@ -72,6 +74,7 @@ fn derive_audit_and_many2one() {
 
 #[derive(IngjooModel)]
 #[ingjoo(table = "logs")]
+#[allow(dead_code)]
 struct LogEntry {
     #[ingjoo(type = "json")]
     payload: serde_json::Value,

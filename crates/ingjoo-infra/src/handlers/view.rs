@@ -12,6 +12,7 @@ use ingjoo_core::ViewDescriptor;
 use ingjoo_core::ViewType;
 
 use crate::extractors::CurrentUser;
+use crate::middleware::database_selector::ResolvedDatabase;
 use crate::middleware::error::AppError;
 use crate::AppState;
 
@@ -103,7 +104,8 @@ pub struct ViewQueryParams {
 /// GET /api/views — 查询视图（支持 ?model=X&type=list 过滤）
 pub async fn list_views(
     Extension(_current_user): Extension<CurrentUser>,
-    State(state): State<Arc<AppState>>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
+    State(_state): State<Arc<AppState>>,
     Query(params): Query<ViewQueryParams>,
 ) -> Result<Json<Vec<ViewDescriptor>>, AppError> {
     let (sql_str, has_model, has_type) = match (&params.model, &params.r#type) {
@@ -125,7 +127,7 @@ pub async fn list_views(
         ),
     };
 
-    let sql = state.dialect.prepare(&sql_str);
+    let sql = resolved_db.dialect.prepare(&sql_str);
     let mut q = sqlx::query(&sql);
     if has_model {
         q = q.bind(params.model.as_deref().unwrap());
@@ -135,7 +137,7 @@ pub async fn list_views(
     }
 
     let rows = q
-        .fetch_all(&*state.pool)
+        .fetch_all(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?;
 
@@ -146,16 +148,17 @@ pub async fn list_views(
 /// GET /api/views/{id} — 获取单个视图
 pub async fn get_view(
     Extension(_current_user): Extension<CurrentUser>,
-    State(state): State<Arc<AppState>>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
+    State(_state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<ViewDescriptor>, AppError> {
-    let sql = state.dialect.prepare(&format!(
+    let sql = resolved_db.dialect.prepare(&format!(
         "SELECT {} FROM ir_view WHERE id = ?",
         VIEW_COLUMNS
     ));
     let row = sqlx::query(&sql)
         .bind(&id)
-        .fetch_optional(&*state.pool)
+        .fetch_optional(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?;
 
@@ -168,6 +171,7 @@ pub async fn get_view(
 /// POST /api/views — 创建视图（管理员）
 pub async fn create_view(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateViewRequest>,
 ) -> Result<(StatusCode, Json<ViewDescriptor>), AppError> {
@@ -179,7 +183,7 @@ pub async fn create_view(
     let group_ids = req.group_ids.unwrap_or_default();
     let group_ids_str = serde_json::to_string(&group_ids).unwrap_or_else(|_| "[]".into());
 
-    let sql = state.dialect.prepare(
+    let sql = resolved_db.dialect.prepare(
         "INSERT INTO ir_view (id, name, model, type, priority, arch, inherit_id, group_ids, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
     );
     sqlx::query(&sql)
@@ -191,7 +195,7 @@ pub async fn create_view(
         .bind(&arch_str)
         .bind(&req.inherit_id)
         .bind(&group_ids_str)
-        .execute(&*state.pool)
+        .execute(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("创建视图失败: {}", e)))?;
 
@@ -213,6 +217,7 @@ pub async fn create_view(
 /// PUT /api/views/{id} — 更新视图（管理员）
 pub async fn update_view(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
     Json(req): Json<UpdateViewRequest>,
@@ -220,13 +225,13 @@ pub async fn update_view(
     require_admin(&current_user, &state.store).await?;
 
     // 查询现有记录
-    let sql = state.dialect.prepare(&format!(
+    let sql = resolved_db.dialect.prepare(&format!(
         "SELECT {} FROM ir_view WHERE id = ?",
         VIEW_COLUMNS
     ));
     let row = sqlx::query(&sql)
         .bind(&id)
-        .fetch_optional(&*state.pool)
+        .fetch_optional(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?
         .ok_or_else(|| AppError::NotFound(format!("视图 '{}' 不存在", id)))?;
@@ -249,7 +254,7 @@ pub async fn update_view(
         .unwrap_or_else(|| serde_json::from_str(&existing.group_ids_str).unwrap_or_default());
     let group_ids_str = serde_json::to_string(&group_ids).unwrap_or_else(|_| "[]".into());
 
-    let sql = state.dialect.prepare(
+    let sql = resolved_db.dialect.prepare(
         "UPDATE ir_view SET name = ?, type = ?, priority = ?, arch = ?, group_ids = ?, updated_at = datetime('now') WHERE id = ?",
     );
     sqlx::query(&sql)
@@ -259,7 +264,7 @@ pub async fn update_view(
         .bind(&arch_str)
         .bind(&group_ids_str)
         .bind(&id)
-        .execute(&*state.pool)
+        .execute(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("更新视图失败: {}", e)))?;
 
@@ -279,15 +284,16 @@ pub async fn update_view(
 /// DELETE /api/views/{id} — 删除视图（管理员）
 pub async fn delete_view(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
     require_admin(&current_user, &state.store).await?;
 
-    let sql = state.dialect.prepare("DELETE FROM ir_view WHERE id = ?");
+    let sql = resolved_db.dialect.prepare("DELETE FROM ir_view WHERE id = ?");
     let result = sqlx::query(&sql)
         .bind(&id)
-        .execute(&*state.pool)
+        .execute(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("删除视图失败: {}", e)))?;
 

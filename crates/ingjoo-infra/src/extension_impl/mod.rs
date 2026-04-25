@@ -1,7 +1,11 @@
 pub mod event_bus;
 pub mod id_generator;
 pub mod lock;
+pub mod text_splitter;
 pub mod vector_inmemory;
+pub mod sanitizer;
+pub mod document_loader;
+pub mod search_engine;
 
 #[cfg(feature = "content-filter")]
 pub mod content_filter;
@@ -15,11 +19,21 @@ pub mod signature;
 pub mod audit;
 #[cfg(feature = "db")]
 pub mod prompt_engine;
+#[cfg(feature = "db")]
+pub mod relation_loader;
+#[cfg(feature = "db")]
+pub mod translation;
+#[cfg(feature = "db")]
+pub mod state_machine_impl;
 
 pub use event_bus::BroadcastEventBus;
 pub use id_generator::DefaultIdGenerator;
 pub use lock::InMemoryLock;
+pub use text_splitter::CharTextSplitter;
 pub use vector_inmemory::InMemoryVectorStore;
+pub use sanitizer::HtmlInputSanitizer;
+pub use document_loader::FsDocumentLoader;
+pub use search_engine::DbSearchEngine;
 
 #[cfg(feature = "content-filter")]
 pub use content_filter::KeywordContentFilter;
@@ -33,3 +47,9 @@ pub use signature::HmacSignatureVerifier;
 pub use audit::DbAuditStore;
 #[cfg(feature = "db")]
 pub use prompt_engine::SettingsPromptManager;
+#[cfg(feature = "db")]
+pub use relation_loader::DbRelationLoader;
+#[cfg(feature = "db")]
+pub use translation::DbTranslationStore;
+#[cfg(feature = "db")]
+pub use state_machine_impl::DbStateMachine;

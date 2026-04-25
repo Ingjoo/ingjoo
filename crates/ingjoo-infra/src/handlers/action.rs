@@ -14,6 +14,7 @@ use ingjoo_core::ViewType;
 
 use super::view::{ViewRow, VIEW_COLUMNS};
 use crate::extractors::CurrentUser;
+use crate::middleware::database_selector::ResolvedDatabase;
 use crate::middleware::error::AppError;
 use crate::AppState;
 
@@ -134,16 +135,17 @@ impl ActionRow {
 /// GET /api/actions/{id} — 获取 action + 关联 views + model schema（一次请求）
 pub async fn get_action(
     Extension(_current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let sql = state.dialect.prepare(&format!(
+    let sql = resolved_db.dialect.prepare(&format!(
         "SELECT {} FROM ir_action WHERE id = ?",
         ACTION_COLUMNS
     ));
     let row = sqlx::query(&sql)
         .bind(&id)
-        .fetch_optional(&*state.pool)
+        .fetch_optional(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询动作失败: {}", e)))?
         .ok_or_else(|| AppError::NotFound(format!("动作 '{}' 不存在", id)))?;
@@ -152,9 +154,9 @@ pub async fn get_action(
 
     // 查询关联视图
     let views_json = if !action.view_ids.is_empty() {
-        fetch_views_by_ids(&state, &action.view_ids).await?
+        fetch_views_by_ids(&resolved_db, &action.view_ids).await?
     } else if let Some(ref res_model) = action.res_model {
-        fetch_views_by_model(&state, res_model).await?
+        fetch_views_by_model(&resolved_db, res_model).await?
     } else {
         serde_json::json!({})
     };
@@ -180,16 +182,17 @@ pub async fn get_action(
 /// GET /api/actions — 列出所有动作（管理员）
 pub async fn list_actions(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<ActionDescriptor>>, AppError> {
     require_admin(&current_user, &state.store).await?;
 
-    let sql = state.dialect.prepare(&format!(
+    let sql = resolved_db.dialect.prepare(&format!(
         "SELECT {} FROM ir_action ORDER BY name",
         ACTION_COLUMNS
     ));
     let rows = sqlx::query(&sql)
-        .fetch_all(&*state.pool)
+        .fetch_all(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询动作失败: {}", e)))?;
 
@@ -199,6 +202,7 @@ pub async fn list_actions(
 /// POST /api/actions — 创建动作（管理员）
 pub async fn create_action(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateActionRequest>,
 ) -> Result<(StatusCode, Json<ActionDescriptor>), AppError> {
@@ -213,7 +217,7 @@ pub async fn create_action(
     let group_ids_str = serde_json::to_string(&group_ids).unwrap_or_else(|_| "[]".into());
     let target = req.target.as_deref().unwrap_or("current");
 
-    let sql = state.dialect.prepare(
+    let sql = resolved_db.dialect.prepare(
         "INSERT INTO ir_action (id, name, type, res_model, view_mode, view_ids, domain, context, page_limit, target, url, help, group_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     );
     sqlx::query(&sql)
@@ -230,7 +234,7 @@ pub async fn create_action(
         .bind(&req.url)
         .bind(&req.help)
         .bind(&group_ids_str)
-        .execute(&*state.pool)
+        .execute(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("创建动作失败: {}", e)))?;
 
@@ -255,19 +259,20 @@ pub async fn create_action(
 /// PUT /api/actions/{id} — 更新动作（管理员）
 pub async fn update_action(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
     Json(req): Json<UpdateActionRequest>,
 ) -> Result<Json<ActionDescriptor>, AppError> {
     require_admin(&current_user, &state.store).await?;
 
-    let sql = state.dialect.prepare(&format!(
+    let sql = resolved_db.dialect.prepare(&format!(
         "SELECT {} FROM ir_action WHERE id = ?",
         ACTION_COLUMNS
     ));
     let row = sqlx::query(&sql)
         .bind(&id)
-        .fetch_optional(&*state.pool)
+        .fetch_optional(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询动作失败: {}", e)))?
         .ok_or_else(|| AppError::NotFound(format!("动作 '{}' 不存在", id)))?;
@@ -327,7 +332,7 @@ pub async fn update_action(
     let context_str = context.as_ref().and_then(|c| serde_json::to_string(c).ok());
     let group_ids_str = serde_json::to_string(&group_ids).unwrap_or_else(|_| "[]".into());
 
-    let sql = state.dialect.prepare(
+    let sql = resolved_db.dialect.prepare(
         "UPDATE ir_action SET name = ?, res_model = ?, view_mode = ?, view_ids = ?, domain = ?, context = ?, page_limit = ?, target = ?, help = ?, group_ids = ?, updated_at = datetime('now') WHERE id = ?",
     );
     sqlx::query(&sql)
@@ -342,7 +347,7 @@ pub async fn update_action(
         .bind(&help)
         .bind(&group_ids_str)
         .bind(&id)
-        .execute(&*state.pool)
+        .execute(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("更新动作失败: {}", e)))?;
 
@@ -372,15 +377,16 @@ pub async fn update_action(
 /// DELETE /api/actions/{id} — 删除动作（管理员）
 pub async fn delete_action(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
     require_admin(&current_user, &state.store).await?;
 
-    let sql = state.dialect.prepare("DELETE FROM ir_action WHERE id = ?");
+    let sql = resolved_db.dialect.prepare("DELETE FROM ir_action WHERE id = ?");
     let result = sqlx::query(&sql)
         .bind(&id)
-        .execute(&*state.pool)
+        .execute(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("删除动作失败: {}", e)))?;
 
@@ -393,23 +399,23 @@ pub async fn delete_action(
 // ==================== 视图查询辅助 ====================
 
 async fn fetch_views_by_ids(
-    state: &AppState,
+    resolved_db: &ResolvedDatabase,
     view_ids: &[String],
 ) -> Result<serde_json::Value, AppError> {
-    let placeholders = state.dialect.placeholders(view_ids.len(), 1);
+    let placeholders = resolved_db.dialect.placeholders(view_ids.len(), 1);
     let ph_str = placeholders.join(",");
     let sql_str = format!(
         "SELECT {} FROM ir_view WHERE id IN ({}) AND active = 1",
         VIEW_COLUMNS, ph_str
     );
-    let sql = state.dialect.prepare(&sql_str);
+    let sql = resolved_db.dialect.prepare(&sql_str);
 
     let mut q = sqlx::query(&sql);
     for vid in view_ids {
         q = q.bind(vid.clone());
     }
     let rows = q
-        .fetch_all(&*state.pool)
+        .fetch_all(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?;
 
@@ -428,16 +434,16 @@ async fn fetch_views_by_ids(
 }
 
 async fn fetch_views_by_model(
-    state: &AppState,
+    resolved_db: &ResolvedDatabase,
     res_model: &str,
 ) -> Result<serde_json::Value, AppError> {
-    let sql = state.dialect.prepare(&format!(
+    let sql = resolved_db.dialect.prepare(&format!(
         "SELECT {} FROM ir_view WHERE model = ? AND active = 1 ORDER BY priority",
         VIEW_COLUMNS
     ));
     let rows = sqlx::query(&sql)
         .bind(res_model)
-        .fetch_all(&*state.pool)
+        .fetch_all(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?;
 

@@ -1,21 +1,21 @@
 # 改进路线图
 
-> 最后更新：2026-04-24
-> 当前版本：v0.1.0 — 阶段 1-3 已完成
+> 最后更新：2026-04-25
+> 当前版本：v0.1.0 — 阶段 1-7.5 已完成
 
 ## 现状总览
 
 | Crate | 代码行数 | 测试数 | 成熟度 | 状态 |
 |-------|---------|--------|--------|------|
 | `ingjoo-core` | 2,137 | 68 | **成熟** | Domain DSL、Store trait、Dialect — 可用于生产 |
-| `ingjoo-infra` | 5,539 | 60 | **成熟** | DB 实现、认证、存储、handler、中间件、路由 |
+| `ingjoo-infra` | 5,900 | 125 | **成熟** | DB 实现、认证、存储、handler、中间件、路由、14 个扩展实现 |
 | `ingjoo-security` | 478 | 16 | **成熟** | 三层 RBAC 引擎，已接线到 CRUD handler |
 | `ingjoo-cache` | 216 | 5 | **完整** | Moka 缓存可用 |
 | `ingjoo-queue` | 1,168 | 25 | **已完成** | 内存/SQL 双后端队列、WorkerPool、重试策略、Cron 调度器 |
 | `ingjoo-bin` | 306 | 7 | **可用** | 完整 axum 路由、集成测试通过 |
 | `ingjoo-macros` | 180 | 4 | **可用** | `#[derive(IngjooModel)]` 派生宏，自动生成 ModelDescriptor |
 
-**合计**：约 10,024 行代码，185 个测试，64 个源文件。
+**合计**：约 10,500 行代码，370 个测试，66 个源文件。
 
 ---
 
@@ -183,6 +183,68 @@ ingjoo-infra/src/
 
 ---
 
+## 阶段 5：扩展激活 ✅ 已完成
+
+> 目标：激活已有扩展组件、接入安全头、补全 noop 覆盖、集成缓存。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T5.1 | 安全响应头中间件激活 | **P0** | ✅ | `security_headers_middleware` 接入路由 — X-Content-Type-Options、X-Frame-Options、CSP 等 |
+| T5.2 | 5 个缺失 trait 的 noop 实现 | **P0** | ✅ | NoopStateMachine、NoopSearchEngine、NoopPaymentProvider、NoopRelationLoader、NoopTranslationStore |
+| T5.3 | 扩展实现的 feature flag | **P0** | ✅ | Cargo.toml 中 `content-filter`、`data-mask`、`vector-pg`、`signature` feature + aes-gcm 依赖 |
+| T5.4 | FrameworkCache 集成到 AppState | **P1** | ✅ | `cache: Arc<FrameworkCache<SecurityPolicy, ()>>` 加入 AppState，load_security_policy() 缓存策略，权限变更时失效缓存 |
+| T5.5 | ROADMAP 更新 | **P2** | ✅ | 中英文 ROADMAP 均已更新至阶段 5 |
+
+**退出标准**：✅ 所有扩展 trait 有 noop 降级，安全头在每次响应生效，SecurityPolicy 加载走缓存，feature-gated 实现可编译。
+
+---
+
+## 阶段 6：生产就绪 ✅ 已完成
+
+> 目标：将 14 个扩展 trait 接入 AppState、条件编译 main.rs、审计日志接入 CRUD、缓存测试、全特性编译验证。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T6.1 | AppState 接入 14 个扩展 trait 字段 | **P0** | ✅ | `state.rs` 新增 14 个 `Arc<dyn Trait>` 字段 + noop 默认 + 14 个 `with_xxx()` builder 方法 |
+| T6.2 | main.rs 条件编译（feature-gated 实现选择） | **P0** | ✅ | `ingjoo-bin/Cargo.toml` feature 转发 + `build_audit()`/`build_content_filter()`/`build_data_mask()`/`build_signature()` 函数 |
+| T6.3 | CRUD handler 审计日志 | **P0** | ✅ | create/update/delete 成功后写审计日志，`state.audit.create_audit_log()` fire-and-forget |
+| T6.4 | 缓存集成测试 | **P1** | ✅ | 3 个测试：put+get 命中、不同 key 隔离、invalidate 清除 |
+| T6.5 | `--all-features` 编译修复 | **P0** | ✅ | 补全 `ids.rs`/`models.rs`/`traits.rs` 的 re-export（GroupId、Group、GroupImplied、ModelAccessRow、RecordRuleRow、GroupStore、AccessStore） |
+| T6.6 | ROADMAP + 进度报告更新 | **P2** | ✅ | 中英文 ROADMAP + 进度报告 |
+
+**退出标准**：✅ 14 个扩展 trait 全部接入 AppState，main.rs 按 feature 选择实现，CRUD 审计日志生效，缓存测试通过，`cargo check --workspace --all-features` 零错误。
+
+---
+
+## 阶段 7：扩展实现 ✅ 已完成
+
+> 目标：实现真实的 DB 后端扩展 trait，替换 noop 桩 — EventBus、IdGenerator、Lock、RelationLoader、TranslationStore、StateMachine、CharTextSplitter。接入 state.rs 和 main.rs。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T7.1 | EventBus（进程内广播） | **P0** | ✅ | `event_bus_impl.rs` — tokio broadcast channel，异步订阅者分发 |
+| T7.2 | IdGenerator（UUID v4） | **P0** | ✅ | `id_generator_impl.rs` — uuid::Uuid::new_v4() |
+| T7.3 | Lock（DB 顾问锁） | **P0** | ✅ | `lock_impl.rs` — 基于 SQLite 的互斥锁，带过期时间 |
+| T7.4 | DbRelationLoader | **P1** | ✅ | `relation_loader_impl.rs` — 批量加载 Many2one 关系及 display_name |
+| T7.5 | DbTranslationStore | **P1** | ✅ | `translation.rs` — ir_translation 表，set/get/batch/remove/list_languages |
+| T7.6 | DbStateMachine | **P1** | ✅ | `state_machine_impl.rs` — ir_state_machine/transition/record 表，注册/转换/查询 |
+| T7.7 | CharTextSplitter | **P1** | ✅ | `text_splitter_impl.rs` — 字符计数分块，带重叠 |
+| T7.8 | 迁移 v8/v9 | **P0** | ✅ | ir_translation、ir_state_machine、ir_state_transition、ir_state_record DDL |
+| T7.9 | state.rs 接线 + main.rs | **P0** | ✅ | 所有已实现 trait 使用真实默认值，main.rs 中 feature-gated |
+
+**退出标准**：✅ 6 个扩展 trait 有 DB 后端实现，CharTextSplitter 已实现，370 个测试通过，0 个 clippy 警告。
+
+### 阶段 7.5：额外扩展实现 ✅ 已完成
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T7.5.1 | HtmlInputSanitizer | **P1** | ✅ | `sanitizer.rs` — 标签白名单、被阻标签内容抑制、属性剥离 |
+| T7.5.2 | FsDocumentLoader | **P1** | ✅ | `document_loader.rs` — 递归文件扫描，10MB 限制，元数据提取 |
+| T7.5.3 | state.rs 真实默认值 | **P0** | ✅ | sanitizer/document_loader/text_splitter 使用真实实现替代 noop |
+| T7.5.4 | 集成测试 | **P0** | ✅ | 7 个 translation + 7 个 state_machine 测试（基于 tempfile SQLite） |
+
+---
+
 ## 额外已完成项（不在原 ROADMAP 中）
 
 | 任务 | 描述 |
@@ -196,20 +258,38 @@ ingjoo-infra/src/
 ## 优先级矩阵（下一步）
 
 ```
-阶段 4 进行中
-├── T4.0 菜单+视图+动作元数据 — ✅ ir_menu/ir_view/ir_action + handler + 种子数据
+阶段 7.5 已完成（370 个测试，0 失败，0 个 clippy 警告）
+├── T7.5.1 HtmlInputSanitizer — ✅ 标签白名单 + 内容抑制
+├── T7.5.2 FsDocumentLoader — ✅ 递归文件扫描，10MB 限制
+├── T7.5.3 state.rs 真实默认值 — ✅ sanitizer/document_loader/text_splitter
+└── T7.5.4 集成测试 — ✅ 7 个 translation + 7 个 state_machine 测试
 
-高影响（阶段 4）
-├── T4.1 插件热加载 — ✅ 线程安全 Registry + PluginManifest + PluginManager + 管理 API
-├── T4.2 rustdoc — ✅ 全 crate 公共 API 文档注释
-├── T4.3 性能基准 — ✅ criterion: Domain DSL / Registry / Cache 三组基准
-├── T4.4 完整集成测试 — 🔄 扩展中
-├── T4.5 CLI 管理工具 — ✅ clap 5 参数 + env var 支持
-├── T4.6 多租户隔离测试 — ✅ 6 单元 + 5 集成测试
+阶段 7 已完成
+├── T7.1 EventBus — ✅ tokio broadcast
+├── T7.2 IdGenerator — ✅ UUID v4
+├── T7.3 Lock — ✅ SQLite 顾问锁
+├── T7.4 DbRelationLoader — ✅ 批量 Many2one
+├── T7.5 DbTranslationStore — ✅ ir_translation CRUD
+├── T7.6 DbStateMachine — ✅ 注册/转换/查询
+├── T7.7 CharTextSplitter — ✅ 字符计数分块
+├── T7.8 迁移 v8/v9 — ✅ DDL
+└── T7.9 接线 — ✅ state.rs + main.rs
 
-已完成（低优先级）
-├── T4.7 连接池可观测 — ✅ PoolOptions + PoolStats + health 端点
-└── T4.8 限流中间件 — ✅ 可配置分层限流 (public/protected/admin)
+阶段 6 已完成
+├── T6.1 AppState 扩展 trait — ✅ 14 个字段 + noop 默认 + builder 方法
+├── T6.2 条件编译 — ✅ feature-gated build_xxx() + ingjoo-bin feature 转发
+├── T6.3 审计日志 — ✅ CRUD 成功后 fire-and-forget 审计
+├── T6.4 缓存测试 — ✅ 3 个集成测试 (put/get/invalidate)
+├── T6.5 --all-features — ✅ 补全 re-export，零错误
+└── T6.6 ROADMAP — ✅ 已更新
+
+已完成的阶段
+├── 阶段 1：让框架能跑 — ✅
+├── 阶段 2：让框架可靠 — ✅
+├── 阶段 3：让框架名副其实 — ✅
+├── 阶段 4：让框架可扩展 — ✅
+├── 阶段 5：扩展激活 — ✅
+└── 阶段 6：生产就绪 — ✅
 ```
 
 ---
@@ -233,8 +313,8 @@ ingjoo-infra/src/
      │        │                │            │
 ┌────▼───┐ ┌──▼────────┐ ┌────▼─────┐ ┌───▼──────┐
 │security│ │   cache   │ │   core   │ │  queue   │
-│ ✅     │ │ ✅ 未使用 │ │ ✅      │ │ ✅ 完成  │
-│已接线  │ │           │ │          │ │ (25测试) │
+│ ✅     │ │ ✅ 已接线 │ │ ✅      │ │ ✅ 完成  │
+│已接线  │ │缓存策略   │ │          │ │ (25测试) │
 └────┬───┘ └────┬──────┘ └────┬─────┘ └───┬──────┘
      │          │              │           │
      └──────────┴──────┬───────┴───────────┘

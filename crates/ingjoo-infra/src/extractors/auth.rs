@@ -4,6 +4,8 @@ use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
+use serde_json::json;
 
 use crate::auth::AuthProvider;
 use crate::AppState;
@@ -14,6 +16,7 @@ pub struct CurrentUser {
     pub user_id: String,
     pub role: String,
     pub groups: Vec<String>,
+    pub database: Option<String>,
 }
 
 impl CurrentUser {
@@ -40,15 +43,20 @@ pub enum AuthRejection {
 
 impl IntoResponse for AuthRejection {
     fn into_response(self) -> Response {
-        let (status, msg) = match self {
+        let (status, code, msg) = match self {
             AuthRejection::MissingToken => {
-                (StatusCode::UNAUTHORIZED, "Missing authorization header")
+                (StatusCode::UNAUTHORIZED, "MISSING_TOKEN", "缺少认证头")
             }
             AuthRejection::InvalidToken => {
-                (StatusCode::UNAUTHORIZED, "Invalid token")
+                (StatusCode::UNAUTHORIZED, "INVALID_TOKEN", "无效的认证令牌")
             }
         };
-        (status, msg).into_response()
+        (status, Json(json!({
+            "error": msg,
+            "code": code,
+            "status": status.as_u16(),
+        })))
+            .into_response()
     }
 }
 
@@ -78,6 +86,7 @@ impl FromRequestParts<Arc<AppState>> for CurrentUser {
             user_id: claims.sub,
             role: claims.role,
             groups: claims.groups,
+            database: claims.database,
         })
     }
 }

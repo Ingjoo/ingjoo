@@ -12,6 +12,8 @@
 //! - `NoopAuditStore` — 审计日志未启用（静默丢弃，不报错）
 
 use async_trait::async_trait;
+use std::collections::HashMap;
+
 use ingjoo_core::extension::audit::{
     AuditEntry, AuditQuery, AuditStore,
 };
@@ -21,8 +23,15 @@ use ingjoo_core::extension::llm::{
     ChatMessage, ChatOptions, ChatResponse, LlmProvider,
 };
 use ingjoo_core::extension::masking::{DataMask, MaskType};
+use ingjoo_core::extension::payment::{
+    PaymentProvider, PaymentResult, PaymentStatus, RefundResult,
+};
+use ingjoo_core::extension::relations::RelationLoader;
 use ingjoo_core::extension::sanitize::InputSanitizer;
+use ingjoo_core::extension::search::{SearchEngine, SearchQuery, SearchResult};
 use ingjoo_core::extension::signature::{HttpRequest, SignatureVerifier};
+use ingjoo_core::extension::state_machine::{StateMachine, StateTransition, TransitionError};
+use ingjoo_core::extension::translation::{Translation, TranslationStore};
 use ingjoo_core::extension::vector::{VectorResult, VectorStore};
 
 // ---------------------------------------------------------------------------
@@ -346,6 +355,208 @@ impl AuditStore for NoopAuditStore {
 }
 
 // ---------------------------------------------------------------------------
+// StateMachine
+// ---------------------------------------------------------------------------
+
+/// 状态机的空实现 — 返回空状态，转换返回错误
+pub struct NoopStateMachine;
+
+#[async_trait]
+impl StateMachine for NoopStateMachine {
+    async fn get_current_state(
+        &self,
+        _model: &str,
+        _record_id: &str,
+    ) -> Result<String, TransitionError> {
+        Ok(String::new())
+    }
+
+    async fn get_available_transitions(
+        &self,
+        _model: &str,
+        _record_id: &str,
+    ) -> Result<Vec<StateTransition>, TransitionError> {
+        Ok(vec![])
+    }
+
+    async fn transition(
+        &self,
+        model: &str,
+        _record_id: &str,
+        target_state: &str,
+        _context: HashMap<String, serde_json::Value>,
+    ) -> Result<String, TransitionError> {
+        Err(TransitionError::InvalidTransition(format!(
+            "无法从当前状态转换到 '{}': 状态机服务未启用 (model={})",
+            target_state, model
+        )))
+    }
+
+    async fn register_machine(
+        &self,
+        _model: &str,
+        _states: Vec<String>,
+        _transitions: Vec<StateTransition>,
+        _initial_state: String,
+    ) -> Result<(), TransitionError> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SearchEngine
+// ---------------------------------------------------------------------------
+
+/// 搜索引擎的空实现 — 所有方法返回"未启用"错误
+pub struct NoopSearchEngine;
+
+#[async_trait]
+impl SearchEngine for NoopSearchEngine {
+    async fn index_record(
+        &self,
+        _model: &str,
+        _record_id: &str,
+        _data: &serde_json::Value,
+    ) -> Result<(), anyhow::Error> {
+        Err(anyhow::anyhow!("搜索服务未启用"))
+    }
+
+    async fn remove_record(
+        &self,
+        _model: &str,
+        _record_id: &str,
+    ) -> Result<(), anyhow::Error> {
+        Err(anyhow::anyhow!("搜索服务未启用"))
+    }
+
+    async fn search(
+        &self,
+        _query: SearchQuery,
+    ) -> Result<Vec<SearchResult>, anyhow::Error> {
+        Err(anyhow::anyhow!("搜索服务未启用"))
+    }
+
+    async fn rebuild_index(&self, _model: &str) -> Result<(), anyhow::Error> {
+        Err(anyhow::anyhow!("搜索服务未启用"))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PaymentProvider
+// ---------------------------------------------------------------------------
+
+/// 支付提供商的空实现 — 所有方法返回"未启用"错误
+pub struct NoopPaymentProvider;
+
+#[async_trait]
+impl PaymentProvider for NoopPaymentProvider {
+    async fn create_intent(
+        &self,
+        _amount: i64,
+        _currency: &str,
+        _metadata: serde_json::Value,
+    ) -> Result<PaymentResult, anyhow::Error> {
+        Err(anyhow::anyhow!("支付服务未启用"))
+    }
+
+    async fn confirm(&self, _intent_id: &str) -> Result<PaymentResult, anyhow::Error> {
+        Err(anyhow::anyhow!("支付服务未启用"))
+    }
+
+    async fn cancel(&self, _intent_id: &str) -> Result<PaymentResult, anyhow::Error> {
+        Err(anyhow::anyhow!("支付服务未启用"))
+    }
+
+    async fn refund(
+        &self,
+        _intent_id: &str,
+        _amount: Option<i64>,
+    ) -> Result<RefundResult, anyhow::Error> {
+        Err(anyhow::anyhow!("支付服务未启用"))
+    }
+
+    async fn get_status(&self, _intent_id: &str) -> Result<PaymentStatus, anyhow::Error> {
+        Err(anyhow::anyhow!("支付服务未启用"))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RelationLoader
+// ---------------------------------------------------------------------------
+
+/// 关系加载器的空实现 — 返回空的 HashMap
+pub struct NoopRelationLoader;
+
+#[async_trait]
+impl RelationLoader for NoopRelationLoader {
+    async fn load_one2many(
+        &self,
+        _model: &str,
+        _field: &str,
+        _ids: &[String],
+    ) -> Result<HashMap<String, Vec<serde_json::Value>>, anyhow::Error> {
+        Ok(HashMap::new())
+    }
+
+    async fn load_many2one(
+        &self,
+        _model: &str,
+        _field: &str,
+        _ids: &[String],
+    ) -> Result<HashMap<String, Option<serde_json::Value>>, anyhow::Error> {
+        Ok(HashMap::new())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TranslationStore
+// ---------------------------------------------------------------------------
+
+/// 翻译存储的空实现 — 读取返回空，写入静默丢弃
+pub struct NoopTranslationStore;
+
+#[async_trait]
+impl TranslationStore for NoopTranslationStore {
+    async fn get(
+        &self,
+        _lang: &str,
+        _model: &str,
+        _field: &str,
+        _record_id: &str,
+    ) -> Result<Option<String>, anyhow::Error> {
+        Ok(None)
+    }
+
+    async fn set(&self, _translation: Translation) -> Result<(), anyhow::Error> {
+        Ok(())
+    }
+
+    async fn get_batch(
+        &self,
+        _lang: &str,
+        _model: &str,
+        _field: &str,
+        _record_ids: &[String],
+    ) -> Result<HashMap<String, String>, anyhow::Error> {
+        Ok(HashMap::new())
+    }
+
+    async fn remove(
+        &self,
+        _lang: &str,
+        _model: &str,
+        _field: &str,
+        _record_id: &str,
+    ) -> Result<(), anyhow::Error> {
+        Ok(())
+    }
+
+    async fn list_languages(&self, _model: &str) -> Result<Vec<String>, anyhow::Error> {
+        Ok(vec![])
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 单元测试
 // ---------------------------------------------------------------------------
 
@@ -478,5 +689,111 @@ mod tests {
 
         let log = store.get_audit_log("id").await.unwrap();
         assert!(log.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_noop_state_machine() {
+        let sm = NoopStateMachine;
+
+        let state = sm.get_current_state("order", "1").await.unwrap();
+        assert!(state.is_empty());
+
+        let transitions = sm.get_available_transitions("order", "1").await.unwrap();
+        assert!(transitions.is_empty());
+
+        let err = sm
+            .transition("order", "1", "confirmed", HashMap::new())
+            .await
+            .unwrap_err();
+        match err {
+            TransitionError::InvalidTransition(msg) => {
+                assert!(msg.contains("confirmed"));
+                assert!(msg.contains("order"));
+            }
+            other => panic!("预期 InvalidTransition，得到: {:?}", other),
+        }
+
+        sm.register_machine("order", vec![], vec![], "draft".to_string())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_noop_search_engine_returns_error() {
+        let engine = NoopSearchEngine;
+        assert!(engine
+            .index_record("model", "1", &serde_json::Value::Null)
+            .await
+            .is_err());
+        assert!(engine.remove_record("model", "1").await.is_err());
+        assert!(engine
+            .search(SearchQuery {
+                text: "test".to_string(),
+                models: vec![],
+                limit: None,
+                offset: None,
+                filters: None,
+            })
+            .await
+            .is_err());
+        assert!(engine.rebuild_index("model").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_noop_payment_provider_returns_error() {
+        let provider = NoopPaymentProvider;
+        assert!(provider
+            .create_intent(100, "CNY", serde_json::Value::Null)
+            .await
+            .is_err());
+        assert!(provider.confirm("id").await.is_err());
+        assert!(provider.cancel("id").await.is_err());
+        assert!(provider.refund("id", None).await.is_err());
+        assert!(provider.get_status("id").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_noop_relation_loader_returns_empty() {
+        let loader = NoopRelationLoader;
+        let o2m = loader
+            .load_one2many("order", "lines", &["1".to_string()])
+            .await
+            .unwrap();
+        assert!(o2m.is_empty());
+
+        let m2o = loader
+            .load_many2one("order", "partner", &["1".to_string()])
+            .await
+            .unwrap();
+        assert!(m2o.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_noop_translation_store_returns_none() {
+        let store = NoopTranslationStore;
+        let result = store.get("zh", "order", "name", "1").await.unwrap();
+        assert!(result.is_none());
+
+        store
+            .set(Translation {
+                lang: "zh".to_string(),
+                model: "order".to_string(),
+                field: "name".to_string(),
+                record_id: "1".to_string(),
+                value: "测试".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let batch = store
+            .get_batch("zh", "order", "name", &["1".to_string()])
+            .await
+            .unwrap();
+        assert!(batch.is_empty());
+
+        store.remove("zh", "order", "name", "1").await.unwrap();
+
+        let langs = store.list_languages("order").await.unwrap();
+        assert!(langs.is_empty());
     }
 }

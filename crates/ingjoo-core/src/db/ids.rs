@@ -53,7 +53,7 @@ macro_rules! define_id {
     };
 }
 
-/// 用户 ID
+// 用户 ID
 define_id!(UserId);
-/// 用户组 ID
+// 用户组 ID
 define_id!(GroupId);

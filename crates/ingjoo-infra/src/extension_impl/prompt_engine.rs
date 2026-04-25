@@ -70,7 +70,7 @@ impl SettingsPromptManager {
             .get_template(key)
             .await?
             .ok_or_else(|| anyhow::anyhow!("模板不存在: {}", key))?;
-        Ok(self.inner.render(&template, vars)?)
+        self.inner.render(&template, vars)
     }
 
     /// 使用原始模板字符串直接渲染（不经过存储）

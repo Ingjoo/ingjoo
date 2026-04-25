@@ -6,6 +6,7 @@ use clap::Parser;
 use ingjoo_core::pool;
 use ingjoo_core::ModelRegistry;
 use ingjoo_infra::{AppState, AuthConfig, JwtAuthProvider, IngjooDb, IngjooStore, PluginManager, RateLimitConfig};
+use ingjoo_infra::db::database_manager::DatabaseManager;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -27,6 +28,13 @@ async fn main() -> Result<()> {
     )
     .await?;
     IngjooDb::run_migrations(&pool, &dialect).await?;
+
+    let mut db_manager = DatabaseManager::new(pool.clone(), dialect);
+    if let Some(ref base_url) = cli.database_base_url {
+        db_manager = db_manager.with_base_url(base_url.as_str());
+        tracing::info!("多数据库模式已启用，基础 URL: {}", base_url);
+    }
+    let db_manager = Arc::new(db_manager);
 
     let scaff_store: Arc<dyn IngjooStore> = Arc::new(IngjooDb::with_dialect(pool.clone(), dialect));
     let auth_config = AuthConfig::new(&cli.jwt_secret);
@@ -55,11 +63,21 @@ async fn main() -> Result<()> {
             scaff_store,
             auth_provider,
             registry,
-            Arc::new(pool),
+            Arc::new(pool.clone()),
             dialect,
+            db_manager,
         )
         .with_plugin_manager(plugin_manager.clone())
-        .with_rate_limit(rate_limit),
+        .with_rate_limit(rate_limit)
+        .with_audit(build_audit(pool.clone(), dialect))
+        .with_content_filter(build_content_filter())
+        .with_data_mask(build_data_mask())
+        .with_signature(build_signature())
+        .with_relation_loader(build_relation_loader(pool.clone(), dialect))
+        .with_translation(build_translation(pool.clone(), dialect))
+        .with_search(build_search(pool.clone(), dialect))
+        .with_state_machine(build_state_machine(pool, dialect))
+        .with_text_splitter(build_text_splitter())
     );
 
     let plugins_path = std::path::Path::new(&cli.plugins_dir);
@@ -85,4 +103,93 @@ async fn main() -> Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+use ingjoo_core::extension::{AuditStore, ContentFilter, DataMask, SignatureVerifier, RelationLoader, TranslationStore, StateMachine, TextSplitter, SearchEngine};
+use ingjoo_infra::extension_noop::*;
+
+#[cfg(feature = "db")]
+fn build_audit(pool: ingjoo_core::pool::Pool, dialect: ingjoo_core::Dialect) -> Arc<dyn AuditStore> {
+    Arc::new(ingjoo_infra::extension_impl::DbAuditStore::new(pool, dialect))
+}
+
+#[cfg(not(feature = "db"))]
+fn build_audit(_pool: ingjoo_core::pool::Pool, _dialect: ingjoo_core::Dialect) -> Arc<dyn AuditStore> {
+    Arc::new(NoopAuditStore)
+}
+
+#[cfg(feature = "content-filter")]
+fn build_content_filter() -> Arc<dyn ContentFilter> {
+    Arc::new(ingjoo_infra::extension_impl::KeywordContentFilter::with_defaults())
+}
+
+#[cfg(not(feature = "content-filter"))]
+fn build_content_filter() -> Arc<dyn ContentFilter> {
+    Arc::new(NoopContentFilter)
+}
+
+#[cfg(feature = "data-mask")]
+fn build_data_mask() -> Arc<dyn DataMask> {
+    Arc::new(ingjoo_infra::extension_impl::AesDataMask::new(
+        &ingjoo_infra::extension_impl::AesDataMask::generate_key(),
+    ))
+}
+
+#[cfg(not(feature = "data-mask"))]
+fn build_data_mask() -> Arc<dyn DataMask> {
+    Arc::new(NoopDataMask)
+}
+
+#[cfg(feature = "signature")]
+fn build_signature() -> Arc<dyn SignatureVerifier> {
+    Arc::new(ingjoo_infra::extension_impl::HmacSignatureVerifier::new())
+}
+
+#[cfg(not(feature = "signature"))]
+fn build_signature() -> Arc<dyn SignatureVerifier> {
+    Arc::new(NoopSignatureVerifier)
+}
+
+#[cfg(feature = "db")]
+fn build_relation_loader(pool: ingjoo_core::pool::Pool, dialect: ingjoo_core::Dialect) -> Arc<dyn RelationLoader> {
+    Arc::new(ingjoo_infra::extension_impl::DbRelationLoader::new(pool, dialect))
+}
+
+#[cfg(not(feature = "db"))]
+fn build_relation_loader(_pool: ingjoo_core::pool::Pool, _dialect: ingjoo_core::Dialect) -> Arc<dyn RelationLoader> {
+    Arc::new(NoopRelationLoader)
+}
+
+#[cfg(feature = "db")]
+fn build_translation(pool: ingjoo_core::pool::Pool, dialect: ingjoo_core::Dialect) -> Arc<dyn TranslationStore> {
+    Arc::new(ingjoo_infra::extension_impl::DbTranslationStore::new(pool, dialect))
+}
+
+#[cfg(not(feature = "db"))]
+fn build_translation(_pool: ingjoo_core::pool::Pool, _dialect: ingjoo_core::Dialect) -> Arc<dyn TranslationStore> {
+    Arc::new(NoopTranslationStore)
+}
+
+#[cfg(feature = "db")]
+fn build_state_machine(pool: ingjoo_core::pool::Pool, dialect: ingjoo_core::Dialect) -> Arc<dyn StateMachine> {
+    Arc::new(ingjoo_infra::extension_impl::DbStateMachine::new(pool, dialect))
+}
+
+#[cfg(not(feature = "db"))]
+fn build_state_machine(_pool: ingjoo_core::pool::Pool, _dialect: ingjoo_core::Dialect) -> Arc<dyn StateMachine> {
+    Arc::new(NoopStateMachine)
+}
+
+#[cfg(feature = "db")]
+fn build_search(pool: ingjoo_core::pool::Pool, dialect: ingjoo_core::Dialect) -> Arc<dyn SearchEngine> {
+    Arc::new(ingjoo_infra::extension_impl::DbSearchEngine::new(pool, dialect))
+}
+
+#[cfg(not(feature = "db"))]
+fn build_search(_pool: ingjoo_core::pool::Pool, _dialect: ingjoo_core::Dialect) -> Arc<dyn SearchEngine> {
+    Arc::new(NoopSearchEngine)
+}
+
+fn build_text_splitter() -> Arc<dyn TextSplitter> {
+    Arc::new(ingjoo_infra::extension_impl::CharTextSplitter::with_defaults())
 }

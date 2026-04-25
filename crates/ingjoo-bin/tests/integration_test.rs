@@ -5,7 +5,7 @@ use axum::Router;
 use http::StatusCode;
 use ingjoo_core::db::ids::GroupId;
 use ingjoo_core::db::models::Group;
-use ingjoo_infra::{AppState, AuthConfig, AuthProvider, JwtAuthProvider, IngjooDb, IngjooStore, PluginManager};
+use ingjoo_infra::{AppState, AuthConfig, AuthProvider, JwtAuthProvider, IngjooDb, IngjooStore, PluginManager, DatabaseManager};
 use ingjoo_core::ModelRegistry;
 use tower::ServiceExt;
 
@@ -27,7 +27,7 @@ async fn create_state() -> (Router, Arc<AppState>) {
     let store: Arc<dyn IngjooStore> = Arc::new(IngjooDb::with_dialect(pool.clone(), dialect));
     let auth = JwtAuthProvider::new(&AuthConfig::new("test-secret"));
     let registry = Arc::new(ModelRegistry::new());
-    let state = Arc::new(AppState::new(store, auth, registry, Arc::new(pool), dialect));
+    let state = Arc::new(AppState::new(store, auth, registry, Arc::new(pool.clone()), dialect, Arc::new(DatabaseManager::new(pool.clone(), dialect))));
     let router = ingjoo_infra::router::base_router(state.clone());
     (router, state)
 }
@@ -63,7 +63,7 @@ async fn setup_app_with_models(models: Vec<ingjoo_core::module::ModelDescriptor>
     }
     let registry = Arc::new(registry);
 
-    let state = Arc::new(AppState::new(store, auth, registry, Arc::new(pool), dialect));
+    let state = Arc::new(AppState::new(store, auth, registry, Arc::new(pool.clone()), dialect, Arc::new(DatabaseManager::new(pool.clone(), dialect))));
     let router = ingjoo_infra::router::base_router(state.clone());
     (router, state)
 }
@@ -115,10 +115,11 @@ async fn get_admin_token(app: &Router, state: &Arc<AppState>) -> String {
 
     state
         .auth
-        .create_access_token(user_id, "admin", &groups)
+        .create_access_token(user_id, "admin", &groups, None)
         .unwrap()
 }
 
+#[allow(dead_code)]
 async fn get_user_token(app: &Router) -> String {
     let resp = app
         .clone()
@@ -1074,7 +1075,7 @@ async fn test_user_groups_admin() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let groups: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(groups.as_array().unwrap().len() >= 1);
+    assert!(!groups.as_array().unwrap().is_empty());
 }
 
 // ── 模型权限 CRUD (admin) ──
@@ -1126,7 +1127,7 @@ async fn test_model_access_crud_admin() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(list.as_array().unwrap().len() >= 1);
+    assert!(!list.as_array().unwrap().is_empty());
 
     // GET
     let resp = app
@@ -1224,7 +1225,7 @@ async fn test_record_rules_crud_admin() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(list.as_array().unwrap().len() >= 1);
+    assert!(!list.as_array().unwrap().is_empty());
 
     // GET
     let resp = app
@@ -1338,7 +1339,7 @@ async fn test_generic_crud_full_flow() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(list["items"].as_array().unwrap().len() >= 1);
+    assert!(!list["items"].as_array().unwrap().is_empty());
 
     // READ
     let resp = app
@@ -1406,7 +1407,7 @@ async fn setup_app_with_plugins() -> (Router, Arc<AppState>) {
     let registry = Arc::new(ModelRegistry::new());
     let plugin_manager = Arc::new(PluginManager::new(registry.clone(), Arc::new(pool.clone()), dialect));
     let state = Arc::new(
-        AppState::new(store, auth, registry, Arc::new(pool), dialect)
+        AppState::new(store, auth, registry, Arc::new(pool.clone()), dialect, Arc::new(DatabaseManager::new(pool.clone(), dialect)))
             .with_plugin_manager(plugin_manager),
     );
     let router = ingjoo_infra::router::base_router(state.clone());
@@ -1568,7 +1569,7 @@ async fn test_plugin_unload() {
 
 #[tokio::test]
 async fn test_plugin_requires_admin() {
-    let (app, state) = setup_app_with_plugins().await;
+    let (app, _state) = setup_app_with_plugins().await;
 
     // 注册普通用户（非 admin）
     let resp = app
@@ -2216,4 +2217,47 @@ async fn test_schedule_crud_full_flow() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_cache_scope_access_put_and_get() {
+    let (_, state) = setup_app_with_state().await;
+
+    assert!(state.cache.get_scope_access("policy", "admin").is_none());
+
+    let policy = ingjoo_security::SecurityPolicy::new();
+    state.cache.put_scope_access("policy", "admin", policy.clone());
+
+    let cached = state.cache.get_scope_access("policy", "admin");
+    assert!(cached.is_some(), "put 后应有缓存");
+}
+
+#[tokio::test]
+async fn test_cache_scope_access_different_keys() {
+    let (_, state) = setup_app_with_state().await;
+
+    let policy = ingjoo_security::SecurityPolicy::new();
+    state.cache.put_scope_access("policy", "admin", policy.clone());
+    state.cache.put_scope_access("policy", "user", policy.clone());
+
+    assert!(state.cache.get_scope_access("policy", "admin").is_some());
+    assert!(state.cache.get_scope_access("policy", "user").is_some());
+    assert!(state.cache.get_scope_access("policy", "guest").is_none());
+}
+
+#[tokio::test]
+async fn test_cache_scope_invalidation() {
+    let (_, state) = setup_app_with_state().await;
+
+    let policy = ingjoo_security::SecurityPolicy::new();
+    state.cache.put_scope_access("policy", "admin", policy.clone());
+    state.cache.put_scope_access("policy", "user", policy.clone());
+
+    assert!(state.cache.get_scope_access("policy", "admin").is_some());
+    assert!(state.cache.get_scope_access("policy", "user").is_some());
+
+    state.cache.invalidate_scope("policy");
+
+    assert!(state.cache.get_scope_access("policy", "admin").is_none());
+    assert!(state.cache.get_scope_access("policy", "user").is_none());
 }

@@ -13,6 +13,7 @@ use ingjoo_core::db::traits::IngjooStore;
 use ingjoo_core::MenuDescriptor;
 
 use crate::extractors::CurrentUser;
+use crate::middleware::database_selector::ResolvedDatabase;
 use crate::middleware::error::AppError;
 use crate::AppState;
 
@@ -62,13 +63,14 @@ fn row_to_menu(row: &sqlx::any::AnyRow) -> MenuDescriptor {
 /// GET /api/menus — 返回当前用户可见的菜单树
 pub async fn list_menus(
     Extension(current_user): Extension<CurrentUser>,
-    State(state): State<Arc<AppState>>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
+    State(_state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let sql = state.dialect.prepare(
+    let sql = resolved_db.dialect.prepare(
         "SELECT id, name, parent_id, sequence, action_id, web_icon, group_ids FROM ir_menu WHERE active = 1 ORDER BY sequence",
     );
     let rows = sqlx::query(&sql)
-        .fetch_all(&*state.pool)
+        .fetch_all(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询菜单失败: {}", e)))?;
 
@@ -90,6 +92,7 @@ pub async fn list_menus(
 /// POST /api/menus — 创建菜单（管理员）
 pub async fn create_menu(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateMenuRequest>,
 ) -> Result<(StatusCode, Json<MenuDescriptor>), AppError> {
@@ -100,7 +103,7 @@ pub async fn create_menu(
     let group_ids = req.group_ids.unwrap_or_default();
     let group_ids_json = serde_json::to_string(&group_ids).unwrap_or_else(|_| "[]".into());
 
-    let sql = state.dialect.prepare(
+    let sql = resolved_db.dialect.prepare(
         "INSERT INTO ir_menu (id, name, parent_id, sequence, action_id, web_icon, group_ids, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
     );
     sqlx::query(&sql)
@@ -111,7 +114,7 @@ pub async fn create_menu(
         .bind(&req.action_id)
         .bind(&req.web_icon)
         .bind(&group_ids_json)
-        .execute(&*state.pool)
+        .execute(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("创建菜单失败: {}", e)))?;
 
@@ -133,6 +136,7 @@ pub async fn create_menu(
 /// PUT /api/menus/{id} — 更新菜单（管理员）
 pub async fn update_menu(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
     Json(req): Json<UpdateMenuRequest>,
@@ -140,12 +144,12 @@ pub async fn update_menu(
     require_admin(&current_user, &state.store).await?;
 
     // 查询现有记录
-    let sql = state.dialect.prepare(
+    let sql = resolved_db.dialect.prepare(
         "SELECT id, name, parent_id, sequence, action_id, web_icon, group_ids FROM ir_menu WHERE id = ?",
     );
     let row = sqlx::query(&sql)
         .bind(&id)
-        .fetch_optional(&*state.pool)
+        .fetch_optional(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("查询菜单失败: {}", e)))?
         .ok_or_else(|| AppError::NotFound(format!("菜单 '{}' 不存在", id)))?;
@@ -170,7 +174,7 @@ pub async fn update_menu(
     let group_ids = req.group_ids.unwrap_or(existing.group_ids);
     let group_ids_json = serde_json::to_string(&group_ids).unwrap_or_else(|_| "[]".into());
 
-    let sql = state.dialect.prepare(
+    let sql = resolved_db.dialect.prepare(
         "UPDATE ir_menu SET name = ?, parent_id = ?, sequence = ?, action_id = ?, web_icon = ?, group_ids = ?, updated_at = datetime('now') WHERE id = ?",
     );
     sqlx::query(&sql)
@@ -181,7 +185,7 @@ pub async fn update_menu(
         .bind(&web_icon)
         .bind(&group_ids_json)
         .bind(&id)
-        .execute(&*state.pool)
+        .execute(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("更新菜单失败: {}", e)))?;
 
@@ -201,15 +205,16 @@ pub async fn update_menu(
 /// DELETE /api/menus/{id} — 删除菜单（管理员）
 pub async fn delete_menu(
     Extension(current_user): Extension<CurrentUser>,
+    Extension(resolved_db): Extension<ResolvedDatabase>,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
     require_admin(&current_user, &state.store).await?;
 
-    let sql = state.dialect.prepare("DELETE FROM ir_menu WHERE id = ?");
+    let sql = resolved_db.dialect.prepare("DELETE FROM ir_menu WHERE id = ?");
     let result = sqlx::query(&sql)
         .bind(&id)
-        .execute(&*state.pool)
+        .execute(&*resolved_db.pool)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("删除菜单失败: {}", e)))?;
 

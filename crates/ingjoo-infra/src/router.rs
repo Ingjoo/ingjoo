@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
 use axum::middleware;
-use axum::routing::{any, get, post, put};
+use axum::routing::{any, delete, get, post, put};
 use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use crate::handlers;
+use crate::middleware::database_selector::database_selector_middleware;
+use crate::middleware::headers::security_headers_middleware;
 use crate::middleware::permission::require_admin;
 use crate::middleware::ratelimit::{rate_limit_middleware, RateLimiter};
 use crate::middleware::security::auth_middleware;
@@ -62,6 +64,9 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route("/api/rules/{id}", get(handlers::permission::get_record_rule).put(handlers::permission::update_record_rule).delete(handlers::permission::delete_record_rule))
         .route("/api/schedules", get(handlers::schedule::list_schedules).post(handlers::schedule::create_schedule))
         .route("/api/schedules/{id}", get(handlers::schedule::get_schedule).put(handlers::schedule::update_schedule).delete(handlers::schedule::delete_schedule))
+        .route("/api/databases", get(handlers::database::list_databases).post(handlers::database::create_database))
+        .route("/api/databases/{name}/status", get(handlers::database::get_database_status))
+        .route("/api/databases/{name}", delete(handlers::database::delete_database))
         .route("/api/admin/plugins", get(handlers::plugin::list_plugins))
         .route("/api/admin/plugins/load", post(handlers::plugin::load_all_plugins))
         .route("/api/admin/plugins/{name}/unload", post(handlers::plugin::unload_plugin))
@@ -75,6 +80,9 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route("/api/models", get(handlers::crud::crud_models))
         .route("/api/data/{model}", get(handlers::crud::crud_list).post(handlers::crud::crud_create))
         .route("/api/data/{model}/{id}", get(handlers::crud::crud_read).put(handlers::crud::crud_update).delete(handlers::crud::crud_delete))
+        .route("/api/data/{model}/{id}/attachments", post(handlers::attachment::upload_attachment).get(handlers::attachment::list_attachments))
+        .route("/api/data/{model}/{id}/attachments/{aid}", get(handlers::attachment::download_attachment).delete(handlers::attachment::delete_attachment))
+        .route("/api/data/{model}/search", get(handlers::crud::crud_search))
         .route("/api/data/{model}/ensure", post(handlers::crud::crud_ensure_table))
         .route_layer(middleware::from_fn(rate_limit_middleware))
         .layer(axum::Extension(crud_limiter))
@@ -108,6 +116,8 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .merge(crud_routes)
         .merge(metadata_read_routes)
         .merge(metadata_admin_routes)
+        .layer(middleware::from_fn_with_state(state.clone(), database_selector_middleware))
+        .layer(middleware::from_fn(security_headers_middleware))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)

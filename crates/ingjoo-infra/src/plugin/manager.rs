@@ -10,6 +10,7 @@ use ingjoo_core::module::plugin::{PluginInfo, PluginManifest, PluginState};
 
 use crate::db::generic::GenericRecordStore;
 use crate::db::generic::GenericDb;
+use crate::db::seed::{seed_plugin_metadata, seed_plugin_records};
 
 struct LoadedPlugin {
     manifest: PluginManifest,
@@ -64,12 +65,25 @@ impl PluginManager {
 
         let name = manifest.name.clone();
 
-        let db = GenericDb::new(&*self.pool, &self.dialect);
+        let db = GenericDb::new(&self.pool, &self.dialect);
         for model in &manifest.models {
             db.ensure_table(model)
                 .await
                 .with_context(|| format!("创建表失败: {}", model.table_name))?;
             self.registry.register(model.clone());
+        }
+
+        if let Err(e) = seed_plugin_metadata(
+            &self.pool, &self.dialect,
+            &manifest.menus, &manifest.views, &manifest.actions,
+        ).await {
+            tracing::warn!("插件 {} 元数据播种失败: {}", name, e);
+        }
+
+        if let Some(records) = &manifest.records {
+            if let Err(e) = seed_plugin_records(&self.pool, &self.dialect, records).await {
+                tracing::warn!("插件 {} 记录播种失败: {}", name, e);
+            }
         }
 
         let loaded = LoadedPlugin {
@@ -140,7 +154,6 @@ impl PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ingjoo_core::module::ModelDescriptor;
 
     fn test_registry() -> Arc<ModelRegistry> {
         Arc::new(ModelRegistry::new())
@@ -148,8 +161,43 @@ mod tests {
 
     async fn test_pool_and_dialect() -> (Arc<Pool>, Dialect) {
         ingjoo_core::pool::install_drivers();
-        let (pool, dialect) = ingjoo_core::pool::connect_pool("sqlite::memory:").await.unwrap();
+        let id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let url = format!("sqlite:file:test_{id}?mode=memory&cache=shared");
+        let (pool, dialect) = ingjoo_core::pool::connect_pool(&url).await.unwrap();
         (Arc::new(pool), dialect)
+    }
+
+    async fn ensure_ir_tables(pool: &Pool) {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS ir_menu (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, parent_id TEXT,
+                sequence INTEGER NOT NULL DEFAULT 10, action_id TEXT, web_icon TEXT,
+                active INTEGER NOT NULL DEFAULT 1, group_ids TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(pool).await.unwrap();
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS ir_view (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, model TEXT NOT NULL,
+                type TEXT NOT NULL DEFAULT 'form', priority INTEGER NOT NULL DEFAULT 16,
+                arch TEXT NOT NULL DEFAULT '{}', inherit_id TEXT,
+                active INTEGER NOT NULL DEFAULT 1, group_ids TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(pool).await.unwrap();
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS ir_action (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'act_window',
+                res_model TEXT, view_mode TEXT NOT NULL DEFAULT 'list,form', view_ids TEXT NOT NULL DEFAULT '[]',
+                domain TEXT, context TEXT, page_limit INTEGER DEFAULT 80,
+                target TEXT NOT NULL DEFAULT 'current', search_view_id TEXT, url TEXT, help TEXT,
+                group_ids TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(pool).await.unwrap();
     }
 
     #[tokio::test]
@@ -227,5 +275,118 @@ mod tests {
         let names: Vec<&str> = list.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"alpha"));
         assert!(names.contains(&"beta"));
+    }
+
+    #[tokio::test]
+    async fn test_load_plugin_seeds_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let json = r#"{
+            "name": "blog",
+            "version": "1.0.0",
+            "models": [
+                {"name": "article", "table_name": "articles", "fields": [
+                    {"name": "title", "field_type": "text"}
+                ]}
+            ],
+            "menus": [
+                {"id": "menu_blog", "name": "博客", "web_icon": "fa fa-book", "action_id": "action_articles"}
+            ],
+            "views": [
+                {"id": "view_article_list", "name": "文章列表", "model": "article", "type": "list", "arch": {"columns": [{"name": "title"}]}}
+            ],
+            "actions": [
+                {"id": "action_articles", "name": "文章管理", "type": "act_window", "res_model": "article", "view_mode": ["list", "form"]}
+            ]
+        }"#;
+        let path = dir.path().join("blog.json");
+        tokio::fs::write(&path, json).await.unwrap();
+
+        let registry = test_registry();
+        let (pool, dialect) = test_pool_and_dialect().await;
+        ensure_ir_tables(&pool).await;
+
+        let manager = PluginManager::new(registry.clone(), pool.clone(), dialect);
+        manager.load_plugin(&path).await.unwrap();
+
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ir_menu WHERE id = 'menu_blog'")
+            .fetch_one(&*pool).await.unwrap();
+        assert_eq!(count, 1);
+
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ir_view WHERE id = 'view_article_list'")
+            .fetch_one(&*pool).await.unwrap();
+        assert_eq!(count, 1);
+
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ir_action WHERE id = 'action_articles'")
+            .fetch_one(&*pool).await.unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_load_plugin_seeds_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let json = r#"{
+            "name": "blog",
+            "version": "1.0.0",
+            "models": [
+                {"name": "article", "table_name": "articles", "fields": [
+                    {"name": "title", "field_type": "text"},
+                    {"name": "status", "field_type": "text"}
+                ]}
+            ],
+            "records": {
+                "articles": [
+                    {"title": "Hello World", "status": "published"},
+                    {"title": "Draft Post", "status": "draft"}
+                ]
+            }
+        }"#;
+        let path = dir.path().join("blog.json");
+        tokio::fs::write(&path, json).await.unwrap();
+
+        let registry = test_registry();
+        let (pool, dialect) = test_pool_and_dialect().await;
+        ensure_ir_tables(&pool).await;
+
+        let manager = PluginManager::new(registry.clone(), pool.clone(), dialect);
+        manager.load_plugin(&path).await.unwrap();
+
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM articles")
+            .fetch_one(&*pool).await.unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_seed_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let json = r#"{
+            "name": "blog",
+            "version": "1.0.0",
+            "models": [
+                {"name": "tag", "table_name": "tags", "fields": [
+                    {"name": "name", "field_type": "text"}
+                ]}
+            ],
+            "menus": [
+                {"id": "menu_tags", "name": "标签"}
+            ],
+            "records": {
+                "tags": [{"name": "Rust"}]
+            }
+        }"#;
+        let path = dir.path().join("blog.json");
+        tokio::fs::write(&path, json).await.unwrap();
+
+        let registry = test_registry();
+        let (pool, dialect) = test_pool_and_dialect().await;
+        ensure_ir_tables(&pool).await;
+
+        let manager = PluginManager::new(registry.clone(), pool.clone(), dialect);
+        manager.load_plugin(&path).await.unwrap();
+        manager.unload_plugin("blog").unwrap();
+        manager.load_plugin(&path).await.unwrap();
+
+        let (menu_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ir_menu WHERE id = 'menu_tags'")
+            .fetch_one(&*pool).await.unwrap();
+        assert_eq!(menu_count, 1);
     }
 }

@@ -34,6 +34,8 @@ pub struct TokenClaims {
     pub role: String,
     #[serde(default)]
     pub groups: Vec<String>,
+    #[serde(default)]
+    pub database: Option<String>,
     pub exp: usize,
     pub iat: usize,
 }
@@ -42,7 +44,7 @@ pub struct TokenClaims {
 pub trait AuthProvider: Send + Sync {
     fn hash_password(&self, password: &str) -> Result<String>;
     fn verify_password(&self, password: &str, hash: &str) -> Result<bool>;
-    fn create_access_token(&self, user_id: &str, role: &str, groups: &[String]) -> Result<String>;
+    fn create_access_token(&self, user_id: &str, role: &str, groups: &[String], database: Option<&str>) -> Result<String>;
     fn create_refresh_token(&self) -> String;
     fn refresh_token_hash(&self, token: &str) -> String;
     fn refresh_expires_at(&self) -> String;
@@ -86,12 +88,13 @@ impl AuthProvider for JwtAuthProvider {
             .is_ok())
     }
 
-    fn create_access_token(&self, user_id: &str, role: &str, groups: &[String]) -> Result<String> {
+    fn create_access_token(&self, user_id: &str, role: &str, groups: &[String], database: Option<&str>) -> Result<String> {
         let now = chrono::Utc::now().timestamp();
         let claims = TokenClaims {
             sub: user_id.to_string(),
             role: role.to_string(),
             groups: groups.to_vec(),
+            database: database.map(|s| s.to_string()),
             exp: (now + self.access_ttl) as usize,
             iat: now as usize,
         };
@@ -171,7 +174,7 @@ mod tests {
     #[test]
     fn test_access_token_roundtrip() {
         let auth = setup_auth();
-        let token = auth.create_access_token("user-123", "admin", &[]).unwrap();
+        let token = auth.create_access_token("user-123", "admin", &[], None).unwrap();
         let claims = auth.verify_access_token(&token).unwrap();
         assert_eq!(claims.sub, "user-123");
         assert_eq!(claims.role, "admin");
@@ -180,7 +183,7 @@ mod tests {
     #[test]
     fn test_access_token_role_field_roundtrip() {
         let auth = setup_auth();
-        let token = auth.create_access_token("user-456", "editor", &[]).unwrap();
+        let token = auth.create_access_token("user-456", "editor", &[], None).unwrap();
         let claims = auth.verify_access_token(&token).unwrap();
         assert_eq!(claims.role, "editor");
     }
@@ -188,7 +191,7 @@ mod tests {
     #[test]
     fn test_access_token_contains_iat_and_exp() {
         let auth = setup_auth();
-        let token = auth.create_access_token("user-789", "user", &[]).unwrap();
+        let token = auth.create_access_token("user-789", "user", &[], None).unwrap();
         let claims = auth.verify_access_token(&token).unwrap();
         assert!(claims.exp > 0);
         assert!(claims.iat > 0);
@@ -198,7 +201,7 @@ mod tests {
     #[test]
     fn test_access_token_tampered_fails() {
         let auth = setup_auth();
-        let token = auth.create_access_token("user-123", "user", &[]).unwrap();
+        let token = auth.create_access_token("user-123", "user", &[], None).unwrap();
         let tampered = format!("{}tampered", &token[..token.len() - 10]);
         let result = auth.verify_access_token(&tampered);
         assert!(result.is_err());
@@ -208,7 +211,7 @@ mod tests {
     fn test_access_token_wrong_secret_fails() {
         let auth1 = JwtAuthProvider::new(&AuthConfig::new("secret-1"));
         let auth2 = JwtAuthProvider::new(&AuthConfig::new("secret-2"));
-        let token = auth1.create_access_token("user-123", "user", &[]).unwrap();
+        let token = auth1.create_access_token("user-123", "user", &[], None).unwrap();
         let result = auth2.verify_access_token(&token);
         assert!(result.is_err());
     }
@@ -282,7 +285,7 @@ mod tests {
             refresh_ttl: 3600,
         };
         let auth = JwtAuthProvider::new(&config);
-        let token = auth.create_access_token("user-1", "user", &[]).unwrap();
+        let token = auth.create_access_token("user-1", "user", &[], None).unwrap();
         let claims = auth.verify_access_token(&token).unwrap();
         let ttl = (claims.exp - claims.iat) as i64;
         assert!((ttl - 60).abs() <= 2, "access TTL should match config");

@@ -1,6 +1,8 @@
 pub mod action;
+pub mod attachment;
 pub mod auth;
 pub mod crud;
+pub mod database;
 pub mod groups;
 pub mod health;
 pub mod menu;
