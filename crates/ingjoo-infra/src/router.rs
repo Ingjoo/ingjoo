@@ -60,6 +60,8 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         )
         .route("/api/settings", get(handlers::settings::list_settings))
         .route("/api/settings/{key}", put(handlers::settings::set_setting))
+        .route("/api/dashboard/stats", get(handlers::dashboard::get_stats))
+        .route("/api/users/search", get(handlers::users::search_users))
         .route_layer(middleware::from_fn(rate_limit_middleware))
         .layer(axum::Extension(protected_limiter.clone()))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
@@ -82,6 +84,7 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route("/api/admin/plugins/load", post(handlers::plugin::load_all_plugins))
         .route("/api/admin/plugins/{name}/unload", post(handlers::plugin::unload_plugin))
         .route("/api/admin/plugins/{name}/reload", post(handlers::plugin::reload_plugin))
+        .route("/api/admin/audit-log", get(handlers::users::get_audit_log))
         .route_layer(middleware::from_fn(rate_limit_middleware))
         .layer(axum::Extension(admin_limiter.clone()))
         .route_layer(middleware::from_fn_with_state(state.clone(), require_admin))

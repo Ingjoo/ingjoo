@@ -67,19 +67,30 @@ impl FromRequestParts<Arc<AppState>> for CurrentUser {
         parts: &mut Parts,
         state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
-        let auth_header = parts
+        let token = parts
             .headers
             .get(axum::http::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .map(str::to_owned)
+            .or_else(|| {
+                parts
+                    .headers
+                    .get(axum::http::header::COOKIE)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|cookie_str| {
+                        cookie_str
+                            .split(';')
+                            .map(str::trim)
+                            .find(|c| c.starts_with("access_token="))
+                        .and_then(|c| c.strip_prefix("access_token=").map(str::to_owned))
+                    })
+            })
             .ok_or(AuthRejection::MissingToken)?;
-
-        let token = auth_header
-            .strip_prefix("Bearer ")
-            .ok_or(AuthRejection::InvalidToken)?;
 
         let claims = state
             .auth
-            .verify_access_token(token)
+            .verify_access_token(&token)
             .map_err(|_| AuthRejection::InvalidToken)?;
 
         Ok(CurrentUser {

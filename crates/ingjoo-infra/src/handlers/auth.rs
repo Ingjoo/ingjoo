@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use axum::extract::State;
+use axum::http::HeaderValue;
 use axum::http::StatusCode;
+use axum::http::header::SET_COOKIE;
+use axum::http::HeaderMap;
 use axum::Extension;
 use axum::Json;
 use ingjoo_core::{AuthToken, LoginRequest, RegisterRequest, UpdatePreferences, UpdateProfileRequest, User, UserPreferences, UserId, UserPublic};
@@ -12,6 +15,44 @@ use crate::middleware::error::AppError;
 use ingjoo_core::db::error::StoreError;
 use crate::AppState;
 
+/// 构建 httpOnly 认证 cookie 的 Set-Cookie 头
+fn auth_cookies(access_token: &str, refresh_token: &str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    let access_cookie = format!(
+        "access_token={}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=3600",
+        access_token
+    );
+    let refresh_cookie = format!(
+        "refresh_token={}; HttpOnly; SameSite=Strict; Path=/api/auth/refresh; Max-Age=604800",
+        refresh_token
+    );
+    headers.insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&access_cookie).unwrap_or_else(|_| HeaderValue::from_static("")),
+    );
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&refresh_cookie).unwrap_or_else(|_| HeaderValue::from_static("")),
+    );
+    headers
+}
+
+/// 构建清除认证 cookie 的 Set-Cookie 头（Max-Age=0）
+fn clear_cookies() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    let access_cookie = "access_token=; HttpOnly; SameSite=Strict; Path=/api; Max-Age=0";
+    let refresh_cookie = "refresh_token=; HttpOnly; SameSite=Strict; Path=/api/auth/refresh; Max-Age=0";
+    headers.insert(
+        SET_COOKIE,
+        HeaderValue::from_static(access_cookie),
+    );
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_static(refresh_cookie),
+    );
+    headers
+}
+
 #[derive(Deserialize)]
 pub struct RefreshRequest {
     pub refresh_token: String,
@@ -20,7 +61,7 @@ pub struct RefreshRequest {
 pub async fn register(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RegisterRequest>,
-) -> Result<(StatusCode, Json<AuthToken>), AppError> {
+) -> Result<(StatusCode, HeaderMap, Json<AuthToken>), AppError> {
     let hash = state.auth.hash_password(&req.password)?;
     let user = User {
         id: UserId::new(uuid::Uuid::new_v4().to_string()),
@@ -60,8 +101,10 @@ pub async fn register(
             &expires_at,
         )
         .await?;
+    let cookies = auth_cookies(&access_token, &refresh_token);
     Ok((
         StatusCode::CREATED,
+        cookies,
         Json(AuthToken {
             access_token,
             refresh_token,
@@ -73,7 +116,7 @@ pub async fn register(
 pub async fn login(
     State(state): State<Arc<AppState>>,
     Json(req): Json<LoginRequest>,
-) -> Result<Json<AuthToken>, AppError> {
+) -> Result<(HeaderMap, Json<AuthToken>), AppError> {
     let user = state
         .store
         .get_user_by_email(&req.email)
@@ -100,17 +143,18 @@ pub async fn login(
             &expires_at,
         )
         .await?;
-    Ok(Json(AuthToken {
+    let cookies = auth_cookies(&access_token, &refresh_token);
+    Ok((cookies, Json(AuthToken {
         access_token,
         refresh_token,
         user: UserPublic::from(&user),
-    }))
+    })))
 }
 
 pub async fn refresh(
     State(state): State<Arc<AppState>>,
     Json(body): Json<RefreshRequest>,
-) -> Result<Json<AuthToken>, AppError> {
+) -> Result<(HeaderMap, Json<AuthToken>), AppError> {
     let token_hash = state.auth.refresh_token_hash(&body.refresh_token);
     let (user_id_str, _expires_at) = state
         .store
@@ -138,11 +182,12 @@ pub async fn refresh(
             &expires_at,
         )
         .await?;
-    Ok(Json(AuthToken {
+    let cookies = auth_cookies(&access_token, &new_refresh);
+    Ok((cookies, Json(AuthToken {
         access_token,
         refresh_token: new_refresh,
         user: UserPublic::from(&user),
-    }))
+    })))
 }
 
 pub async fn get_profile(
@@ -244,9 +289,8 @@ pub async fn get_me(
 pub async fn logout(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RefreshRequest>,
-) -> Result<StatusCode, AppError> {
+) -> Result<(StatusCode, HeaderMap), AppError> {
     let token_hash = state.auth.refresh_token_hash(&req.refresh_token);
-    // 先检查 token 是否存在，不存在返回错误
     let exists = state
         .store
         .get_refresh_token(&token_hash)
@@ -256,5 +300,5 @@ pub async fn logout(
         return Err(AppError::Unauthorized("无效的刷新令牌".into()));
     }
     state.store.delete_refresh_token(&token_hash).await?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok((StatusCode::NO_CONTENT, clear_cookies()))
 }

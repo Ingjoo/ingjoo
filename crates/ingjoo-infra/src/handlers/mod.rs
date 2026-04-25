@@ -4,6 +4,7 @@ pub mod auth;
 #[cfg(feature = "captcha")]
 pub mod captcha;
 pub mod crud;
+pub mod dashboard;
 pub mod database;
 pub mod groups;
 pub mod health;
@@ -12,5 +13,6 @@ pub mod permission;
 pub mod plugin;
 pub mod schedule;
 pub mod settings;
+pub mod users;
 pub mod view;
 pub mod ws;
