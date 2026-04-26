@@ -1,7 +1,7 @@
 # 改进路线图
 
 > 最后更新：2026-04-26
-> 当前版本：v0.1.0 — 阶段 1-16 已完成，阶段 17 (视图管线增强) 进行中
+> 当前版本：v0.1.0 — 阶段 1-17 已完成
 
 ## 现状总览
 
@@ -456,17 +456,17 @@ QA 健康评分: 49 → 65 → 77.5 → 85/100
 
 ---
 
-## 阶段 17：视图管线增强 🔧 进行中
+## 阶段 17：视图管线增强 ✅ 完成
 
 > 目标：增强 Action/View 系统的视图渲染管线——结构化 view arch、看板视图接线、表单编辑、搜索视图扩展、收藏过滤。
 
 | # | 任务 | 优先级 | 状态 | 交付物 |
 |---|------|--------|------|--------|
-| T17.1 | 结构化 view arch JSON Schema | **P0** | 📋 待开始 | `ViewArch` 类型定义（list/form/kanban/search 四种视图的结构化 arch） |
+| T17.1 | 结构化 view arch JSON Schema | **P0** | ✅ 完成 | ViewArch types (ListArch, FormArch, KanbanArch, SearchArch) defined in metadata.rs |
 | T17.2 | 看板视图接入 ViewRenderer | **P0** | ✅ 完成 | ViewRenderer 支持 `activeView === "kanban"` 分支，SDK KanbanBoard 接线 + rollup 多入口修复 |
-| T17.3 | 表单视图内联编辑 | **P0** | 📋 待开始 | ViewRenderer form 模式支持字段编辑 + PUT 提交 |
+| T17.3 | 表单视图内联编辑 | **P0** | ✅ 完成 | ViewRenderer form mode with editing state, dirty field detection, PUT submit, FormField component |
 | T17.4 | 搜索视图种子数据扩展 | **P1** | ✅ 完成 | `seed.rs` 新增 article/product 搜索视图 + 动作 + 菜单 |
-| T17.5 | 搜索收藏（保存过滤条件） | **P2** | 📋 待开始 | `ir_search_favorite` 表 + CRUD API + 前端收藏 UI |
+| T17.5 | 搜索收藏（保存过滤条件） | **P2** | ✅ 完成 | ir_search_favorite table + CRUD API + SearchPanel favorites UI |
 
 ---
 

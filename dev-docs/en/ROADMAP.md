@@ -1,7 +1,7 @@
 # Improvement Roadmap
 
 > Last updated: 2026-04-26
-> Status: v0.1.0 — Phase 1-15 complete, Phase 16 (E2E testing) next
+> Status: v0.1.0 — Phase 1-17 complete
 
 ## Current State Summary
 
@@ -388,17 +388,17 @@ Legend:
 
 ---
 
-## Phase 17: View Pipeline Enhancement 🔧 In Progress
+## Phase 17: View Pipeline Enhancement ✅ COMPLETE
 
 > Goal: Enhance the Action/View rendering pipeline — structured view arch, kanban wiring, form editing, search view expansion, saved filters.
 
 | # | Task | Priority | Status | Deliverable |
 |---|------|----------|--------|-------------|
-| T17.1 | Structured view arch JSON Schema | **P0** | 📋 Pending | `ViewArch` type definitions (list/form/kanban/search structured arch) |
+| T17.1 | Structured view arch JSON Schema | **P0** | ✅ Done | ViewArch types (ListArch, FormArch, KanbanArch, SearchArch) defined in metadata.rs |
 | T17.2 | Kanban view wiring in ViewRenderer | **P0** | ✅ Done | ViewRenderer supports `activeView === "kanban"` branch, SDK KanbanBoard wired + rollup multi-entry fix |
-| T17.3 | Form view inline editing | **P0** | 📋 Pending | ViewRenderer form mode supports field editing + PUT submission |
+| T17.3 | Form view inline editing | **P0** | ✅ Done | ViewRenderer form mode with editing state, dirty field detection, PUT submit, FormField component |
 | T17.4 | Search view seed data expansion | **P1** | ✅ Done | `seed.rs` adds article/product search views + actions + menus |
-| T17.5 | Search favorites (saved filters) | **P2** | 📋 Pending | `ir_search_favorite` table + CRUD API + frontend favorites UI |
+| T17.5 | Search favorites (saved filters) | **P2** | ✅ Done | ir_search_favorite table + CRUD API + SearchPanel favorites UI |
 
 ---
 
