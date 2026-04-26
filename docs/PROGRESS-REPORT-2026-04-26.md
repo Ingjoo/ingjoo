@@ -307,6 +307,20 @@
 
 **退出标准**：✅ NotificationBell 显示未读计数 + 下拉列表，SSE 通过 fetch 发送 Bearer token，timeAgo 共享函数消除重复代码。
 
+### 阶段 13：集成测试修复 + Profile 完善 🔧
+
+> 目标：解决集成测试 runtime-in-runtime 问题，完善 Profile 页面功能，提升代码质量和用户体验。
+
+| # | 任务 | 改动范围 | 状态 |
+|---|------|---------|------|
+| T13.1 | 修复 handlers_test.rs tokio runtime 嵌套问题 | `ingjoo-infra/tests/handlers_test.rs` | 📋 待开始 |
+| T13.2 | Profile 头像上传（前端 + 后端 storage API） | `profile/page.tsx` + `handlers/storage.rs` | 📋 待开始 |
+| T13.3 | Profile 偏好设置持久化（PUT /api/auth/preferences 对接） | `profile/page.tsx` | 📋 待开始 |
+| T13.4 | 项目文档纳入版本控制（docs/ → ingjoo repo） | `source/ingjoo/docs/` | ✅ |
+| T13.5 | ROADMAP 页面数修正（8→12） | `dev-docs/en/ROADMAP.md` + `dev-docs/zh/ROADMAP.md` | ✅ |
+
+**退出标准**：集成测试全量通过（411+，0 failures），Profile 页面支持头像上传 + 偏好设置持久化。
+
 ---
 
 ## 四、API 端点清单
@@ -406,11 +420,11 @@
 
 | 问题 | 严重程度 | 说明 |
 |------|---------|------|
-| 集成测试 runtime-in-runtime | 低 | handlers_test.rs 因 tokio runtime 嵌套失败，单独运行通过 |
-| Profile 完善 | 低 | 头像上传、偏好设置持久化 |
-| E2E 测试框架 | 低 | Playwright 自动化 |
+| 集成测试 runtime-in-runtime | 低 | handlers_test.rs 因 tokio runtime 嵌套失败，单独运行通过 — Phase 13 |
+| Profile 完善 | 低 | 头像上传、偏好设置持久化 — Phase 13 |
+| E2E 测试框架 | 低 | Playwright 自动化 — Phase 14+ |
 
-> **已解决**（Phase 11+集成测试补充）：~~retry 测试偶发失败~~ → jitter 阈值修正（1.5→1.25）；~~WebSocket 前端代理~~ → 已配置 rewrites；~~通知系统后端~~ → 已实现 NotificationStore + handler；~~admin 页面功能~~ → 角色编辑 + 创建用户 + 审计过滤；~~search 页面~~ → 类型筛选 + 防抖 + URL 同步；~~Header 通知铃铛~~ → NotificationBell + fetch-based SSE + 共享 timeAgo。
+> **已解决**（Phase 11+集成测试补充）：~~retry 测试偶发失败~~ → jitter 阈值修正（1.5→1.25）；~~WebSocket 前端代理~~ → 已配置 rewrites；~~通知系统后端~~ → 已实现 NotificationStore + handler；~~admin 页面功能~~ → 角色编辑 + 创建用户 + 审计过滤；~~search 页面~~ → 类型筛选 + 防抖 + URL 同步；~~Header 通知铃铛~~ → NotificationBell + fetch-based SSE + 共享 timeAgo；~~项目文档未纳入版本控制~~ → docs/ 已迁入 ingjoo repo；~~ROADMAP 页面数不一致~~ → 统一修正为 12。
 
 ---
 
@@ -442,18 +456,19 @@
 2026-04-26  Phase 10   ██████       模块系统 + 空库体验
 2026-04-26  Phase 11   ██████       通知系统 + 前端增强
 2026-04-26  Phase 12   ████         前端通知铃铛 + SSE 修复
-                                       ↑ 现在
+2026-04-26  Phase 13   ████         集成测试修复 + Profile 完善
+                                        ↑ 现在
 ```
 
 ---
 
 ## 九、下一步建议
 
+> Phase 13 已启动（集成测试修复 + Profile 完善）。以下为 Phase 14+ 待办。
+
 | 优先级 | 任务 | 预估工时 | 说明 |
 |--------|------|---------|------|
 | **P1** | E2E 测试框架 | 2 天 | Playwright 自动化（登录→Dashboard→Admin 全流程） |
-| **P1** | Profile 完善 | 1 天 | 头像上传、偏好设置持久化 |
-| **P1** | 集成测试修复 | 1 天 | 解决 runtime-in-runtime |
 | **P2** | 邮件/短信 provider 真实实现 | 2-3 天 | 替换 noop，接入 SMTP / 短信网关 |
 | **P2** | 文件存储 provider | 2 天 | S3/OSS 真实实现 |
 | **P2** | 多租户隔离测试 | 1 天 | collection_isolation 端到端验证 |

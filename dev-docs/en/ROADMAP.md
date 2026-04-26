@@ -1,7 +1,7 @@
 # Improvement Roadmap
 
 > Last updated: 2026-04-26
-> Status: v0.1.0 — Phase 1-12 complete
+> Status: v0.1.0 — Phase 1-12 complete, Phase 13 in progress
 
 ## Current State Summary
 
@@ -285,6 +285,15 @@ PHASE 12 COMPLETE (411 tests, frontend SSE auth fixed)
 ├── T12.1 NotificationBell — ✅ badge + dropdown + mark-read
 ├── T12.2 SSE auth fix — ✅ fetch-based SSE with Bearer token
 ├── T12.3 Notifications page — ✅ pagination + filtering + SSE refresh
+├── T12.4 Shared timeAgo utility — ✅ utils.ts
+└── T12.5 Header notification bell wiring — ✅
+
+PHASE 13 IN PROGRESS (Integration test fix + Profile)
+├── T13.1 Fix handlers_test.rs runtime-in-runtime — 📋 pending
+├── T13.2 Profile avatar upload — 📋 pending
+├── T13.3 Profile preferences persistence — 📋 pending
+├── T13.4 Docs versioned in ingjoo repo — ✅
+└── T13.5 Page count fix (8→12) — ✅
 ├── T12.4 Shared timeAgo — ✅ utils.ts extracted
 └── T12.5 Header wiring — ✅ bell in header
 

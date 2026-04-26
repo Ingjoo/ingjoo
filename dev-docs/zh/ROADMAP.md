@@ -1,7 +1,7 @@
 # 改进路线图
 
 > 最后更新：2026-04-26
-> 当前版本：v0.1.0 — 阶段 1-12 已完成
+> 当前版本：v0.1.0 — 阶段 1-12 已完成，阶段 13 进行中
 
 ## 现状总览
 
@@ -332,6 +332,13 @@ ingjoo-infra/src/
 ├── T12.3 通知中心页面 — ✅ 分页 + 筛选 + SSE 实时刷新
 ├── T12.4 共享 timeAgo — ✅ 提取到 utils.ts
 └── T12.5 Header 接线 — ✅ 通知铃铛已接入 Header
+
+阶段 13 进行中（集成测试修复 + Profile 完善）
+├── T13.1 修复 handlers_test.rs runtime-in-runtime — 📋 待开始
+├── T13.2 Profile 头像上传 — 📋 待开始
+├── T13.3 Profile 偏好设置持久化 — 📋 待开始
+├── T13.4 文档纳入版本控制 — ✅ docs/ 已迁入 ingjoo repo
+└── T13.5 页面数修正 (8→12) — ✅
 
 阶段 8 已完成
 ├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索

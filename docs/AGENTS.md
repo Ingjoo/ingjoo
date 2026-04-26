@@ -245,6 +245,7 @@ StateMachine, EventBus, IdGenerator, SearchEngine, PaymentProvider, Lock, Relati
 - **Phase 10 (模块系统)**: ✅ 完成 — 模块安装/卸载/升级 + 空库体验
 - **Phase 11 (通知系统)**: ✅ 完成 — NotificationStore + SSE + 管理后台增强
 - **Phase 12 (通知铃铛)**: ✅ 完成 — NotificationBell + fetch-based SSE 认证 + 共享 timeAgo
+- **Phase 13 (集成测试修复+Profile)**: 🔧 进行中 — handlers_test runtime 嵌套 + 头像上传 + 偏好持久化
 - **StoreError 类型化**: ✅ 完成
 
 ---
