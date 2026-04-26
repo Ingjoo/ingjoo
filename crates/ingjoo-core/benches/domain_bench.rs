@@ -62,7 +62,8 @@ fn bench_domain_end_to_end(c: &mut Criterion) {
 fn bench_domain_from_json(c: &mut Criterion) {
     let simple = r#"["status", "=", "published"]"#;
     let and_cond = r#"["&", ["status", "=", "published"], ["collection_id", "in", ["id1", "id2"]]]"#;
-    let nested = r#"["|", ["&", ["status", "=", "published"], ["type", "=", "article"]], ["!", ["archived", "=", true]]]"#;
+    let nested =
+        r#"["|", ["&", ["status", "=", "published"], ["type", "=", "article"]], ["!", ["archived", "=", true]]]"#;
 
     let mut group = c.benchmark_group("domain_from_json");
     group.bench_function("simple_leaf", |b| b.iter(|| Domain::from_json(black_box(simple)).unwrap()));
@@ -94,22 +95,12 @@ fn bench_domain_compose(c: &mut Criterion) {
 fn bench_domain_deeply_nested(c: &mut Criterion) {
     let input = json!([
         "&",
-        ["|",
-            ["&",
-                ["|", ["a", "=", "1"], ["b", "=", "2"]],
-                ["&", ["c", "=", "3"], ["d", "=", "4"]]
-            ],
-            ["!",
-                ["&",
-                    ["|", ["e", "=", "5"], ["f", "=", "6"]],
-                    ["g", "=", "7"]
-                ]
-            ]
+        [
+            "|",
+            ["&", ["|", ["a", "=", "1"], ["b", "=", "2"]], ["&", ["c", "=", "3"], ["d", "=", "4"]]],
+            ["!", ["&", ["|", ["e", "=", "5"], ["f", "=", "6"]], ["g", "=", "7"]]]
         ],
-        ["|",
-            ["&", ["h", "=", "8"], ["i", "=", "9"]],
-            ["j", "=", "10"]
-        ]
+        ["|", ["&", ["h", "=", "8"], ["i", "=", "9"]], ["j", "=", "10"]]
     ]);
 
     c.bench_function("domain_deeply_nested_5_levels", |b| {

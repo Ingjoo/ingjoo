@@ -4,8 +4,12 @@ use std::time::Instant;
 use crate::auth::JwtAuthProvider;
 use crate::db::database_manager::DatabaseManager;
 use crate::db::seed;
+#[cfg(feature = "email")]
+use crate::email::EmailProvider;
 use crate::extension_noop::*;
 use crate::plugin::PluginManager;
+#[cfg(feature = "sms")]
+use crate::sms::SmsProvider;
 use crate::storage::FileStorage;
 use crate::IngjooStore;
 use ingjoo_cache::FrameworkCache;
@@ -14,10 +18,6 @@ use ingjoo_core::extension::{
     NotificationStore, PaymentProvider, RelationLoader, SearchEngine, SignatureVerifier, StateMachine, TextSplitter,
     TranslationStore, VectorStore,
 };
-#[cfg(feature = "email")]
-use crate::email::EmailProvider;
-#[cfg(feature = "sms")]
-use crate::sms::SmsProvider;
 use ingjoo_core::pool::Pool;
 use ingjoo_core::Dialect;
 use ingjoo_core::ModelRegistry;

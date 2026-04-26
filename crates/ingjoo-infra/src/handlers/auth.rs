@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use axum::body::Body;
 use axum::extract::{Multipart, Path, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, SET_COOKIE};
 use axum::http::HeaderMap;
 use axum::http::HeaderValue;
 use axum::http::StatusCode;
 use axum::response::Response;
-use axum::body::Body;
 use axum::Extension;
 use axum::Json;
 use ingjoo_core::{
@@ -244,20 +244,14 @@ pub async fn upload_avatar(
         .map_err(|e| AppError::BadRequest(format!("读取上传数据失败: {}", e)))?
         .ok_or_else(|| AppError::BadRequest("未找到上传文件".into()))?;
 
-    let content_type = field
-        .content_type()
-        .unwrap_or("")
-        .to_string();
+    let content_type = field.content_type().unwrap_or("").to_string();
     if !content_type.starts_with("image/") {
         return Err(AppError::BadRequest("仅支持图片文件".into()));
     }
 
     let ext = mime_to_ext(&content_type).ok_or_else(|| AppError::BadRequest("不支持的图片格式".into()))?;
 
-    let data = field
-        .bytes()
-        .await
-        .map_err(|e| AppError::BadRequest(format!("读取上传数据失败: {}", e)))?;
+    let data = field.bytes().await.map_err(|e| AppError::BadRequest(format!("读取上传数据失败: {}", e)))?;
 
     if data.len() > 2_097_152 {
         return Err(AppError::BadRequest("文件大小不能超过 2MB".into()));
@@ -286,16 +280,9 @@ pub async fn serve_avatar(
     }
 
     let path = format!("avatars/{}", filename);
-    let data = state
-        .file_storage
-        .load(&path)
-        .await
-        .map_err(|_| AppError::NotFound("头像文件不存在".into()))?;
+    let data = state.file_storage.load(&path).await.map_err(|_| AppError::NotFound("头像文件不存在".into()))?;
 
-    let ext = std::path::Path::new(&filename)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let ext = std::path::Path::new(&filename).extension().and_then(|e| e.to_str()).unwrap_or("");
     let content_type = match ext {
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
@@ -304,7 +291,39 @@ pub async fn serve_avatar(
         _ => "application/octet-stream",
     };
 
-    Ok(Response::builder().status(StatusCode::OK).header(CONTENT_TYPE, content_type).header(CACHE_CONTROL, "public, max-age=86400").body(Body::from(data)).unwrap_or_else(|_| {
-        Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::from("服务器内部错误")).unwrap()
-    }))
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, content_type)
+        .header(CACHE_CONTROL, "public, max-age=86400")
+        .body(Body::from(data))
+        .unwrap_or_else(|_| {
+            Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::from("服务器内部错误")).unwrap()
+        }))
+}
+
+/// 忘记密码请求
+#[derive(Deserialize)]
+pub struct ForgotPasswordRequest {
+    pub email: String,
+}
+
+/// 忘记密码 — noop 实现，始终返回成功防止邮箱枚举
+///
+/// 当 email provider 激活后，此处应发送重置链接。
+/// 当前使用 NoopEmailProvider，仅记录日志。
+pub async fn forgot_password(
+    State(_state): State<Arc<AppState>>,
+    Json(req): Json<ForgotPasswordRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    tracing::info!("忘记密码请求: email={}", req.email);
+
+    #[cfg(feature = "email")]
+    {
+        let _ = _state.email.send(&req.email, "密码重置", "您请求了密码重置。").await;
+    }
+
+    Ok(Json(serde_json::json!({
+        "ok": true,
+        "message": "如果该邮箱已注册，重置链接已发送"
+    })))
 }

@@ -2331,11 +2331,21 @@ async fn test_users_search_authenticated() {
     assert!(results.is_array());
 }
 
-fn make_multipart_request(method: &str, uri: &str, token: &str, field_name: &str, filename: &str, content_type: &str, data: &[u8]) -> http::Request<Body> {
+fn make_multipart_request(
+    method: &str,
+    uri: &str,
+    token: &str,
+    field_name: &str,
+    filename: &str,
+    content_type: &str,
+    data: &[u8],
+) -> http::Request<Body> {
     let boundary = "----TestBoundary12345";
     let mut body = Vec::new();
     body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
-    body.extend_from_slice(format!("Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n", field_name, filename).as_bytes());
+    body.extend_from_slice(
+        format!("Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n", field_name, filename).as_bytes(),
+    );
     body.extend_from_slice(format!("Content-Type: {}\r\n\r\n", content_type).as_bytes());
     body.extend_from_slice(data);
     body.extend_from_slice(format!("\r\n--{}--\r\n", boundary).as_bytes());
@@ -2498,10 +2508,7 @@ async fn test_multi_user_cross_tenant_isolation() {
     assert_eq!(items.len(), 2, "tenant_a 应看到 2 条记录");
     for item in items {
         assert_eq!(item["collection_id"].as_str().unwrap(), "tenant_a");
-        assert!(
-            item["name"].as_str().unwrap().starts_with("tenant_a"),
-            "不应看到其他租户的记录"
-        );
+        assert!(item["name"].as_str().unwrap().starts_with("tenant_a"), "不应看到其他租户的记录");
     }
 
     let domain_b = simple_url_encode(r#"["collection_id", "=", "tenant_b"]"#);
@@ -2517,10 +2524,7 @@ async fn test_multi_user_cross_tenant_isolation() {
     assert_eq!(items.len(), 2, "tenant_b 应看到 2 条记录");
     for item in items {
         assert_eq!(item["collection_id"].as_str().unwrap(), "tenant_b");
-        assert!(
-            item["name"].as_str().unwrap().starts_with("tenant_b"),
-            "不应看到其他租户的记录"
-        );
+        assert!(item["name"].as_str().unwrap().starts_with("tenant_b"), "不应看到其他租户的记录");
     }
 
     let domain_cross = simple_url_encode(r#"["collection_id", "=", "tenant_a"]"#);
@@ -2704,11 +2708,8 @@ async fn test_collection_isolation_create_scoped() {
     assert_eq!(created["name"].as_str().unwrap(), "doc_in_a");
     let id_a = created["id"].as_str().unwrap().to_string();
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", &format!("/api/data/col_item/{}", id_a), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("GET", &format!("/api/data/col_item/{}", id_a), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let fetched: serde_json::Value = serde_json::from_slice(&body).unwrap();

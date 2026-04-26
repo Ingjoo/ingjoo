@@ -1,7 +1,7 @@
 # Improvement Roadmap
 
 > Last updated: 2026-04-26
-> Status: v0.1.0 — Phase 1-13 complete
+> Status: v0.1.0 — Phase 1-14 complete, Phase 15 in progress
 
 ## Current State Summary
 
@@ -316,7 +316,23 @@ PHASE 7 COMPLETE
 ├── T7.8 Migrations v8/v9 — ✅ DDL
 └── T7.9 Wiring — ✅ state.rs + main.rs
 
-PHASE 6 COMPLETE
+PHASE 14 COMPLETE
+├── T14.1 Email/SMS wiring — ✅ NoopEmailProvider + NoopSmsProvider + AppState
+├── T14.2 S3/OSS file storage — ✅ build_file_storage() + env-var config + S3 fallback
+├── T14.3 Multi-tenant isolation tests — ✅ 3 new integration tests
+└── T14.4 Performance benchmarks — ✅ policy_bench + domain/registry + Justfile bench
+
+PHASE 15 IN PROGRESS (QA Fixes + Documentation Sync)
+├── T15.1 Full QA test — ✅ 12 pages, 10 issues, health score 49→65
+├── T15.2 ISSUE-004 Search fix — ✅ POST + JSON body + response unwrap
+├── T15.3 ISSUE-002 Settings redirect — ✅ /settings → /admin/settings
+├── T15.4 ISSUE-003 Admin users list — ✅ /users/search?q= + type fix
+├── T15.5 ISSUE-006 Test user — ✅ admin2 created
+├── T15.6 QA report — ✅ .gstack/qa-reports/
+├── T15.7 Doc sync — ✅ PROGRESS-PLAN/Roadmap/AGENTS.md
+├── T15.8 ISSUE-010 Audit log API — 📋 in progress
+├── T15.9 ISSUE-005 Forgot password API — 📋 in progress
+└── T15.10 ISSUE-001 WebSocket proxy — 📋 pending
 ├── T6.1 AppState trait wiring — ✅ 14 fields + noop defaults + builder methods
 ├── T6.2 Conditional compilation — ✅ feature-gated build_xxx() + ingjoo-bin feature forwarding
 ├── T6.3 Audit logging — ✅ CRUD success fire-and-forget audit

@@ -132,11 +132,5 @@ fn bench_policy_build(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    benches,
-    bench_check_access,
-    bench_record_filter,
-    bench_collection_isolation,
-    bench_policy_build,
-);
+criterion_group!(benches, bench_check_access, bench_record_filter, bench_collection_isolation, bench_policy_build,);
 criterion_main!(benches);

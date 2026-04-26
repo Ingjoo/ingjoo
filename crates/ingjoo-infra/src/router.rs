@@ -55,6 +55,7 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route("/api/auth/login", post(handlers::auth::login))
         .route("/api/auth/logout", post(handlers::auth::logout))
         .route("/api/auth/refresh", post(handlers::auth::refresh))
+        .route("/api/auth/forgot-password", post(handlers::auth::forgot_password))
         .route("/api/avatars/{filename}", get(handlers::auth::serve_avatar))
         .route("/ws", any(handlers::ws::ws_handler))
         .route_layer(middleware::from_fn(rate_limit_middleware))

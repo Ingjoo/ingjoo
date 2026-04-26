@@ -7,12 +7,12 @@ use ingjoo_core::pool;
 use ingjoo_core::ModelRegistry;
 use ingjoo_infra::auth::AuthProvider;
 use ingjoo_infra::db::database_manager::DatabaseManager;
+#[cfg(feature = "s3")]
+use ingjoo_infra::S3Storage;
 use ingjoo_infra::{
     AppState, AuthConfig, FileStorage, IngjooDb, IngjooStore, JwtAuthProvider, LocalStorage, PluginManager,
     RateLimitConfig,
 };
-#[cfg(feature = "s3")]
-use ingjoo_infra::S3Storage;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -157,17 +157,17 @@ use ingjoo_core::extension::{
     AuditStore, ContentFilter, DataMask, NotificationStore, RelationLoader, SearchEngine, SignatureVerifier,
     StateMachine, TextSplitter, TranslationStore,
 };
+#[cfg(feature = "email")]
+use ingjoo_infra::email::EmailProvider;
+#[cfg(feature = "email")]
+use ingjoo_infra::extension_noop::NoopEmailProvider;
+#[cfg(feature = "sms")]
+use ingjoo_infra::extension_noop::NoopSmsProvider;
 #[allow(unused_imports)]
 use ingjoo_infra::extension_noop::{
     NoopAuditStore, NoopContentFilter, NoopDataMask, NoopNotificationStore, NoopRelationLoader, NoopSearchEngine,
     NoopSignatureVerifier, NoopStateMachine, NoopTranslationStore,
 };
-#[cfg(feature = "email")]
-use ingjoo_infra::extension_noop::NoopEmailProvider;
-#[cfg(feature = "email")]
-use ingjoo_infra::email::EmailProvider;
-#[cfg(feature = "sms")]
-use ingjoo_infra::extension_noop::NoopSmsProvider;
 #[cfg(feature = "sms")]
 use ingjoo_infra::sms::SmsProvider;
 

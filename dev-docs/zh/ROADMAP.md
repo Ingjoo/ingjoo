@@ -1,7 +1,7 @@
 # 改进路线图
 
 > 最后更新：2026-04-26
-> 当前版本：v0.1.0 — 阶段 1-13 已完成
+> 当前版本：v0.1.0 — 阶段 1-14 已完成，阶段 15 进行中
 
 ## 现状总览
 
@@ -347,6 +347,18 @@ ingjoo-infra/src/
 ├── T14.2 S3/OSS 文件存储接线 — ✅ build_file_storage() + 环境变量配置 + S3 降级
 ├── T14.3 多租户隔离测试 — ✅ 3 个新集成测试（跨租户/三层组合/创建作用域）
 └── T14.4 性能基准 — ✅ policy_bench + domain/registry 扩展 + Justfile bench
+
+阶段 15 进行中（QA 修复 + 文档同步）
+├── T15.1 QA 全面测试 — ✅ 12 页面，10 issues，健康评分 49→65
+├── T15.2 ISSUE-004 搜索修复 — ✅ POST + JSON body + 返回类型解包
+├── T15.3 ISSUE-002 Settings 重定向 — ✅ /settings → /admin/settings
+├── T15.4 ISSUE-003 Admin 用户列表 — ✅ /users/search?q= + 类型修正
+├── T15.5 ISSUE-006 测试用户 — ✅ admin2 创建
+├── T15.6 QA 报告 — ✅ .gstack/qa-reports/
+├── T15.7 文档同步 — ✅ PROGRESS-PLAN/Roadmap/AGENTS.md
+├── T15.8 ISSUE-010 审计日志 API — 📋 进行中
+├── T15.9 ISSUE-005 忘记密码 API — 📋 进行中
+└── T15.10 ISSUE-001 WebSocket 代理 — 📋 待定
 
 阶段 8 已完成
 ├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索

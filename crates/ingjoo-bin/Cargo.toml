@@ -17,7 +17,10 @@ content-filter = ["ingjoo-infra/content-filter"]
 data-mask = ["ingjoo-infra/data-mask"]
 signature = ["ingjoo-infra/signature"]
 multi-db = ["ingjoo-infra/multi-db"]
-full = ["db", "auth", "content-filter", "data-mask", "signature", "multi-db"]
+email = ["ingjoo-infra/email"]
+sms = ["ingjoo-infra/sms"]
+s3 = ["ingjoo-infra/s3"]
+full = ["db", "auth", "content-filter", "data-mask", "signature", "multi-db", "email", "sms", "s3"]
 
 [dependencies]
 ingjoo-core = { path = "../ingjoo-core" }
