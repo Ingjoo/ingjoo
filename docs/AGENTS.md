@@ -247,6 +247,9 @@ StateMachine, EventBus, IdGenerator, SearchEngine, PaymentProvider, Lock, Relati
 - **Phase 12 (通知铃铛)**: ✅ 完成 — NotificationBell + fetch-based SSE 认证 + 共享 timeAgo
 - **Phase 13 (集成测试修复+Profile)**: ✅ 完成 — 头像上传 + 偏好持久化 + 前端构建修复
 - **Phase 14 (基础设施接线+多租户测试+性能基准)**: ✅ 完成 — Email/SMS noop + S3 存储 + 多租户测试 + 性能基准
+- **Phase 15 (QA修复+文档同步)**: ✅ 完成 — 10 issues 中 9 个已修复，QA 健康评分 49→77.5
+- **Phase 15.5 (QA修复续)**: ✅ 完成 — 5 issues 全部修复（Footer合规/WebSocket条件连接/欢迎横幅/权限提示/搜索种子）
+- **Phase 16 (QA验证+控制台修复)**: ✅ 完成 — admin用户修复 + /api/database/list回退 + 全页面QA通过 + 控制台0错误
 - **StoreError 类型化**: ✅ 完成
 - **Phase 17 (视图管线增强)**: ✅ 完成 — ViewArch types + 看板视图 + 表单内联编辑 + 搜索种子 + 搜索收藏
 
