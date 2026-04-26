@@ -504,6 +504,40 @@ fn all_migrations() -> Vec<Migration> {
                 ALTER TABLE model_access ADD COLUMN perm_export INTEGER NOT NULL DEFAULT 0"#,
             ),
         },
+        Migration {
+            version: 16,
+            name: "create_ir_search_favorite",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_search_favorite (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    domain TEXT,
+                    context TEXT,
+                    is_default INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_search_fav_user_model ON ir_search_favorite(user_id, model)"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_search_favorite (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    name VARCHAR NOT NULL,
+                    model VARCHAR NOT NULL,
+                    domain TEXT,
+                    context TEXT,
+                    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_search_fav_user_model ON ir_search_favorite(user_id, model)"#,
+            ),
+        },
     ]
 }
 

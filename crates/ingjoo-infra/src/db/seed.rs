@@ -91,12 +91,26 @@ pub async fn seed_metadata(pool: &Pool, dialect: &Dialect) -> Result<()> {
     }
 
     // ── Search Views ──
-    let search_views = vec![(
-        "search_users",
-        "用户搜索",
-        "users",
-        r#"{"fields":[{"name":"name","label":"姓名","type":"text"},{"name":"email","label":"邮箱","type":"text"},{"name":"role","label":"角色","type":"select","options":[["admin","管理员"],["user","用户"],["viewer","查看者"]]}],"filters":[{"name":"admins","label":"管理员","domain":[["role","=","admin"]]}],"group_by":[{"name":"role","label":"按角色分组"}]}"#,
-    )];
+    let search_views = vec![
+        (
+            "search_users",
+            "用户搜索",
+            "users",
+            r#"{"fields":[{"name":"name","label":"姓名","type":"text"},{"name":"email","label":"邮箱","type":"text"},{"name":"role","label":"角色","type":"select","options":[["admin","管理员"],["user","用户"],["viewer","查看者"]]}],"filters":[{"name":"admins","label":"管理员","domain":[["role","=","admin"]]}],"group_by":[{"name":"role","label":"按角色分组"}]}"#,
+        ),
+        (
+            "search_articles",
+            "文章搜索",
+            "article",
+            r#"{"fields":[{"name":"title","label":"标题","type":"text"},{"name":"content","label":"内容","type":"text"},{"name":"status","label":"状态","type":"select","options":[["draft","草稿"],["published","已发布"]]}],"filters":[{"name":"published","label":"已发布","domain":[["status","=","published"]]}],"group_by":[{"name":"status","label":"按状态分组"}]}"#,
+        ),
+        (
+            "search_products",
+            "产品搜索",
+            "product",
+            r#"{"fields":[{"name":"name","label":"名称","type":"text"},{"name":"price","label":"价格","type":"number"},{"name":"category","label":"分类","type":"text"}],"filters":[{"name":"low_price","label":"低价产品","domain":[["price","<","100"]]}],"group_by":[{"name":"category","label":"按分类分组"}]}"#,
+        ),
+    ];
 
     for (id, name, model, arch) in &search_views {
         let sql = format!(
@@ -106,7 +120,11 @@ pub async fn seed_metadata(pool: &Pool, dialect: &Dialect) -> Result<()> {
     }
 
     // ── Demo Actions ──
-    let demo_actions = vec![("action_users", "用户管理", "act_window", "users", "list,form", "search_users")];
+    let demo_actions = vec![
+        ("action_users", "用户管理", "act_window", "users", "list,form", "search_users"),
+        ("action_articles", "文章管理", "act_window", "article", "list,form", "search_articles"),
+        ("action_products", "产品管理", "act_window", "product", "list,form", "search_products"),
+    ];
 
     for (id, name, atype, res_model, view_mode, search_view_id) in &demo_actions {
         let sql = format!(
@@ -128,6 +146,8 @@ pub async fn seed_metadata(pool: &Pool, dialect: &Dialect) -> Result<()> {
         ("menu_apps", "应用管理", None::<&str>, "fa fa-th-large", Some("action_apps")),
         ("menu_settings", "系统设置", None::<&str>, "fa fa-cog", Some("action_settings")),
         ("menu_users", "用户管理", None::<&str>, "fa fa-users", Some("action_users")),
+        ("menu_articles", "文章管理", None::<&str>, "fa fa-file-alt", Some("action_articles")),
+        ("menu_products", "产品管理", None::<&str>, "fa fa-box", Some("action_products")),
     ];
 
     for (id, name, parent_id, icon, action_id) in &menus {

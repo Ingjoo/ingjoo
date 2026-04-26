@@ -87,6 +87,18 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route("/api/notifications/{id}/mark-read", post(handlers::notification::mark_read))
         .route("/api/events", get(handlers::events::sse_events))
         .route("/api/search", post(handlers::search::global_search))
+        .route(
+            "/api/search-favorites",
+            get(handlers::search_favorite::list_favorites).post(handlers::search_favorite::create_favorite),
+        )
+        .route(
+            "/api/search-favorites/{id}",
+            delete(handlers::search_favorite::delete_favorite),
+        )
+        .route(
+            "/api/search-favorites/{id}/default",
+            put(handlers::search_favorite::set_default_favorite),
+        )
         .route_layer(middleware::from_fn(rate_limit_middleware))
         .layer(axum::Extension(protected_limiter.clone()))
         .route_layer(middleware::from_fn_with_state(state.clone(), auth_middleware));

@@ -1,7 +1,7 @@
 # 改进路线图
 
 > 最后更新：2026-04-26
-> 当前版本：v0.1.0 — 阶段 1-16 已完成，阶段 17 (E2E 测试) 待开始
+> 当前版本：v0.1.0 — 阶段 1-16 已完成，阶段 17 (视图管线增强) 进行中
 
 ## 现状总览
 
@@ -453,3 +453,83 @@ QA 健康评分: 49 → 65 → 77.5 → 85/100
 图例：
 - ✅ 完成：代码完成且有测试
 - ✅ 未使用：代码完成但未被业务流程调用
+
+---
+
+## 阶段 17：视图管线增强 🔧 进行中
+
+> 目标：增强 Action/View 系统的视图渲染管线——结构化 view arch、看板视图接线、表单编辑、搜索视图扩展、收藏过滤。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T17.1 | 结构化 view arch JSON Schema | **P0** | 📋 待开始 | `ViewArch` 类型定义（list/form/kanban/search 四种视图的结构化 arch） |
+| T17.2 | 看板视图接入 ViewRenderer | **P0** | ✅ 完成 | ViewRenderer 支持 `activeView === "kanban"` 分支，SDK KanbanBoard 接线 + rollup 多入口修复 |
+| T17.3 | 表单视图内联编辑 | **P0** | 📋 待开始 | ViewRenderer form 模式支持字段编辑 + PUT 提交 |
+| T17.4 | 搜索视图种子数据扩展 | **P1** | ✅ 完成 | `seed.rs` 新增 article/product 搜索视图 + 动作 + 菜单 |
+| T17.5 | 搜索收藏（保存过滤条件） | **P2** | 📋 待开始 | `ir_search_favorite` 表 + CRUD API + 前端收藏 UI |
+
+---
+
+## 阶段 18：自动化规则引擎 📋 待开始
+
+> 目标：实现 Odoo 风格的自动化规则引擎——基于条件自动触发动作（创建/更新/发送通知）。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T18.1 | `ir_action_rule` 表 + 迁移 | **P0** | — | 📋 | DDL: model, trigger (create/update/unlink), filter_domain, action_type, action_id, active, sequence |
+| T18.2 | `ActionRule` 类型定义 | **P0** | T18.1 | 📋 | `ingjoo-core` ActionRule + ActionRuleStore trait |
+| T18.3 | EventBus 订阅 + 规则评估 | **P0** | T18.2 | 📋 | EventBus consumer: model_event → filter_domain 评估 → action 触发 |
+| T18.4 | 内置动作: 更新字段 / 发送通知 | **P1** | T18.3 | 📋 | `UpdateField` / `SendNotification` action 类型实现 |
+| T18.5 | CRUD API `/api/action-rules` | **P1** | T18.2 | 📋 | 管理 CRUD handler + 路由注册 |
+| T18.6 | 批量执行优化 | **P2** | T18.3 | 📋 | 批量规则评估 + N+1 查询避免 |
+
+---
+
+## 阶段 19：计算字段 + 模块继承 📋 待开始
+
+> 目标：实现计算字段（computed fields）和模块继承（module inheritance）机制。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T19.1 | `compute` / `depends` 注册 | **P0** | — | 📋 | ModelRegistry 支持 `computed_fields` + `depends` 声明 |
+| T19.2 | 字段计算引擎 | **P0** | T19.1 | 📋 | 依赖变更 → 自动重算 → 批量更新，避免循环依赖 |
+| T19.3 | 视图继承 (`inherit_id` merge) | **P0** | — | 📋 | `ir_view.inherit_id` 运行时 merge：扩展 arch、添加字段/按钮 |
+| T19.4 | 模型扩展（非继承） | **P1** | T19.3 | 📋 | 通过 `inherit_id` 给已有模型添加字段/方法，不改原表 |
+
+---
+
+## 阶段 20：模块依赖 + 安装顺序 📋 待开始
+
+> 目标：完善模块依赖解析，确保安装/卸载顺序正确，支持依赖冲突检测。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T20.1 | 依赖图解析器 | **P0** | — | 📋 | DAG 拓扑排序 + 循环检测 + 安装/卸载顺序计算 |
+| T20.2 | 安装时依赖检查 | **P0** | T20.1 | 📋 | 安装前检查依赖是否已安装，缺失则自动安装 |
+| T20.3 | 卸载时反向依赖检查 | **P0** | T20.1 | 📋 | 卸载前检查是否有其他模块依赖，有则拒绝 |
+| T20.4 | 模块元数据 API 增强 | **P1** | T20.1 | 📋 | `/api/modules` 返回依赖关系图 + 状态 |
+
+---
+
+## 阶段 21：TestContext 助手 📋 待开始
+
+> 目标：提供统一的测试工具 struct，简化集成测试编写。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T21.1 | `TestContext` struct | **P0** | — | 📋 | 封装 Db + AppState + test user，一行创建测试环境 |
+| T21.2 | 测试固件（fixtures） | **P1** | T21.1 | 📋 | 预定义测试数据工厂（create_test_user, create_test_record） |
+| T21.3 | 断言辅助宏 | **P2** | T21.1 | 📋 | `assert_record_exists!` / `assert_field_equals!` / `assert_domain_matches!` |
+
+---
+
+## 阶段 22：翻译集成 + 文件管理 📋 待开始
+
+> 目标：将翻译系统接入 CRUD 序列化，实现统一文件管理。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T22.1 | 翻译序列化集成 | **P0** | — | 📋 | GET /api/data/{model} 自动按 Accept-Language 返回翻译字段 |
+| T22.2 | 翻译管理 UI | **P1** | T22.1 | 📋 | Admin 翻译管理页面：语言切换 + 字段翻译编辑 |
+| T22.3 | `ir_attachment` 统一文件管理 | **P1** | — | 📋 | 附件模型 + 上传/下载/关联 API + 前端组件 |
+| T22.4 | 文件预览集成 | **P2** | T22.3 | 📋 | PDF/图片/Office 文件在线预览 |

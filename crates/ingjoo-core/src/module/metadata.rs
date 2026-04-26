@@ -108,6 +108,34 @@ fn default_priority() -> i32 {
     16
 }
 
+impl ViewDescriptor {
+    /// 将 `arch` JSON 解析为结构化的 `ViewArch`
+    pub fn parse_arch(&self) -> Result<Option<ViewArch>, serde_json::Error> {
+        if self.arch.is_null() {
+            return Ok(None);
+        }
+        match self.view_type {
+            ViewType::List => {
+                serde_json::from_value::<ListArch>(self.arch.clone())
+                    .map(|a| Some(ViewArch::List(a)))
+            }
+            ViewType::Form => {
+                serde_json::from_value::<FormArch>(self.arch.clone())
+                    .map(|a| Some(ViewArch::Form(a)))
+            }
+            ViewType::Kanban => {
+                serde_json::from_value::<KanbanArch>(self.arch.clone())
+                    .map(|a| Some(ViewArch::Kanban(a)))
+            }
+            ViewType::Search => {
+                serde_json::from_value::<SearchArch>(self.arch.clone())
+                    .map(|a| Some(ViewArch::Search(a)))
+            }
+            _ => Ok(None),
+        }
+    }
+}
+
 // ==================== Action ====================
 
 /// 动作描述符
@@ -152,4 +180,167 @@ pub struct ActionDescriptor {
 
 fn default_target() -> Option<String> {
     Some("current".to_string())
+}
+
+// ==================== ViewArch — 视图架构 JSON 结构化类型 ====================
+
+/// 列表视图列定义
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ListColumn {
+    pub field: String,
+    pub label: String,
+    #[serde(default)]
+    pub width: Option<String>,
+    #[serde(default)]
+    pub sortable: Option<bool>,
+    #[serde(default)]
+    pub widget: Option<String>,
+}
+
+/// 列表视图架构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ListArch {
+    pub columns: Vec<ListColumn>,
+    #[serde(default)]
+    pub editable: Option<bool>,
+}
+
+/// 表单字段定义
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FormField {
+    pub field: String,
+    pub label: String,
+    #[serde(default)]
+    pub widget: Option<String>,
+    #[serde(default)]
+    pub required: Option<bool>,
+    #[serde(default)]
+    pub readonly: Option<bool>,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub colspan: Option<u32>,
+}
+
+/// 表单分组
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FormGroup {
+    #[serde(default)]
+    pub string: Option<String>,
+    pub fields: Vec<FormField>,
+    #[serde(default)]
+    pub colspan: Option<u32>,
+}
+
+/// 表单按钮
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FormButton {
+    pub name: String,
+    pub label: String,
+    pub action: String,
+    #[serde(default, rename = "type")]
+    pub button_type: Option<String>,
+}
+
+/// 表单底部
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FormFooter {
+    pub buttons: Vec<FormButton>,
+}
+
+/// 表单视图架构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FormArch {
+    pub groups: Vec<FormGroup>,
+    #[serde(default)]
+    pub footer: Option<FormFooter>,
+}
+
+/// 看板卡片字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct KanbanCardField {
+    pub field: String,
+    #[serde(default)]
+    pub widget: Option<String>,
+}
+
+/// 看板卡片定义
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct KanbanCard {
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub subtitle: Option<String>,
+    pub fields: Vec<KanbanCardField>,
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+/// 看板视图架构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct KanbanArch {
+    pub group_by: String,
+    pub card: KanbanCard,
+    #[serde(default)]
+    pub quick_create: Option<bool>,
+}
+
+/// 搜索字段
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SearchField {
+    pub name: String,
+    pub label: String,
+    pub field_type: String,
+    #[serde(default)]
+    pub options: Option<Vec<(String, String)>>,
+}
+
+/// 搜索过滤器
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SearchFilter {
+    pub name: String,
+    pub label: String,
+    pub domain: Vec<Vec<String>>,
+}
+
+/// 搜索分组
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SearchGroupBy {
+    pub name: String,
+    pub label: String,
+}
+
+/// 搜索视图架构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SearchArch {
+    pub fields: Vec<SearchField>,
+    #[serde(default)]
+    pub filters: Vec<SearchFilter>,
+    #[serde(default)]
+    pub group_by: Vec<SearchGroupBy>,
+}
+
+/// 视图架构联合类型 — 根据 view_type 解析不同的 arch 结构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "arch")]
+#[serde(rename_all = "snake_case")]
+pub enum ViewArch {
+    List(ListArch),
+    Form(FormArch),
+    Kanban(KanbanArch),
+    Search(SearchArch),
 }

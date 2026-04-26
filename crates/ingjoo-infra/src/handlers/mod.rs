@@ -16,6 +16,7 @@ pub mod permission;
 pub mod plugin;
 pub mod schedule;
 pub mod search;
+pub mod search_favorite;
 pub mod settings;
 pub mod users;
 pub mod view;

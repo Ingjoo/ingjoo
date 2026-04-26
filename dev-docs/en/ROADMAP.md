@@ -385,3 +385,83 @@ PREVIOUS PHASES (ALL COMPLETE)
 Legend:
 - ✅ Complete: Code done with tests
 - ✅ unused: Code done but not called from business flows
+
+---
+
+## Phase 17: View Pipeline Enhancement 🔧 In Progress
+
+> Goal: Enhance the Action/View rendering pipeline — structured view arch, kanban wiring, form editing, search view expansion, saved filters.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T17.1 | Structured view arch JSON Schema | **P0** | 📋 Pending | `ViewArch` type definitions (list/form/kanban/search structured arch) |
+| T17.2 | Kanban view wiring in ViewRenderer | **P0** | ✅ Done | ViewRenderer supports `activeView === "kanban"` branch, SDK KanbanBoard wired + rollup multi-entry fix |
+| T17.3 | Form view inline editing | **P0** | 📋 Pending | ViewRenderer form mode supports field editing + PUT submission |
+| T17.4 | Search view seed data expansion | **P1** | ✅ Done | `seed.rs` adds article/product search views + actions + menus |
+| T17.5 | Search favorites (saved filters) | **P2** | 📋 Pending | `ir_search_favorite` table + CRUD API + frontend favorites UI |
+
+---
+
+## Phase 18: Automation Rules Engine 📋 Pending
+
+> Goal: Implement Odoo-style automation rules engine — auto-trigger actions based on conditions (create/update/notify).
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T18.1 | `ir_action_rule` table + migration | **P0** | 📋 | DDL: model, trigger, filter_domain, action_type, action_id, active, sequence |
+| T18.2 | `ActionRule` type definition | **P0** | 📋 | `ingjoo-core` ActionRule + ActionRuleStore trait |
+| T18.3 | EventBus subscription + rule evaluation | **P0** | 📋 | EventBus consumer: model_event → filter_domain evaluation → action trigger |
+| T18.4 | Built-in actions: update field / send notification | **P1** | 📋 | `UpdateField` / `SendNotification` action type implementations |
+| T18.5 | CRUD API `/api/action-rules` | **P1** | 📋 | Admin CRUD handler + route registration |
+| T18.6 | Batch execution optimization | **P2** | 📋 | Batch rule evaluation + N+1 query avoidance |
+
+---
+
+## Phase 19: Computed Fields + Module Inheritance 📋 Pending
+
+> Goal: Implement computed fields and module inheritance mechanisms.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T19.1 | `compute` / `depends` registration | **P0** | 📋 | ModelRegistry supports `computed_fields` + `depends` declarations |
+| T19.2 | Field computation engine | **P0** | 📋 | Dependency change → auto recompute → batch update, cycle detection |
+| T19.3 | View inheritance (`inherit_id` merge) | **P0** | 📋 | `ir_view.inherit_id` runtime merge: extend arch, add fields/buttons |
+| T19.4 | Model extension (non-inheritance) | **P1** | 📋 | Add fields/methods to existing models via `inherit_id` without altering original table |
+
+---
+
+## Phase 20: Module Dependencies + Install Order 📋 Pending
+
+> Goal: Complete module dependency resolution with correct install/uninstall ordering and conflict detection.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T20.1 | Dependency graph resolver | **P0** | 📋 | DAG topological sort + cycle detection + install/uninstall order |
+| T20.2 | Install-time dependency check | **P0** | 📋 | Pre-install check: auto-install missing dependencies |
+| T20.3 | Uninstall-time reverse dependency check | **P0** | 📋 | Pre-uninstall check: reject if other modules depend on it |
+| T20.4 | Module metadata API enhancement | **P1** | 📋 | `/api/modules` returns dependency graph + status |
+
+---
+
+## Phase 21: TestContext Helper 📋 Pending
+
+> Goal: Provide unified test utility struct to simplify integration test authoring.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T21.1 | `TestContext` struct | **P0** | 📋 | Encapsulates Db + AppState + test user, one-line test environment setup |
+| T21.2 | Test fixtures | **P1** | 📋 | Predefined test data factories (create_test_user, create_test_record) |
+| T21.3 | Assertion helper macros | **P2** | 📋 | `assert_record_exists!` / `assert_field_equals!` / `assert_domain_matches!` |
+
+---
+
+## Phase 22: Translation Integration + File Management 📋 Pending
+
+> Goal: Integrate translation into CRUD serialization, implement unified file management.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T22.1 | Translation serialization integration | **P0** | 📋 | GET /api/data/{model} auto-returns translated fields by Accept-Language |
+| T22.2 | Translation management UI | **P1** | 📋 | Admin translation page: language switch + field translation editing |
+| T22.3 | `ir_attachment` unified file management | **P1** | 📋 | Attachment model + upload/download/association API + frontend component |
+| T22.4 | File preview integration | **P2** | 📋 | PDF/image/Office file online preview |
