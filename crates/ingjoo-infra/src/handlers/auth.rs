@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use axum::extract::State;
-use axum::http::header::SET_COOKIE;
+use axum::extract::{Multipart, Path, State};
+use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, SET_COOKIE};
 use axum::http::HeaderMap;
 use axum::http::HeaderValue;
 use axum::http::StatusCode;
+use axum::response::Response;
+use axum::body::Body;
 use axum::Extension;
 use axum::Json;
 use ingjoo_core::{
@@ -217,4 +219,93 @@ pub async fn logout(
     }
     state.store.delete_refresh_token(&token_hash).await?;
     Ok((StatusCode::NO_CONTENT, clear_cookies()))
+}
+
+/// mime 类型 → 文件扩展名
+fn mime_to_ext(mime: &str) -> Option<&'static str> {
+    match mime {
+        "image/jpeg" | "image/jpg" => Some("jpg"),
+        "image/png" => Some("png"),
+        "image/gif" => Some("gif"),
+        "image/webp" => Some("webp"),
+        _ => None,
+    }
+}
+
+/// 上传头像 — multipart 表单，限制 2MB，仅接受图片
+pub async fn upload_avatar(
+    Extension(current_user): Extension<crate::extractors::CurrentUser>,
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Result<Json<UserPublic>, AppError> {
+    let field = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("读取上传数据失败: {}", e)))?
+        .ok_or_else(|| AppError::BadRequest("未找到上传文件".into()))?;
+
+    let content_type = field
+        .content_type()
+        .unwrap_or("")
+        .to_string();
+    if !content_type.starts_with("image/") {
+        return Err(AppError::BadRequest("仅支持图片文件".into()));
+    }
+
+    let ext = mime_to_ext(&content_type).ok_or_else(|| AppError::BadRequest("不支持的图片格式".into()))?;
+
+    let data = field
+        .bytes()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("读取上传数据失败: {}", e)))?;
+
+    if data.len() > 2_097_152 {
+        return Err(AppError::BadRequest("文件大小不能超过 2MB".into()));
+    }
+
+    let filename = format!("avatars/{}_{}.{}", current_user.user_id, uuid::Uuid::new_v4(), ext);
+    state.file_storage.save(&filename, &data).await?;
+
+    let avatar_url = format!("/api/avatars/{}", filename.trim_start_matches("avatars/"));
+    let user_id = UserId::new(current_user.user_id);
+    let user = state
+        .store
+        .update_user(&user_id, None, Some(&avatar_url), None)
+        .await?
+        .ok_or_else(|| AppError::NotFound("用户不存在".into()))?;
+
+    Ok(Json(UserPublic::from(&user)))
+}
+
+/// 公开端点 — 提供已上传的头像文件
+pub async fn serve_avatar(
+    State(state): State<Arc<AppState>>,
+    Path(filename): Path<String>,
+) -> Result<Response, AppError> {
+    let path = format!("avatars/{}", filename);
+    let data = state
+        .file_storage
+        .load(&path)
+        .await
+        .map_err(|_| AppError::NotFound("头像文件不存在".into()))?;
+
+    let ext = std::path::Path::new(&filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    let content_type = match ext {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => "application/octet-stream",
+    };
+
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static(content_type));
+    headers.insert(CACHE_CONTROL, HeaderValue::from_static("public, max-age=86400"));
+
+    Ok(Response::builder().status(StatusCode::OK).header(CONTENT_TYPE, content_type).header(CACHE_CONTROL, "public, max-age=86400").body(Body::from(data)).unwrap_or_else(|_| {
+        Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::from("服务器内部错误")).unwrap()
+    }))
 }

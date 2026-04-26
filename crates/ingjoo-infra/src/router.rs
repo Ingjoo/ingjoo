@@ -55,6 +55,7 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route("/api/auth/login", post(handlers::auth::login))
         .route("/api/auth/logout", post(handlers::auth::logout))
         .route("/api/auth/refresh", post(handlers::auth::refresh))
+        .route("/api/avatars/{filename}", get(handlers::auth::serve_avatar))
         .route("/ws", any(handlers::ws::ws_handler))
         .route_layer(middleware::from_fn(rate_limit_middleware))
         .layer(axum::Extension(public_limiter.clone()));
@@ -66,6 +67,7 @@ pub fn base_router(state: Arc<AppState>) -> Router {
     let protected_routes = Router::new()
         .route("/api/auth/me", get(handlers::auth::get_me))
         .route("/api/auth/profile", get(handlers::auth::get_profile).put(handlers::auth::update_profile))
+        .route("/api/auth/avatar", post(handlers::auth::upload_avatar))
         .route("/api/auth/change-password", post(handlers::auth::change_password))
         .route("/api/auth/preferences", get(handlers::auth::get_preferences).put(handlers::auth::update_preferences))
         .route("/api/settings", get(handlers::settings::list_settings))
