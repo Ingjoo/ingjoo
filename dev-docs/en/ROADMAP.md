@@ -1,7 +1,7 @@
 # Improvement Roadmap
 
 > Last updated: 2026-04-26
-> Status: v0.1.0 — Phase 1-14 complete, Phase 15 in progress
+> Status: v0.1.0 — Phase 1-15 complete, Phase 16 (E2E testing) next
 
 ## Current State Summary
 
