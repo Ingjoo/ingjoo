@@ -13,7 +13,7 @@
 | `ingjoo-cache` | 342 | 5 | **完整** | Moka 缓存可用 |
 | `ingjoo-queue` | 1,585 | 25 | **已完成** | 内存/SQL 双后端队列、WorkerPool、重试策略、Cron 调度器 |
 | `ingjoo-bin` | 2,650 | 80 | **可用** | 完整 axum 路由、80 集成测试通过 |
-| `ingjoo-macros` | 210 | 4 | **可用** | `#[derive(IngjooModel)]` 派生宏 |
+| `ingjoo-macros` | 210 | — | **可用** | `#[derive(IngjooModel)]` 派生宏 |
 
 **合计**：约 24,300 行代码，411 个单元测试 + 集成测试，130+ 个源文件。
 

@@ -13,7 +13,7 @@
 | `ingjoo-cache` | 342 | 5 | **Complete** | Moka-based caching — working |
 | `ingjoo-queue` | 1,585 | 25 | **Complete** | In-memory + SQL queue, WorkerPool, retry policy, cron scheduler |
 | `ingjoo-bin` | 2,650 | 80 | **Working** | Full axum router with 80 integration tests passing |
-| `ingjoo-macros` | 210 | 4 | **Working** | `#[derive(IngjooModel)]` proc macro |
+| `ingjoo-macros` | 210 | — | **Working** | `#[derive(IngjooModel)]` proc macro |
 
 **Total**: ~24,300 lines, 411 tests, 130+ source files.
 
@@ -338,7 +338,7 @@ PREVIOUS PHASES (ALL COMPLETE)
      └──────────┴──────┬───────┴───────────┘
                        │
                 ┌──────▼──────┐
-                 │  ingjoo-infra│  ✅ Complete (134 tests)
+                 │  ingjoo-infra│  ✅ Complete (197 tests)
                 │  (DB/Auth/  │
                 │   Storage)  │
                 └─────────────┘
