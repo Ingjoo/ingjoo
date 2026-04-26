@@ -366,5 +366,24 @@ pub async fn seed_core_data(pool: &Pool, dialect: &Dialect, password_hash: &str)
     }
 
     tracing::info!("已播种核心数据: 默认管理员用户 + 设置定义");
+
+    let si_sql = match dialect {
+        Dialect::Sqlite => "INSERT OR IGNORE INTO ir_search_index (model, record_id, content, data) VALUES (?, ?, ?, ?)",
+        _ => "INSERT INTO ir_search_index (model, record_id, content, data) VALUES (?, ?, ?, ?) ON CONFLICT (model, record_id) DO NOTHING",
+    };
+    let search_seeds = [
+        ("users", uid, "admin admin@ingjoo.local 管理员", r#"{"name":"admin","email":"admin@ingjoo.local","role":"admin"}"#),
+    ];
+    for (model, record_id, content, data) in &search_seeds {
+        sqlx::query(&dialect.prepare(si_sql))
+            .bind(model)
+            .bind(record_id)
+            .bind(content)
+            .bind(data)
+            .execute(pool)
+            .await?;
+    }
+
     Ok(())
 }
+

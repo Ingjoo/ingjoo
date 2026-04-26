@@ -7,12 +7,13 @@ use axum::Json;
 use serde::Deserialize;
 
 use ingjoo_core::db::traits::IngjooStore;
-use ingjoo_core::extension::search::SearchQuery;
+use ingjoo_core::extension::search::{SearchEngine, SearchQuery};
 use ingjoo_core::module::FieldType;
 use ingjoo_core::query::domain::{Domain, DomainOp, DomainValue, SqlCondition};
 use ingjoo_security::{AccessOp, ModelAccess, RecordRule, SecurityPolicy};
 
 use crate::db::generic::{GenericDb, GenericRecordStore};
+use crate::extension_impl::search_engine::DbSearchEngine;
 use crate::extractors::CurrentUser;
 use crate::middleware::database_selector::ResolvedDatabase;
 use crate::middleware::error::AppError;
@@ -261,7 +262,8 @@ pub async fn crud_create(
 
     // 后台索引（失败不影响主流程）
     if let Some(id) = record.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()) {
-        let search = state.search.clone();
+        let search =
+            DbSearchEngine::new(resolved_db.pool.as_ref().clone(), resolved_db.dialect);
         let model_name_idx = model_name.clone();
         let data_idx = record.clone();
         tokio::spawn(async move {
@@ -334,7 +336,8 @@ pub async fn crud_update(
 
     // 后台重新索引（失败不影响主流程）
     if let Some(record_id) = record.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()) {
-        let search = state.search.clone();
+        let search =
+            DbSearchEngine::new(resolved_db.pool.as_ref().clone(), resolved_db.dialect);
         let model_name_idx = model_name.clone();
         let data_idx = record.clone();
         tokio::spawn(async move {
@@ -402,7 +405,8 @@ pub async fn crud_delete(
             .await;
 
         // 后台移除索引（失败不影响主流程）
-        let search = state.search.clone();
+        let search =
+            DbSearchEngine::new(resolved_db.pool.as_ref().clone(), resolved_db.dialect);
         let model_name_idx = model_name.clone();
         let id_idx = id.clone();
         tokio::spawn(async move {
@@ -491,7 +495,9 @@ pub async fn crud_search(
         filters: None,
     };
 
-    if let Ok(results) = state.search.search(search_query).await {
+    let search =
+        DbSearchEngine::new(resolved_db.pool.as_ref().clone(), resolved_db.dialect);
+    if let Ok(results) = search.search(search_query).await {
         return Ok(Json(serde_json::json!({
             "results": results.into_iter().map(|r| r.data).collect::<Vec<_>>(),
             "total": 0,

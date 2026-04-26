@@ -1,7 +1,7 @@
 # 改进路线图
 
 > 最后更新：2026-04-26
-> 当前版本：v0.1.0 — 阶段 1-15 已完成，阶段 16 (E2E 测试) 待开始
+> 当前版本：v0.1.0 — 阶段 1-16 已完成，阶段 17 (E2E 测试) 待开始
 
 ## 现状总览
 
@@ -359,6 +359,23 @@ ingjoo-infra/src/
 ├── T15.8 ISSUE-010 审计日志 API — ✅ handler 已存在，API 返回 200
 ├── T15.9 ISSUE-005 忘记密码 API — ✅ handler + 端点修正，API 返回 200
 └── T15.10 ISSUE-001 WebSocket — ✅ 直连 ws://localhost:3000/ws，warnings only
+
+阶段 15.5 完成（QA 修复续）✅
+├── T15.5.1 Footer 合规 404 → ✅ 公共 /api/module-settings 端点
+├── T15.5.2 WebSocket 无条件连接 → ✅ enabled 参数按需连接
+├── T15.5.3 Dashboard 空库无欢迎 → ✅ 欢迎横幅
+├── T15.5.4 Admin 非管理员空白 → ✅ Shield 图标 + 权限提示
+└── T15.5.5 搜索空库无结果 → ✅ seed 搜索索引
+
+阶段 16 完成（QA 验证 + 控制台修复）✅
+├── T16.1 Admin 用户角色修复 → ✅ DB role=user→admin
+├── T16.2 创建管理员账号 → ✅ ingjoo-admin@ingjoo.com / Admin123
+├── T16.3 /api/database/list 404 修复 → ✅ simple_list_databases 回退端点
+├── T16.4 QA Quick tier 全页面验证 → ✅ 7 页面全部通过
+├── T16.5 控制台错误消除 → ✅ 修复前 404+401 循环 → 修复后 0 错误
+└── T16.6 文档同步 → ✅ PROGRESS-REPORT/PLAN/ROADMAP/AGENTS.md
+
+QA 健康评分: 49 → 65 → 77.5 → 85/100
 
 阶段 8 已完成
 ├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索

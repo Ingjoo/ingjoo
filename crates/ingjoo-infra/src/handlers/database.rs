@@ -61,6 +61,17 @@ pub struct CreateDatabaseResponse {
     pub message: String,
 }
 
+/// GET /api/database/list — 公共列出数据库（始终可用，返回当前数据库）
+/// 当 multi-db 未启用时，返回单个默认数据库条目
+pub async fn simple_list_databases(State(_state): State<Arc<AppState>>) -> Json<PublicListResponse> {
+    Json(PublicListResponse {
+        databases: vec![PublicDatabaseEntry {
+            name: "main".to_string(),
+            is_default: true,
+        }],
+    })
+}
+
 // ==================== Handler ====================
 
 /// GET /api/databases — 列出所有数据库
@@ -129,13 +140,11 @@ pub async fn create_database(
         }
     }
 
-    // 获取连接池（会自动创建并缓存）
-    let (pool, dialect) = mgr.get_pool(&name).await.map_err(|e| {
+    let (pool, dialect) = mgr.create_database(&name).await.map_err(|e| {
         tracing::error!("创建数据库失败: {:?}", e);
-        AppError::Internal(anyhow::anyhow!("创建数据库失败"))
+        AppError::Internal(anyhow::anyhow!("创建数据库失败: {}", e))
     })?;
 
-    // 验证连接
     sqlx::query("SELECT 1").execute(&*pool).await.map_err(|e| {
         tracing::error!("数据库连接验证失败: {:?}", e);
         AppError::Internal(anyhow::anyhow!("数据库连接验证失败"))
@@ -205,15 +214,14 @@ pub async fn delete_database(
 
     let mgr = &state.db_manager;
 
-    // 检查数据库是否存在
     let existing = mgr.list_databases().await;
     if !existing.contains(&name) {
         return Err(AppError::NotFound(format!("数据库 '{}' 不存在", name)));
     }
 
-    mgr.remove_pool(&name).await.map_err(|e| {
+    mgr.drop_database(&name).await.map_err(|e| {
         tracing::error!("删除数据库失败: {:?}", e);
-        AppError::Internal(anyhow::anyhow!("删除数据库失败"))
+        AppError::Internal(anyhow::anyhow!("删除数据库失败: {}", e))
     })?;
 
     let _ = state
@@ -285,9 +293,9 @@ pub async fn public_create_database(
         return Err(AppError::Conflict(format!("数据库 '{}' 已存在", name)));
     }
 
-    let (pool, dialect) = mgr.get_pool(&name).await.map_err(|e| {
-        tracing::error!("创建数据库连接池失败: {:?}", e);
-        AppError::Internal(anyhow::anyhow!("创建数据库连接池失败"))
+    let (pool, dialect) = mgr.create_database(&name).await.map_err(|e| {
+        tracing::error!("创建数据库失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("创建数据库失败: {}", e))
     })?;
 
     let admin_hash =
@@ -324,17 +332,10 @@ pub async fn public_delete_database(
         return Err(AppError::NotFound(format!("数据库 '{}' 不存在", name)));
     }
 
-    mgr.remove_pool(&name).await.map_err(|e| {
+    mgr.drop_database(&name).await.map_err(|e| {
         tracing::error!("删除数据库失败: {:?}", e);
-        AppError::Internal(anyhow::anyhow!("删除数据库失败"))
+        AppError::Internal(anyhow::anyhow!("删除数据库失败: {}", e))
     })?;
-
-    if let Some(base_url) = mgr.base_url() {
-        if base_url.starts_with("sqlite:") {
-            let file_path = format!("{}/{}.db", base_url.trim_start_matches("sqlite:").trim_end_matches('/'), name);
-            let _ = std::fs::remove_file(&file_path);
-        }
-    }
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Extension;
 use axum::Json;
@@ -87,4 +87,26 @@ pub async fn list_settings_definitions(
         .collect();
 
     Ok(Json(defs))
+}
+
+#[derive(Deserialize)]
+pub struct ModuleSettingsQuery {
+    pub module: Option<String>,
+}
+
+/// 获取模块配置项（公开端点，用于 Footer 合规信息等）
+pub async fn list_public_module_settings(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ModuleSettingsQuery>,
+) -> Result<Json<Vec<serde_json::Value>>, AppError> {
+    let settings = state
+        .store
+        .list_module_settings("system", None, query.module.as_deref())
+        .await
+        .unwrap_or_default();
+    let items: Vec<serde_json::Value> = settings
+        .into_iter()
+        .map(|s| serde_json::json!({ "key": s.key, "value": s.value }))
+        .collect();
+    Ok(Json(items))
 }

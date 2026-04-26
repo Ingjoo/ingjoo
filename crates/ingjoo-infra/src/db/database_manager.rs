@@ -235,6 +235,94 @@ impl DatabaseManager {
             }
         }
     }
+
+    /// 创建新数据库（物理层面）
+    ///
+    /// - SQLite: 连接时自动创建文件（mode=rwc），然后返回连接池
+    /// - PostgreSQL: 通过默认连接池执行 `CREATE DATABASE`，然后创建新连接池
+    pub async fn create_database(&self, db_name: &str) -> Result<(Arc<Pool>, Dialect)> {
+        if db_name.is_empty() || db_name == DEFAULT_DB_NAME {
+            anyhow::bail!("不能创建默认数据库");
+        }
+
+        let base_url = self
+            .base_url
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("多数据库模式未启用"))?;
+
+        let is_sqlite = base_url.starts_with("sqlite:");
+
+        if !is_sqlite {
+            // PostgreSQL: 先在默认库上执行 CREATE DATABASE
+            let escaped = db_name.replace('\'', "''");
+            sqlx::query(&format!("CREATE DATABASE {}", escaped))
+                .execute(&*self.default_pool)
+                .await
+                .map_err(|e| anyhow::anyhow!("创建 PostgreSQL 数据库 '{}' 失败: {}", db_name, e))?;
+        }
+
+        // 连接到新数据库（SQLite 自动创建文件）
+        let url = Self::build_database_url(base_url, db_name, &self.default_dialect);
+        let (pool, dialect) = connect_pool_with_options(&url, 5, 1, 30, 600, 1800).await.map_err(|e| {
+            // PostgreSQL 创建成功但连接失败 → 尝试清理
+            if !is_sqlite {
+                let escaped = db_name.replace('\'', "''");
+                let default_pool = self.default_pool.clone();
+                let cleanup_name = db_name.to_string();
+                tokio::spawn(async move {
+                    let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS {}", escaped.replace('\'', "''")))
+                        .execute(&*default_pool)
+                        .await;
+                    tracing::warn!("创建数据库 '{}' 连接失败，已尝试清理", cleanup_name);
+                });
+            }
+            anyhow::anyhow!("连接新数据库 '{}' 失败: {}", db_name, e)
+        })?;
+
+        let pool = Arc::new(pool);
+        {
+            let mut pools = self.pools.write().await;
+            pools.insert(db_name.to_string(), (pool.clone(), dialect));
+        }
+
+        Ok((pool, dialect))
+    }
+
+    /// 删除数据库（物理层面）
+    ///
+    /// - SQLite: 关闭连接池 + 删除文件
+    /// - PostgreSQL: 关闭连接池 + 执行 `DROP DATABASE`
+    pub async fn drop_database(&self, db_name: &str) -> Result<()> {
+        if db_name.is_empty() || db_name == DEFAULT_DB_NAME {
+            anyhow::bail!("不能删除默认数据库");
+        }
+
+        let base_url = self.base_url.as_ref();
+
+        // 先关闭连接池
+        self.remove_pool(db_name).await?;
+
+        // 物理删除
+        if let Some(base_url) = base_url {
+            if base_url.starts_with("sqlite:") {
+                let dir = base_url.trim_start_matches("sqlite:").trim_end_matches('/').split('?').next().unwrap_or(".");
+                let file_path = format!("{}/{}.db", dir, db_name);
+                if std::path::Path::new(&file_path).exists() {
+                    std::fs::remove_file(&file_path)
+                        .map_err(|e| anyhow::anyhow!("删除 SQLite 文件失败: {}", e))?;
+                }
+            } else {
+                // PostgreSQL: DROP DATABASE
+                let escaped = db_name.replace('\'', "''");
+                sqlx::query(&format!("DROP DATABASE IF EXISTS {}", escaped))
+                    .execute(&*self.default_pool)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("删除 PostgreSQL 数据库 '{}' 失败: {}", db_name, e))?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

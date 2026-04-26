@@ -70,6 +70,18 @@ async fn main() -> Result<()> {
                 tracing::info!("多数据库模式已启用，发现 {} 个租户数据库: {:?}", discovered.len(), discovered);
             }
         }
+
+        if let Some(ref default_db) = cli.default_db {
+            match db_manager.get_pool(default_db).await {
+                Ok((default_pool, default_dialect)) => {
+                    tracing::info!("默认数据库 '{}' 已连接，执行迁移检查", default_db);
+                    ingjoo_infra::db::init_database(&default_pool, &default_dialect, &admin_hash).await?;
+                }
+                Err(e) => {
+                    tracing::warn!("默认数据库 '{}' 连接失败: {}", default_db, e);
+                }
+            }
+        }
     }
 
     let scaff_store: Arc<dyn IngjooStore> = Arc::new(IngjooDb::with_dialect(pool.clone(), dialect));

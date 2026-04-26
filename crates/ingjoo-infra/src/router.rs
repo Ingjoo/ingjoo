@@ -58,8 +58,13 @@ pub fn base_router(state: Arc<AppState>) -> Router {
         .route("/api/auth/forgot-password", post(handlers::auth::forgot_password))
         .route("/api/avatars/{filename}", get(handlers::auth::serve_avatar))
         .route("/ws", any(handlers::ws::ws_handler))
+        .route("/api/module-settings", get(handlers::settings::list_public_module_settings))
         .route_layer(middleware::from_fn(rate_limit_middleware))
         .layer(axum::Extension(public_limiter.clone()));
+
+    #[cfg(not(feature = "multi-db"))]
+    let public_routes = public_routes
+        .route("/api/database/list", get(handlers::database::simple_list_databases));
 
     #[cfg(feature = "captcha")]
     let public_routes = public_routes

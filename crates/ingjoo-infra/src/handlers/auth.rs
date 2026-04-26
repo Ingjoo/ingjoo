@@ -16,6 +16,7 @@ use ingjoo_core::{
 use serde::Deserialize;
 
 use crate::auth::AuthProvider;
+use crate::db::traits::IngjooStore;
 use crate::middleware::error::AppError;
 use crate::AppState;
 use ingjoo_core::db::error::StoreError;
@@ -88,12 +89,30 @@ pub async fn register(
     Ok((StatusCode::CREATED, cookies, Json(AuthToken { access_token, refresh_token, user: UserPublic::from(&user) })))
 }
 
+async fn resolve_login_store(
+    state: &AppState,
+    database: Option<&str>,
+) -> Result<Arc<dyn IngjooStore>, AppError> {
+    match database {
+        Some(db_name) if !db_name.is_empty() => {
+            let (pool, dialect) = state
+                .db_manager
+                .get_pool(db_name)
+                .await
+                .map_err(|e| AppError::BadRequest(format!("数据库 '{}' 不可用: {}", db_name, e)))?;
+            Ok(Arc::new(crate::db::Db::with_dialect(pool.as_ref().clone(), dialect)))
+        }
+        _ => Ok(state.store.clone()),
+    }
+}
+
 pub async fn login(
     State(state): State<Arc<AppState>>,
     Json(req): Json<LoginRequest>,
 ) -> Result<(HeaderMap, Json<AuthToken>), AppError> {
-    let user = state
-        .store
+    let login_store = resolve_login_store(&state, req.database.as_deref()).await?;
+
+    let user = login_store
         .get_user_by_email(&req.email)
         .await?
         .ok_or_else(|| AppError::Unauthorized("邮箱或密码错误".into()))?;
@@ -101,12 +120,12 @@ pub async fn login(
     if !state.auth.verify_password(&req.password, hash)? {
         return Err(AppError::Unauthorized("邮箱或密码错误".into()));
     }
-    let groups = state.store.resolve_all_groups(&user.id).await.unwrap_or_else(|_| vec![user.role.clone()]);
+    let groups = login_store.resolve_all_groups(&user.id).await.unwrap_or_else(|_| vec![user.role.clone()]);
     let access_token = state.auth.create_access_token(&user.id.0, &user.role, &groups, req.database.as_deref())?;
     let refresh_token = state.auth.create_refresh_token();
     let token_hash = state.auth.refresh_token_hash(&refresh_token);
     let expires_at = state.auth.refresh_expires_at();
-    state.store.create_refresh_token(&uuid::Uuid::new_v4().to_string(), &user.id, &token_hash, &expires_at).await?;
+    login_store.create_refresh_token(&uuid::Uuid::new_v4().to_string(), &user.id, &token_hash, &expires_at).await?;
     let cookies = auth_cookies(&access_token, &refresh_token);
     Ok((cookies, Json(AuthToken { access_token, refresh_token, user: UserPublic::from(&user) })))
 }
