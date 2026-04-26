@@ -22,11 +22,7 @@ use crate::Dialect;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Domain {
     /// 叶节点: field op value
-    Leaf {
-        field: String,
-        op: DomainOp,
-        value: DomainValue,
-    },
+    Leaf { field: String, op: DomainOp, value: DomainValue },
     /// 逻辑与 (默认): domain1 AND domain2 AND ...
     And(Vec<Domain>),
     /// 逻辑或: domain1 OR domain2 OR ...
@@ -48,11 +44,11 @@ pub enum DomainOp {
     ILike,        // LIKE (不区分大小写)
     NotLike,
     NotILike,
-    In,           // IN
-    NotIn,        // NOT IN
-    IsNull,       // IS NULL (value=true) / IS NOT NULL (value=false)
-    Between,      // BETWEEN (value=[lo, hi])
-    ChildOf,      // 父子关系 (暂不支持，预留)
+    In,      // IN
+    NotIn,   // NOT IN
+    IsNull,  // IS NULL (value=true) / IS NOT NULL (value=false)
+    Between, // BETWEEN (value=[lo, hi])
+    ChildOf, // 父子关系 (暂不支持，预留)
 }
 
 /// 域值类型
@@ -102,7 +98,7 @@ impl Domain {
                             }
                             Ok(Domain::Not(Box::new(Self::parse(&arr[1])?)))
                         }
-                    _ => Self::parse_leaf(arr),
+                        _ => Self::parse_leaf(arr),
                     }
                 } else {
                     if arr.len() == 1 {
@@ -192,11 +188,7 @@ impl Domain {
     pub fn to_sql_with_dialect(&self, alias: Option<&str>, dialect: Option<&Dialect>) -> SqlCondition {
         match self {
             Domain::Leaf { field, op, value } => {
-                let col = if let Some(a) = alias {
-                    format!("{}.{}", a, field)
-                } else {
-                    field.clone()
-                };
+                let col = if let Some(a) = alias { format!("{}.{}", a, field) } else { field.clone() };
                 op_to_sql(&col, op, value, dialect)
             }
             Domain::And(domains) => {
@@ -240,10 +232,7 @@ impl Domain {
                 if cond.clause.is_empty() {
                     cond
                 } else {
-                    SqlCondition {
-                        clause: format!("NOT ({})", cond.clause),
-                        params: cond.params,
-                    }
+                    SqlCondition { clause: format!("NOT ({})", cond.clause), params: cond.params }
                 }
             }
         }
@@ -299,10 +288,7 @@ fn op_to_sql(col: &str, op: &DomainOp, value: &DomainValue, dialect: Option<&Dia
                 for item in items {
                     params.push(value_to_string(item));
                 }
-                SqlCondition {
-                    clause: format!("{} IN ({})", col, placeholders.join(", ")),
-                    params,
-                }
+                SqlCondition { clause: format!("{} IN ({})", col, placeholders.join(", ")), params }
             }
             _ => SqlCondition::bind(format!("{} = ?", col), value),
         },
@@ -311,10 +297,7 @@ fn op_to_sql(col: &str, op: &DomainOp, value: &DomainValue, dialect: Option<&Dia
             if inner.clause == "1=0" {
                 SqlCondition::expr("1=1".to_string())
             } else {
-                SqlCondition {
-                    clause: format!("NOT ({})", inner.clause),
-                    params: inner.params,
-                }
+                SqlCondition { clause: format!("NOT ({})", inner.clause), params: inner.params }
             }
         }
         DomainOp::IsNull => match value {
@@ -322,15 +305,10 @@ fn op_to_sql(col: &str, op: &DomainOp, value: &DomainValue, dialect: Option<&Dia
             _ => SqlCondition::expr(format!("{} IS NOT NULL", col)),
         },
         DomainOp::Between => match value {
-            DomainValue::List(items) if items.len() == 2 => {
-                SqlCondition {
-                    clause: format!("{} BETWEEN ? AND ?", col),
-                    params: vec![
-                        value_to_string(&items[0]),
-                        value_to_string(&items[1]),
-                    ],
-                }
-            }
+            DomainValue::List(items) if items.len() == 2 => SqlCondition {
+                clause: format!("{} BETWEEN ? AND ?", col),
+                params: vec![value_to_string(&items[0]), value_to_string(&items[1])],
+            },
             _ => SqlCondition::empty(),
         },
         DomainOp::ChildOf => SqlCondition::empty(),
@@ -350,24 +328,15 @@ fn value_to_string(v: &DomainValue) -> String {
 
 impl SqlCondition {
     pub fn empty() -> Self {
-        Self {
-            clause: String::new(),
-            params: Vec::new(),
-        }
+        Self { clause: String::new(), params: Vec::new() }
     }
 
     pub fn expr(clause: String) -> Self {
-        Self {
-            clause,
-            params: Vec::new(),
-        }
+        Self { clause, params: Vec::new() }
     }
 
     fn bind(clause: String, value: &DomainValue) -> Self {
-        Self {
-            clause,
-            params: vec![value_to_string(value)],
-        }
+        Self { clause, params: vec![value_to_string(value)] }
     }
 
     pub fn apply_to_query(&self, sql: &mut String) {
@@ -394,7 +363,9 @@ impl fmt::Display for Domain {
             Domain::And(ds) => {
                 write!(f, "AND(")?;
                 for (i, d) in ds.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", d)?;
                 }
                 write!(f, ")")
@@ -402,7 +373,9 @@ impl fmt::Display for Domain {
             Domain::Or(ds) => {
                 write!(f, "OR(")?;
                 for (i, d) in ds.iter().enumerate() {
-                    if i > 0 { write!(f, ", ")?; }
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", d)?;
                 }
                 write!(f, ")")
@@ -550,7 +523,8 @@ mod tests {
 
     #[test]
     fn test_parse_compound() {
-        let json = r#"["|", ["&", ["status", "=", "published"], ["category", "=", "concept"]], ["status", "=", "draft"]]"#;
+        let json =
+            r#"["|", ["&", ["status", "=", "published"], ["category", "=", "concept"]], ["status", "=", "draft"]]"#;
         let domain = Domain::from_json(json).unwrap();
         let sql = domain.to_sql(None);
         assert!(sql.clause.contains("OR"));

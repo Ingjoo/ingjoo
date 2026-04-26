@@ -42,25 +42,24 @@ impl<T> PaginatedResult<T> {
     }
 }
 
-pub use dialect::Dialect;
-pub use query::domain::{Domain, DomainOp, DomainValue, SqlCondition};
-pub use scope::{ScopeGuard, ScopeError, role_gte, SCOPE_HIERARCHY_4, SCOPE_HIERARCHY_3};
 pub use config::cascade::CascadeConfig;
-pub use module::{ModuleRoutes, RouteDescriptor, ModelRegistry, ModelDescriptor, FieldDescriptor, FieldType, IdType, ViewType, ActionType, MenuDescriptor, ViewDescriptor, ActionDescriptor, PluginManifest, PluginInfo, PluginState};
+pub use dialect::Dialect;
+pub use module::{
+    ActionDescriptor, ActionType, FieldDescriptor, FieldType, IdType, MenuDescriptor, ModelDescriptor, ModelRegistry,
+    ModuleRoutes, PluginInfo, PluginManifest, PluginState, RouteDescriptor, ViewDescriptor, ViewType,
+};
+pub use query::domain::{Domain, DomainOp, DomainValue, SqlCondition};
+pub use scope::{role_gte, ScopeError, ScopeGuard, SCOPE_HIERARCHY_3, SCOPE_HIERARCHY_4};
 
-pub use db::ids::UserId;
-pub use db::ids::GroupId;
 pub use db::error::{StoreError, StoreResult};
+pub use db::ids::GroupId;
+pub use db::ids::UserId;
 pub use db::models::{
-    User, UserPublic, AuthToken, RegisterRequest, LoginRequest, UpdateProfileRequest,
-    UserPreferences, UpdatePreferences, Attachment, CreateAttachment,
-    ModuleSetting, SetModuleSetting,
-    Group, GroupImplied, UserGroup, UpsertGroupRequest,
-    ModelAccessRow, UpsertModelAccessRequest,
-    RecordRuleRow, UpsertRecordRuleRequest,
+    Attachment, AuthToken, CreateAttachment, Group, GroupImplied, LoginRequest, ModelAccessRow, ModuleSetting,
+    RecordRuleRow, RegisterRequest, SetModuleSetting, UpdatePreferences, UpdateProfileRequest, UpsertGroupRequest,
+    UpsertModelAccessRequest, UpsertRecordRuleRequest, User, UserGroup, UserPreferences, UserPublic,
 };
 pub use db::traits::{
-    UserStore, TokenStore, CaptchaStore, SmsCodeStore, SettingsStore,
-    PreferenceStore, AttachmentStore, ModuleSettingStore, GroupStore, AccessStore,
-    IngjooStore, IngjooTransaction,
+    AccessStore, AttachmentStore, CaptchaStore, GroupStore, IngjooStore, IngjooTransaction, ModuleSettingStore,
+    PreferenceStore, SettingsStore, SmsCodeStore, TokenStore, UserStore,
 };

@@ -22,11 +22,7 @@ impl PromptManager {
     }
 
     /// 渲染模板 — 将变量替换到模板中
-    pub fn render(
-        &self,
-        template: &str,
-        vars: &HashMap<String, String>,
-    ) -> Result<String, anyhow::Error> {
+    pub fn render(&self, template: &str, vars: &HashMap<String, String>) -> Result<String, anyhow::Error> {
         let mut result = template.to_string();
         for (key, value) in vars {
             result = result.replace(&format!("{{{{{}}}}}", key), value);

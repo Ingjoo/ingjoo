@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
-    pub role: String,       // "system" | "user" | "assistant"
+    pub role: String, // "system" | "user" | "assistant"
     pub content: String,
 }
 
@@ -40,11 +40,7 @@ pub trait LlmProvider: Send + Sync {
     ) -> Result<ChatResponse, anyhow::Error>;
 
     /// 文本向量化 — 将文本转换为嵌入向量
-    async fn embed(
-        &self,
-        texts: &[String],
-        model: Option<&str>,
-    ) -> Result<Vec<Vec<f32>>, anyhow::Error>;
+    async fn embed(&self, texts: &[String], model: Option<&str>) -> Result<Vec<Vec<f32>>, anyhow::Error>;
 
     /// 估算 token 数量（同步方法，不调用 API）
     fn token_count(&self, text: &str) -> u32;

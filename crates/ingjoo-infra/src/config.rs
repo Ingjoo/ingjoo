@@ -16,11 +16,7 @@ pub struct IngjooConfig {
 impl IngjooConfig {
     /// 从 settings 键值表构建配置
     #[allow(unused_variables)]
-    pub fn from_settings(
-        jwt_secret: String,
-        storage_path: PathBuf,
-        settings: &HashMap<String, String>,
-    ) -> Self {
+    pub fn from_settings(jwt_secret: String, storage_path: PathBuf, settings: &HashMap<String, String>) -> Self {
         Self {
             jwt_secret,
             storage_path,

@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BatchSize};
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use ingjoo_core::module::registry::{FieldType, ModelDescriptor, ModelRegistry};
 
 /// 构造含 field_count 个字段的 ModelDescriptor（使用 builder 模式）
@@ -36,9 +36,7 @@ fn bench_registry_get(c: &mut Criterion) {
         reg.register(make_model(&format!("model_{}", i), 5));
     }
 
-    c.bench_function("registry_get_model", |b| {
-        b.iter(|| black_box(&reg).get("model_50"))
-    });
+    c.bench_function("registry_get_model", |b| b.iter(|| black_box(&reg).get("model_50")));
 }
 
 /// 列出全部 100 个模型
@@ -48,9 +46,7 @@ fn bench_registry_list(c: &mut Criterion) {
         reg.register(make_model(&format!("model_{}", i), 5));
     }
 
-    c.bench_function("registry_list_100_models", |b| {
-        b.iter(|| black_box(&reg).list())
-    });
+    c.bench_function("registry_list_100_models", |b| b.iter(|| black_box(&reg).list()));
 }
 
 /// 注销模型
@@ -71,11 +67,5 @@ fn bench_registry_unregister(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    benches,
-    bench_registry_register,
-    bench_registry_get,
-    bench_registry_list,
-    bench_registry_unregister,
-);
+criterion_group!(benches, bench_registry_register, bench_registry_get, bench_registry_list, bench_registry_unregister,);
 criterion_main!(benches);

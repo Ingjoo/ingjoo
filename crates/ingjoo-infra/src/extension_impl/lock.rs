@@ -16,9 +16,7 @@ pub struct InMemoryLock {
 
 impl InMemoryLock {
     pub fn new() -> Self {
-        Self {
-            locks: Mutex::new(HashMap::new()),
-        }
+        Self { locks: Mutex::new(HashMap::new()) }
     }
 
     fn generate_token() -> String {
@@ -55,18 +53,8 @@ impl Lock for InMemoryLock {
         match locks.get(key) {
             Some(existing) if !Self::is_expired(&existing.expires_at) => Ok(None),
             _ => {
-                locks.insert(
-                    key.to_string(),
-                    InnerLock {
-                        token: token.clone(),
-                        expires_at,
-                    },
-                );
-                Ok(Some(LockGuard {
-                    key: key.to_string(),
-                    token,
-                    expires_at,
-                }))
+                locks.insert(key.to_string(), InnerLock { token: token.clone(), expires_at });
+                Ok(Some(LockGuard { key: key.to_string(), token, expires_at }))
             }
         }
     }
@@ -169,13 +157,7 @@ mod tests {
             let _ = lock_clone;
         });
 
-        let guard = tokio::time::timeout(
-            Duration::from_secs(2),
-            lock.acquire("key", 5000),
-        )
-        .await
-        .unwrap()
-        .unwrap();
+        let guard = tokio::time::timeout(Duration::from_secs(2), lock.acquire("key", 5000)).await.unwrap().unwrap();
         assert_eq!(guard.key, "key");
 
         handle.await.unwrap();

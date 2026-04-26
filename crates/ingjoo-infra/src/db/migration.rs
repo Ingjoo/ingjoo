@@ -378,6 +378,132 @@ fn all_migrations() -> Vec<Migration> {
                 CREATE INDEX IF NOT EXISTS idx_ir_search_index_model ON ir_search_index(model)"#,
             ),
         },
+        Migration {
+            version: 11,
+            name: "ir_module",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_module (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE,
+                    version TEXT NOT NULL DEFAULT '0.0.0',
+                    description TEXT NOT NULL DEFAULT '',
+                    author TEXT NOT NULL DEFAULT '',
+                    website TEXT NOT NULL DEFAULT '',
+                    state TEXT NOT NULL DEFAULT 'uninstalled',
+                    installed_at TEXT,
+                    data TEXT NOT NULL DEFAULT '{}'
+                )"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_module (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR NOT NULL UNIQUE,
+                    version VARCHAR NOT NULL DEFAULT '0.0.0',
+                    description TEXT NOT NULL DEFAULT '',
+                    author VARCHAR NOT NULL DEFAULT '',
+                    website VARCHAR NOT NULL DEFAULT '',
+                    state VARCHAR NOT NULL DEFAULT 'uninstalled',
+                    installed_at TIMESTAMP,
+                    data TEXT NOT NULL DEFAULT '{}'
+                )"#,
+            ),
+        },
+        Migration {
+            version: 12,
+            name: "ir_settings_definition",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_settings_definition (
+                    key TEXT PRIMARY KEY,
+                    type TEXT NOT NULL DEFAULT 'string',
+                    default_value TEXT NOT NULL DEFAULT '',
+                    group_name TEXT NOT NULL DEFAULT 'general',
+                    label TEXT NOT NULL DEFAULT '',
+                    description TEXT NOT NULL DEFAULT ''
+                )"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS ir_settings_definition (
+                    key VARCHAR PRIMARY KEY,
+                    type VARCHAR NOT NULL DEFAULT 'string',
+                    default_value TEXT NOT NULL DEFAULT '',
+                    group_name VARCHAR NOT NULL DEFAULT 'general',
+                    label VARCHAR NOT NULL DEFAULT '',
+                    description VARCHAR NOT NULL DEFAULT ''
+                )"#,
+            ),
+        },
+        Migration {
+            version: 13,
+            name: "add_auth_performance_indexes",
+            up_sqlite: Some(
+                r#"CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+                CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+                CREATE INDEX IF NOT EXISTS idx_user_groups_user_id ON user_groups(user_id);
+                CREATE INDEX IF NOT EXISTS idx_group_implied_group_id ON group_implied(group_id);
+                CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash ON refresh_tokens(token_hash)"#,
+            ),
+            up_generic: Some(
+                r#"CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+                CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+                CREATE INDEX IF NOT EXISTS idx_user_groups_user_id ON user_groups(user_id);
+                CREATE INDEX IF NOT EXISTS idx_group_implied_group_id ON group_implied(group_id);
+                CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash ON refresh_tokens(token_hash)"#,
+            ),
+        },
+        Migration {
+            version: 14,
+            name: "mail_messages_and_notifications",
+            up_sqlite: Some(
+                r#"CREATE TABLE IF NOT EXISTS mail_messages (
+                    id TEXT PRIMARY KEY,
+                    author_id TEXT,
+                    subject TEXT NOT NULL DEFAULT '',
+                    body TEXT NOT NULL DEFAULT '',
+                    message_type TEXT NOT NULL DEFAULT 'notification',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE TABLE IF NOT EXISTS mail_notifications (
+                    id TEXT PRIMARY KEY,
+                    message_id TEXT NOT NULL REFERENCES mail_messages(id),
+                    user_id TEXT NOT NULL,
+                    is_read INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_mail_notifications_user ON mail_notifications(user_id, is_read);
+                CREATE INDEX IF NOT EXISTS idx_mail_notifications_message ON mail_notifications(message_id)"#,
+            ),
+            up_generic: Some(
+                r#"CREATE TABLE IF NOT EXISTS mail_messages (
+                    id VARCHAR PRIMARY KEY,
+                    author_id VARCHAR,
+                    subject VARCHAR NOT NULL DEFAULT '',
+                    body TEXT NOT NULL DEFAULT '',
+                    message_type VARCHAR NOT NULL DEFAULT 'notification',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS mail_notifications (
+                    id VARCHAR PRIMARY KEY,
+                    message_id VARCHAR NOT NULL REFERENCES mail_messages(id),
+                    user_id VARCHAR NOT NULL,
+                    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_mail_notifications_user ON mail_notifications(user_id, is_read);
+                CREATE INDEX IF NOT EXISTS idx_mail_notifications_message ON mail_notifications(message_id)"#,
+            ),
+        },
+        Migration {
+            version: 15,
+            name: "model_access_import_export",
+            up_sqlite: Some(
+                r#"ALTER TABLE model_access ADD COLUMN perm_import INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE model_access ADD COLUMN perm_export INTEGER NOT NULL DEFAULT 0"#,
+            ),
+            up_generic: Some(
+                r#"ALTER TABLE model_access ADD COLUMN perm_import INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE model_access ADD COLUMN perm_export INTEGER NOT NULL DEFAULT 0"#,
+            ),
+        },
     ]
 }
 
@@ -386,12 +512,10 @@ pub async fn run_pending_migrations(pool: &Pool, dialect: &Dialect) -> Result<()
     let migrations = all_migrations();
 
     // 获取已执行的版本号（表可能刚创建，查询失败说明无已应用迁移）
-    let applied: Vec<i64> = sqlx::query_scalar(
-        "SELECT version FROM _migration_versions ORDER BY version",
-    )
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default();
+    let applied: Vec<i64> = sqlx::query_scalar("SELECT version FROM _migration_versions ORDER BY version")
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
 
     for migration in &migrations {
         if applied.contains(&migration.version) {
@@ -407,15 +531,22 @@ pub async fn run_pending_migrations(pool: &Pool, dialect: &Dialect) -> Result<()
             let prepared = dialect.prepare(sql);
             let stmts = Dialect::split_ddl(&prepared);
             for (i, stmt) in stmts.iter().enumerate() {
-                let result = sqlx::query(stmt)
-                    .execute(pool)
-                    .await;
+                let result = sqlx::query(stmt).execute(pool).await;
                 if let Err(ref e) = result {
                     let msg = e.to_string();
-                    if msg.contains("duplicate column name") || msg.contains("no such column") || msg.contains("already exists") {
+                    if msg.contains("duplicate column name")
+                        || msg.contains("no such column")
+                        || msg.contains("already exists")
+                    {
                         tracing::debug!("迁移 v{} stmt[{}] 跳过: {}", migration.version, i, msg);
                     } else {
-                        tracing::error!("迁移 v{} stmt[{}] 失败: {} | SQL: {}", migration.version, i, msg, &stmt[..stmt.len().min(200)]);
+                        tracing::error!(
+                            "迁移 v{} stmt[{}] 失败: {} | SQL: {}",
+                            migration.version,
+                            i,
+                            msg,
+                            &stmt[..stmt.len().min(200)]
+                        );
                         result?;
                     }
                 }
@@ -423,14 +554,8 @@ pub async fn run_pending_migrations(pool: &Pool, dialect: &Dialect) -> Result<()
         }
 
         // 记录已执行
-        let insert_sql = dialect.prepare(
-                "INSERT INTO _migration_versions (version, name) VALUES (?, ?)",
-            );
-        let result = sqlx::query(&insert_sql)
-        .bind(migration.version)
-        .bind(migration.name)
-        .execute(pool)
-        .await;
+        let insert_sql = dialect.prepare("INSERT INTO _migration_versions (version, name) VALUES (?, ?)");
+        let result = sqlx::query(&insert_sql).bind(migration.version).bind(migration.name).execute(pool).await;
 
         if let Err(ref e) = result {
             tracing::debug!("迁移 v{} 记录失败: {}", migration.version, e);

@@ -23,9 +23,7 @@ pub struct CategoryConfig {
 
 impl KeywordContentFilter {
     pub fn new() -> Self {
-        Self {
-            categories: HashMap::new(),
-        }
+        Self { categories: HashMap::new() }
     }
 
     /// 添加过滤类别
@@ -36,33 +34,18 @@ impl KeywordContentFilter {
         keywords: Vec<String>,
         case_sensitive: bool,
     ) {
-        self.categories.insert(
-            name.into(),
-            CategoryConfig {
-                keywords,
-                description: description.into(),
-                case_sensitive,
-            },
-        );
+        self.categories
+            .insert(name.into(), CategoryConfig { keywords, description: description.into(), case_sensitive });
     }
 
     /// 创建带默认敏感词的过滤器
     pub fn with_defaults() -> Self {
         let mut filter = Self::new();
-        filter.add_category(
-            "profanity",
-            "粗俗语言",
-            vec!["damn".to_string(), "hell".to_string()],
-            false,
-        );
+        filter.add_category("profanity", "粗俗语言", vec!["damn".to_string(), "hell".to_string()], false);
         filter.add_category(
             "dangerous",
             "危险内容",
-            vec![
-                "炸弹制作".to_string(),
-                "毒品合成".to_string(),
-                "hack password".to_string(),
-            ],
+            vec!["炸弹制作".to_string(), "毒品合成".to_string(), "hack password".to_string()],
             false,
         );
         filter
@@ -74,8 +57,7 @@ impl KeywordContentFilter {
                 let hit = if config.case_sensitive {
                     text.contains(keyword.as_str())
                 } else {
-                    text.to_lowercase()
-                        .contains(&keyword.to_lowercase())
+                    text.to_lowercase().contains(&keyword.to_lowercase())
                 };
                 if hit {
                     return FilterResult {
@@ -86,11 +68,7 @@ impl KeywordContentFilter {
                 }
             }
         }
-        FilterResult {
-            passed: true,
-            reason: None,
-            category: None,
-        }
+        FilterResult { passed: true, reason: None, category: None }
     }
 }
 
@@ -106,15 +84,9 @@ impl ContentFilter for KeywordContentFilter {
         Ok(self.check_text_inner(text))
     }
 
-    async fn check_file(
-        &self,
-        data: &[u8],
-        file_type: &str,
-    ) -> Result<FilterResult, anyhow::Error> {
+    async fn check_file(&self, data: &[u8], file_type: &str) -> Result<FilterResult, anyhow::Error> {
         let text_content = match file_type {
-            "txt" | "csv" | "json" | "xml" | "html" | "md" => {
-                String::from_utf8_lossy(data).into_owned()
-            }
+            "txt" | "csv" | "json" | "xml" | "html" | "md" => String::from_utf8_lossy(data).into_owned(),
             _ => {
                 return Ok(FilterResult {
                     passed: true,
@@ -157,16 +129,8 @@ mod tests {
     #[tokio::test]
     async fn test_custom_category() {
         let mut filter = KeywordContentFilter::new();
-        filter.add_category(
-            "pii",
-            "个人隐私信息",
-            vec!["身份证号".to_string(), "银行卡号".to_string()],
-            false,
-        );
-        let result = filter
-            .check_text("请提供您的身份证号")
-            .await
-            .unwrap();
+        filter.add_category("pii", "个人隐私信息", vec!["身份证号".to_string(), "银行卡号".to_string()], false);
+        let result = filter.check_text("请提供您的身份证号").await.unwrap();
         assert!(!result.passed);
         assert_eq!(result.category.as_deref(), Some("pii"));
     }

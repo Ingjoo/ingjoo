@@ -17,19 +17,11 @@ pub struct BroadcastEventBus {
 impl BroadcastEventBus {
     pub fn new(capacity: usize) -> Self {
         let (sender, _) = broadcast::channel(capacity);
-        Self {
-            sender,
-            handlers: RwLock::new(HashMap::new()),
-            next_id: Mutex::new(0),
-        }
+        Self { sender, handlers: RwLock::new(HashMap::new()), next_id: Mutex::new(0) }
     }
 
     pub fn from_sender(sender: broadcast::Sender<String>) -> Self {
-        Self {
-            sender,
-            handlers: RwLock::new(HashMap::new()),
-            next_id: Mutex::new(0),
-        }
+        Self { sender, handlers: RwLock::new(HashMap::new()), next_id: Mutex::new(0) }
     }
 
     fn alloc_id(&self) -> String {
@@ -57,17 +49,10 @@ impl EventBus for BroadcastEventBus {
         Ok(())
     }
 
-    async fn subscribe(
-        &self,
-        topic: &str,
-        handler: EventHandler,
-    ) -> Result<String, anyhow::Error> {
+    async fn subscribe(&self, topic: &str, handler: EventHandler) -> Result<String, anyhow::Error> {
         let sub_id = self.alloc_id();
         let mut handlers = self.handlers.write().await;
-        handlers
-            .entry(topic.to_string())
-            .or_default()
-            .push((sub_id.clone(), handler));
+        handlers.entry(topic.to_string()).or_default().push((sub_id.clone(), handler));
         Ok(sub_id)
     }
 
@@ -87,11 +72,7 @@ mod tests {
     use std::sync::Arc;
 
     fn make_event(topic: &str, payload: &str) -> Event {
-        Event {
-            topic: topic.to_string(),
-            payload: serde_json::json!({ "data": payload }),
-            source: "test".to_string(),
-        }
+        Event { topic: topic.to_string(), payload: serde_json::json!({ "data": payload }), source: "test".to_string() }
     }
 
     #[tokio::test]
@@ -102,13 +83,7 @@ mod tests {
         let event = make_event("orders", "created");
         bus.publish(event).await.unwrap();
 
-        let received = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            rx.recv(),
-        )
-        .await
-        .unwrap()
-        .unwrap();
+        let received = tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await.unwrap().unwrap();
 
         let parsed: serde_json::Value = serde_json::from_str(&received).unwrap();
         assert_eq!(parsed["topic"], "orders");
@@ -149,13 +124,19 @@ mod tests {
         let ca = counter_a.clone();
         let handler_a: EventHandler = Box::new(move |_| {
             let c = ca.clone();
-            Box::pin(async move { c.fetch_add(1, Ordering::SeqCst); Ok(()) })
+            Box::pin(async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })
         });
 
         let cb = counter_b.clone();
         let handler_b: EventHandler = Box::new(move |_| {
             let c = cb.clone();
-            Box::pin(async move { c.fetch_add(1, Ordering::SeqCst); Ok(()) })
+            Box::pin(async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })
         });
 
         bus.subscribe("a", handler_a).await.unwrap();

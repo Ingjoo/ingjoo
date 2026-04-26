@@ -16,14 +16,8 @@ use crate::AppState;
 
 async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
     if !user.is_admin() {
-        let _ = store.create_audit_log(
-            Some(&user.user_id),
-            "admin_required_denied",
-            "permissions",
-            None,
-            None,
-            None,
-        ).await;
+        let _ =
+            store.create_audit_log(Some(&user.user_id), "admin_required_denied", "permissions", None, None, None).await;
         return Err(AppError::Forbidden("需要管理员权限".into()));
     }
     Ok(())
@@ -77,8 +71,7 @@ pub async fn get_model_access(
     Path(id): Path<String>,
 ) -> Result<Json<ModelAccessRow>, AppError> {
     require_admin(&current_user, &state.store).await?;
-    let access = state.store.get_model_access(&id).await?
-        .ok_or_else(|| AppError::NotFound("权限规则不存在".into()))?;
+    let access = state.store.get_model_access(&id).await?.ok_or_else(|| AppError::NotFound("权限规则不存在".into()))?;
     Ok(Json(access))
 }
 
@@ -100,7 +93,10 @@ pub async fn update_model_access(
         perm_import: req.perm_import,
         perm_export: req.perm_export,
     };
-    let access = state.store.update_model_access(&id, &access).await?
+    let access = state
+        .store
+        .update_model_access(&id, &access)
+        .await?
         .ok_or_else(|| AppError::NotFound("权限规则不存在".into()))?;
     state.cache.invalidate_scope("policy");
     Ok(Json(access))
@@ -162,8 +158,7 @@ pub async fn get_record_rule(
     Path(id): Path<String>,
 ) -> Result<Json<RecordRuleRow>, AppError> {
     require_admin(&current_user, &state.store).await?;
-    let rule = state.store.get_record_rule(&id).await?
-        .ok_or_else(|| AppError::NotFound("记录规则不存在".into()))?;
+    let rule = state.store.get_record_rule(&id).await?.ok_or_else(|| AppError::NotFound("记录规则不存在".into()))?;
     Ok(Json(rule))
 }
 
@@ -185,8 +180,8 @@ pub async fn update_record_rule(
         perm_create: req.perm_create,
         perm_delete: req.perm_delete,
     };
-    let rule = state.store.update_record_rule(&id, &rule).await?
-        .ok_or_else(|| AppError::NotFound("记录规则不存在".into()))?;
+    let rule =
+        state.store.update_record_rule(&id, &rule).await?.ok_or_else(|| AppError::NotFound("记录规则不存在".into()))?;
     state.cache.invalidate_scope("policy");
     Ok(Json(rule))
 }

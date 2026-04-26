@@ -7,15 +7,15 @@
 
 | Crate | 代码行数 | 测试数 | 成熟度 | 状态 |
 |-------|---------|--------|--------|------|
-| `ingjoo-core` | 2,137 | 68 | **成熟** | Domain DSL、Store trait、Dialect — 可用于生产 |
-| `ingjoo-infra` | 5,900 | 125 | **成熟** | DB 实现、认证、存储、handler、中间件、路由、14 个扩展实现 |
-| `ingjoo-security` | 478 | 16 | **成熟** | 三层 RBAC 引擎，已接线到 CRUD handler |
-| `ingjoo-cache` | 216 | 5 | **完整** | Moka 缓存可用 |
-| `ingjoo-queue` | 1,168 | 25 | **已完成** | 内存/SQL 双后端队列、WorkerPool、重试策略、Cron 调度器 |
-| `ingjoo-bin` | 306 | 7 | **可用** | 完整 axum 路由、集成测试通过 |
-| `ingjoo-macros` | 180 | 4 | **可用** | `#[derive(IngjooModel)]` 派生宏，自动生成 ModelDescriptor |
+| `ingjoo-core` | 3,920 | 82 | **成熟** | Domain DSL、Store trait、Dialect、NotificationStore |
+| `ingjoo-infra` | 15,800 | 197 | **成熟** | DB 实现、认证、存储、handler、中间件、路由、15 扩展实现 |
+| `ingjoo-security` | 622 | 22 | **成熟** | 三层 RBAC 引擎，已接线到 CRUD handler |
+| `ingjoo-cache` | 342 | 5 | **完整** | Moka 缓存可用 |
+| `ingjoo-queue` | 1,585 | 25 | **已完成** | 内存/SQL 双后端队列、WorkerPool、重试策略、Cron 调度器 |
+| `ingjoo-bin` | 2,650 | 80 | **可用** | 完整 axum 路由、80 集成测试通过 |
+| `ingjoo-macros` | 210 | 4 | **可用** | `#[derive(IngjooModel)]` 派生宏 |
 
-**合计**：约 24,300 行代码，272 个单元测试 + 集成测试，127+ 个源文件。
+**合计**：约 24,300 行代码，411 个单元测试 + 集成测试，130+ 个源文件。
 
 ### 前端仓库
 
@@ -158,7 +158,7 @@ ingjoo-infra/tests/
 | T4.1 | 插件/模块热加载系统 | P1 | T3.1 | ✅ |
 | T4.2 | 公共 API rustdoc（所有公开项加 `///`） | P1 | 阶段 2 | ✅ |
 | T4.3 | 性能基准测试（criterion） | P2 | 阶段 2 | ✅ |
-| T4.4 | 完整集成测试套件 | P2 | 阶段 2 | 🔄 |
+| T4.4 | 完整集成测试套件 | P2 | 阶段 2 | ✅ |
 | T4.5 | `ingjoo-cli` 管理工具 | P2 | 阶段 2 | ✅ |
 | T4.6 | 多租户集合隔离测试 | P2 | T3.3 | ✅ |
 | T4.7 | 数据库连接池可观测性 | P3 | — | ✅ |

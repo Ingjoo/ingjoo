@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use ingjoo_core::db::error::StoreResult;
-use ingjoo_core::{Dialect, pool::Pool};
+use ingjoo_core::{pool::Pool, Dialect};
 use serde_json::Value;
 use sqlx::Row;
 
-use crate::{JobStatus, QueuedJob, Queue};
+use crate::{JobStatus, Queue, QueuedJob};
 
 /// 基于 SQL 数据库的持久化队列实现
 pub struct SqlQueue<'a> {
@@ -154,12 +154,7 @@ impl<'a> Queue for SqlQueue<'a> {
             self.dialect.placeholder(1),
             self.dialect.placeholder(1),
         ));
-        sqlx::query(&sql)
-            .bind(JobStatus::Completed.as_str())
-            .bind(&now)
-            .bind(job_id)
-            .execute(self.pool)
-            .await?;
+        sqlx::query(&sql).bind(JobStatus::Completed.as_str()).bind(&now).bind(job_id).execute(self.pool).await?;
         Ok(())
     }
 
@@ -170,21 +165,11 @@ impl<'a> Queue for SqlQueue<'a> {
             self.dialect.placeholder(1),
             self.dialect.placeholder(1),
         ));
-        sqlx::query(&sql)
-            .bind(JobStatus::Failed.as_str())
-            .bind(reason)
-            .bind(job_id)
-            .execute(self.pool)
-            .await?;
+        sqlx::query(&sql).bind(JobStatus::Failed.as_str()).bind(reason).bind(job_id).execute(self.pool).await?;
 
-        let check_sql = self.sql(&format!(
-            "SELECT attempts, max_attempts FROM queue_jobs WHERE id = {}",
-            self.dialect.placeholder(1),
-        ));
-        let row = sqlx::query(&check_sql)
-            .bind(job_id)
-            .fetch_optional(self.pool)
-            .await?;
+        let check_sql = self
+            .sql(&format!("SELECT attempts, max_attempts FROM queue_jobs WHERE id = {}", self.dialect.placeholder(1),));
+        let row = sqlx::query(&check_sql).bind(job_id).fetch_optional(self.pool).await?;
 
         if let Some(row) = row {
             let attempts: i32 = row.try_get("attempts").unwrap_or(0);
@@ -203,11 +188,7 @@ impl<'a> Queue for SqlQueue<'a> {
             self.dialect.placeholder(1),
             self.dialect.placeholder(1),
         ));
-        sqlx::query(&sql)
-            .bind(JobStatus::Pending.as_str())
-            .bind(job_id)
-            .execute(self.pool)
-            .await?;
+        sqlx::query(&sql).bind(JobStatus::Pending.as_str()).bind(job_id).execute(self.pool).await?;
         Ok(())
     }
 
@@ -219,12 +200,7 @@ impl<'a> Queue for SqlQueue<'a> {
             self.dialect.placeholder(1),
             self.dialect.placeholder(1),
         ));
-        sqlx::query(&sql)
-            .bind(JobStatus::DeadLetter.as_str())
-            .bind(&now)
-            .bind(job_id)
-            .execute(self.pool)
-            .await?;
+        sqlx::query(&sql).bind(JobStatus::DeadLetter.as_str()).bind(&now).bind(job_id).execute(self.pool).await?;
         Ok(())
     }
 

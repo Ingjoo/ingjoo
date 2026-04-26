@@ -14,18 +14,13 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
 
-use ingjoo_core::extension::audit::{
-    AuditEntry, AuditQuery, AuditStore,
-};
+use ingjoo_core::extension::audit::{AuditEntry, AuditQuery, AuditStore};
 use ingjoo_core::extension::content_filter::{ContentFilter, FilterResult};
 use ingjoo_core::extension::document::{Document, DocumentLoader, TextSplitter};
-use ingjoo_core::extension::llm::{
-    ChatMessage, ChatOptions, ChatResponse, LlmProvider,
-};
+use ingjoo_core::extension::llm::{ChatMessage, ChatOptions, ChatResponse, LlmProvider};
 use ingjoo_core::extension::masking::{DataMask, MaskType};
-use ingjoo_core::extension::payment::{
-    PaymentProvider, PaymentResult, PaymentStatus, RefundResult,
-};
+use ingjoo_core::extension::notification::NotificationStore;
+use ingjoo_core::extension::payment::{PaymentProvider, PaymentResult, PaymentStatus, RefundResult};
 use ingjoo_core::extension::relations::RelationLoader;
 use ingjoo_core::extension::sanitize::InputSanitizer;
 use ingjoo_core::extension::search::{SearchEngine, SearchQuery, SearchResult};
@@ -51,11 +46,7 @@ impl LlmProvider for NoopLlmProvider {
         Err(anyhow::anyhow!("LLM 服务未启用"))
     }
 
-    async fn embed(
-        &self,
-        _texts: &[String],
-        _model: Option<&str>,
-    ) -> Result<Vec<Vec<f32>>, anyhow::Error> {
+    async fn embed(&self, _texts: &[String], _model: Option<&str>) -> Result<Vec<Vec<f32>>, anyhow::Error> {
         Err(anyhow::anyhow!("嵌入服务未启用"))
     }
 
@@ -93,11 +84,7 @@ impl VectorStore for NoopVectorStore {
         Err(anyhow::anyhow!("向量存储未启用"))
     }
 
-    async fn delete(
-        &self,
-        _collection: &str,
-        _id: &str,
-    ) -> Result<(), anyhow::Error> {
+    async fn delete(&self, _collection: &str, _id: &str) -> Result<(), anyhow::Error> {
         Err(anyhow::anyhow!("向量存储未启用"))
     }
 }
@@ -233,23 +220,11 @@ pub struct NoopContentFilter;
 #[async_trait]
 impl ContentFilter for NoopContentFilter {
     async fn check_text(&self, _text: &str) -> Result<FilterResult, anyhow::Error> {
-        Ok(FilterResult {
-            passed: true,
-            reason: None,
-            category: None,
-        })
+        Ok(FilterResult { passed: true, reason: None, category: None })
     }
 
-    async fn check_file(
-        &self,
-        _data: &[u8],
-        _file_type: &str,
-    ) -> Result<FilterResult, anyhow::Error> {
-        Ok(FilterResult {
-            passed: true,
-            reason: None,
-            category: None,
-        })
+    async fn check_file(&self, _data: &[u8], _file_type: &str) -> Result<FilterResult, anyhow::Error> {
+        Ok(FilterResult { passed: true, reason: None, category: None })
     }
 }
 
@@ -339,18 +314,16 @@ impl AuditStore for NoopAuditStore {
         })
     }
 
-    async fn list_audit_logs(
-        &self,
-        _query: AuditQuery,
-    ) -> Result<Vec<AuditEntry>, anyhow::Error> {
+    async fn list_audit_logs(&self, _query: AuditQuery) -> Result<Vec<AuditEntry>, anyhow::Error> {
         Ok(vec![])
     }
 
-    async fn get_audit_log(
-        &self,
-        _id: &str,
-    ) -> Result<Option<AuditEntry>, anyhow::Error> {
+    async fn get_audit_log(&self, _id: &str) -> Result<Option<AuditEntry>, anyhow::Error> {
         Ok(None)
+    }
+
+    async fn delete_logs_before(&self, _before: &str) -> Result<u64, anyhow::Error> {
+        Ok(0)
     }
 }
 
@@ -363,11 +336,7 @@ pub struct NoopStateMachine;
 
 #[async_trait]
 impl StateMachine for NoopStateMachine {
-    async fn get_current_state(
-        &self,
-        _model: &str,
-        _record_id: &str,
-    ) -> Result<String, TransitionError> {
+    async fn get_current_state(&self, _model: &str, _record_id: &str) -> Result<String, TransitionError> {
         Ok(String::new())
     }
 
@@ -421,18 +390,11 @@ impl SearchEngine for NoopSearchEngine {
         Err(anyhow::anyhow!("搜索服务未启用"))
     }
 
-    async fn remove_record(
-        &self,
-        _model: &str,
-        _record_id: &str,
-    ) -> Result<(), anyhow::Error> {
+    async fn remove_record(&self, _model: &str, _record_id: &str) -> Result<(), anyhow::Error> {
         Err(anyhow::anyhow!("搜索服务未启用"))
     }
 
-    async fn search(
-        &self,
-        _query: SearchQuery,
-    ) -> Result<Vec<SearchResult>, anyhow::Error> {
+    async fn search(&self, _query: SearchQuery) -> Result<Vec<SearchResult>, anyhow::Error> {
         Err(anyhow::anyhow!("搜索服务未启用"))
     }
 
@@ -467,11 +429,7 @@ impl PaymentProvider for NoopPaymentProvider {
         Err(anyhow::anyhow!("支付服务未启用"))
     }
 
-    async fn refund(
-        &self,
-        _intent_id: &str,
-        _amount: Option<i64>,
-    ) -> Result<RefundResult, anyhow::Error> {
+    async fn refund(&self, _intent_id: &str, _amount: Option<i64>) -> Result<RefundResult, anyhow::Error> {
         Err(anyhow::anyhow!("支付服务未启用"))
     }
 
@@ -541,18 +499,75 @@ impl TranslationStore for NoopTranslationStore {
         Ok(HashMap::new())
     }
 
-    async fn remove(
-        &self,
-        _lang: &str,
-        _model: &str,
-        _field: &str,
-        _record_id: &str,
-    ) -> Result<(), anyhow::Error> {
+    async fn remove(&self, _lang: &str, _model: &str, _field: &str, _record_id: &str) -> Result<(), anyhow::Error> {
         Ok(())
     }
 
     async fn list_languages(&self, _model: &str) -> Result<Vec<String>, anyhow::Error> {
         Ok(vec![])
+    }
+}
+
+// ---------------------------------------------------------------------------
+// NotificationStore
+// ---------------------------------------------------------------------------
+
+/// 通知存储的空实现 — 返回空结果
+pub struct NoopNotificationStore;
+
+#[async_trait]
+impl NotificationStore for NoopNotificationStore {
+    async fn create_message(
+        &self,
+        _author_id: Option<&str>,
+        _subject: &str,
+        _body: &str,
+        _message_type: &str,
+    ) -> Result<ingjoo_core::db::models::MailMessage, anyhow::Error> {
+        Ok(ingjoo_core::db::models::MailMessage {
+            id: String::new(),
+            author_id: None,
+            subject: String::new(),
+            body: String::new(),
+            message_type: String::new(),
+            created_at: String::new(),
+        })
+    }
+
+    async fn create_notification(
+        &self,
+        _message_id: &str,
+        _user_id: &str,
+    ) -> Result<ingjoo_core::db::models::MailNotification, anyhow::Error> {
+        Ok(ingjoo_core::db::models::MailNotification {
+            id: String::new(),
+            message_id: String::new(),
+            user_id: String::new(),
+            is_read: false,
+            created_at: String::new(),
+        })
+    }
+
+    async fn list_notifications(
+        &self,
+        _user_id: &str,
+        _unread_only: bool,
+        _limit: i64,
+        _offset: i64,
+    ) -> Result<Vec<ingjoo_core::db::models::NotificationItem>, anyhow::Error> {
+        Ok(vec![])
+    }
+
+    async fn get_unread_count(&self, _user_id: &str) -> Result<i64, anyhow::Error> {
+        Ok(0)
+    }
+
+    async fn mark_read(&self, _notification_id: &str, _user_id: &str) -> Result<bool, anyhow::Error> {
+        Ok(false)
+    }
+
+    async fn mark_all_read(&self, _user_id: &str) -> Result<u64, anyhow::Error> {
+        Ok(0)
     }
 }
 
@@ -567,9 +582,7 @@ mod tests {
     #[tokio::test]
     async fn test_noop_llm_provider_returns_error() {
         let provider = NoopLlmProvider;
-        let result = provider
-            .chat_completion(&[], None)
-            .await;
+        let result = provider.chat_completion(&[], None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("LLM 服务未启用"));
 
@@ -596,11 +609,8 @@ mod tests {
     #[test]
     fn test_noop_text_splitter_returns_original() {
         let splitter = NoopTextSplitter;
-        let docs = vec![Document {
-            id: "1".to_string(),
-            content: "hello".to_string(),
-            metadata: serde_json::Value::Null,
-        }];
+        let docs =
+            vec![Document { id: "1".to_string(), content: "hello".to_string(), metadata: serde_json::Value::Null }];
         let result = splitter.split(&docs);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].content, "hello");
@@ -676,15 +686,18 @@ mod tests {
         let entry = store.create_audit_log(None, "test", "res", None, None, None).await.unwrap();
         assert!(entry.id.is_empty());
 
-        let logs = store.list_audit_logs(AuditQuery {
-            user_id: None,
-            action: None,
-            resource: None,
-            resource_id: None,
-            ip: None,
-            limit: None,
-            offset: None,
-        }).await.unwrap();
+        let logs = store
+            .list_audit_logs(AuditQuery {
+                user_id: None,
+                action: None,
+                resource: None,
+                resource_id: None,
+                ip: None,
+                limit: None,
+                offset: None,
+            })
+            .await
+            .unwrap();
         assert!(logs.is_empty());
 
         let log = store.get_audit_log("id").await.unwrap();
@@ -701,10 +714,7 @@ mod tests {
         let transitions = sm.get_available_transitions("order", "1").await.unwrap();
         assert!(transitions.is_empty());
 
-        let err = sm
-            .transition("order", "1", "confirmed", HashMap::new())
-            .await
-            .unwrap_err();
+        let err = sm.transition("order", "1", "confirmed", HashMap::new()).await.unwrap_err();
         match err {
             TransitionError::InvalidTransition(msg) => {
                 assert!(msg.contains("confirmed"));
@@ -713,27 +723,16 @@ mod tests {
             other => panic!("预期 InvalidTransition，得到: {:?}", other),
         }
 
-        sm.register_machine("order", vec![], vec![], "draft".to_string())
-            .await
-            .unwrap();
+        sm.register_machine("order", vec![], vec![], "draft".to_string()).await.unwrap();
     }
 
     #[tokio::test]
     async fn test_noop_search_engine_returns_error() {
         let engine = NoopSearchEngine;
-        assert!(engine
-            .index_record("model", "1", &serde_json::Value::Null)
-            .await
-            .is_err());
+        assert!(engine.index_record("model", "1", &serde_json::Value::Null).await.is_err());
         assert!(engine.remove_record("model", "1").await.is_err());
         assert!(engine
-            .search(SearchQuery {
-                text: "test".to_string(),
-                models: vec![],
-                limit: None,
-                offset: None,
-                filters: None,
-            })
+            .search(SearchQuery { text: "test".to_string(), models: vec![], limit: None, offset: None, filters: None })
             .await
             .is_err());
         assert!(engine.rebuild_index("model").await.is_err());
@@ -742,10 +741,7 @@ mod tests {
     #[tokio::test]
     async fn test_noop_payment_provider_returns_error() {
         let provider = NoopPaymentProvider;
-        assert!(provider
-            .create_intent(100, "CNY", serde_json::Value::Null)
-            .await
-            .is_err());
+        assert!(provider.create_intent(100, "CNY", serde_json::Value::Null).await.is_err());
         assert!(provider.confirm("id").await.is_err());
         assert!(provider.cancel("id").await.is_err());
         assert!(provider.refund("id", None).await.is_err());
@@ -755,16 +751,10 @@ mod tests {
     #[tokio::test]
     async fn test_noop_relation_loader_returns_empty() {
         let loader = NoopRelationLoader;
-        let o2m = loader
-            .load_one2many("order", "lines", &["1".to_string()])
-            .await
-            .unwrap();
+        let o2m = loader.load_one2many("order", "lines", &["1".to_string()]).await.unwrap();
         assert!(o2m.is_empty());
 
-        let m2o = loader
-            .load_many2one("order", "partner", &["1".to_string()])
-            .await
-            .unwrap();
+        let m2o = loader.load_many2one("order", "partner", &["1".to_string()]).await.unwrap();
         assert!(m2o.is_empty());
     }
 
@@ -785,10 +775,7 @@ mod tests {
             .await
             .unwrap();
 
-        let batch = store
-            .get_batch("zh", "order", "name", &["1".to_string()])
-            .await
-            .unwrap();
+        let batch = store.get_batch("zh", "order", "name", &["1".to_string()]).await.unwrap();
         assert!(batch.is_empty());
 
         store.remove("zh", "order", "name", "1").await.unwrap();

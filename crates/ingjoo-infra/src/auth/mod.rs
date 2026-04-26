@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::SaltString;
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -18,11 +18,7 @@ pub struct AuthConfig {
 impl AuthConfig {
     /// 创建默认配置（access 15min, refresh 7d）
     pub fn new(secret: impl Into<String>) -> Self {
-        Self {
-            secret: secret.into(),
-            access_ttl: 900,
-            refresh_ttl: 604800,
-        }
+        Self { secret: secret.into(), access_ttl: 900, refresh_ttl: 604800 }
     }
 }
 
@@ -44,7 +40,13 @@ pub struct TokenClaims {
 pub trait AuthProvider: Send + Sync {
     fn hash_password(&self, password: &str) -> Result<String>;
     fn verify_password(&self, password: &str, hash: &str) -> Result<bool>;
-    fn create_access_token(&self, user_id: &str, role: &str, groups: &[String], database: Option<&str>) -> Result<String>;
+    fn create_access_token(
+        &self,
+        user_id: &str,
+        role: &str,
+        groups: &[String],
+        database: Option<&str>,
+    ) -> Result<String>;
     fn create_refresh_token(&self) -> String;
     fn refresh_token_hash(&self, token: &str) -> String;
     fn refresh_expires_at(&self) -> String;
@@ -75,20 +77,22 @@ impl AuthProvider for JwtAuthProvider {
     fn hash_password(&self, password: &str) -> Result<String> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
-        let hash = argon2
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| anyhow!("密码哈希失败: {}", e))?;
+        let hash = argon2.hash_password(password.as_bytes(), &salt).map_err(|e| anyhow!("密码哈希失败: {}", e))?;
         Ok(hash.to_string())
     }
 
     fn verify_password(&self, password: &str, hash: &str) -> Result<bool> {
         let parsed = PasswordHash::new(hash).map_err(|e| anyhow!("哈希格式错误: {}", e))?;
-        Ok(Argon2::default()
-            .verify_password(password.as_bytes(), &parsed)
-            .is_ok())
+        Ok(Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok())
     }
 
-    fn create_access_token(&self, user_id: &str, role: &str, groups: &[String], database: Option<&str>) -> Result<String> {
+    fn create_access_token(
+        &self,
+        user_id: &str,
+        role: &str,
+        groups: &[String],
+        database: Option<&str>,
+    ) -> Result<String> {
         let now = chrono::Utc::now().timestamp();
         let claims = TokenClaims {
             sub: user_id.to_string(),
@@ -98,8 +102,7 @@ impl AuthProvider for JwtAuthProvider {
             exp: (now + self.access_ttl) as usize,
             iat: now as usize,
         };
-        encode(&Header::default(), &claims, &self.encoding_key)
-            .map_err(|e| anyhow!("签发 access_token 失败: {}", e))
+        encode(&Header::default(), &claims, &self.encoding_key).map_err(|e| anyhow!("签发 access_token 失败: {}", e))
     }
 
     fn create_refresh_token(&self) -> String {
@@ -107,7 +110,7 @@ impl AuthProvider for JwtAuthProvider {
     }
 
     fn refresh_token_hash(&self, token: &str) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(token.as_bytes());
         format!("{:x}", hasher.finalize())
@@ -279,11 +282,7 @@ mod tests {
 
     #[test]
     fn test_custom_ttl_config() {
-        let config = AuthConfig {
-            secret: "test".to_string(),
-            access_ttl: 60,
-            refresh_ttl: 3600,
-        };
+        let config = AuthConfig { secret: "test".to_string(), access_ttl: 60, refresh_ttl: 3600 };
         let auth = JwtAuthProvider::new(&config);
         let token = auth.create_access_token("user-1", "user", &[], None).unwrap();
         let claims = auth.verify_access_token(&token).unwrap();

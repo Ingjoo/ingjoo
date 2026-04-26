@@ -22,10 +22,7 @@ impl FsDocumentLoader {
     }
 
     fn is_supported(path: &Path) -> bool {
-        path.extension()
-            .and_then(|e| e.to_str())
-            .map(|e| matches!(e, "txt" | "md" | "json" | "csv"))
-            .unwrap_or(false)
+        path.extension().and_then(|e| e.to_str()).map(|e| matches!(e, "txt" | "md" | "json" | "csv")).unwrap_or(false)
     }
 }
 
@@ -76,30 +73,15 @@ impl FsDocumentLoader {
     fn load_file(&self, path: &Path) -> Result<Document, anyhow::Error> {
         let metadata = std::fs::metadata(path)?;
         if metadata.len() > self.max_file_size {
-            anyhow::bail!(
-                "文件过大: {} bytes (上限: {} bytes)",
-                metadata.len(),
-                self.max_file_size
-            );
+            anyhow::bail!("文件过大: {} bytes (上限: {} bytes)", metadata.len(), self.max_file_size);
         }
 
         let content = std::fs::read_to_string(path)?;
-        let id = path
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("无效路径编码"))?
-            .to_string();
+        let id = path.to_str().ok_or_else(|| anyhow::anyhow!("无效路径编码"))?.to_string();
 
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_string();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string();
 
-        let file_name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
 
         Ok(Document {
             id,
@@ -148,10 +130,7 @@ mod tests {
         let loader = FsDocumentLoader::with_defaults();
         let docs = loader.load(dir.path().to_str().unwrap()).await.unwrap();
         assert_eq!(docs.len(), 2);
-        let names: Vec<&str> = docs
-            .iter()
-            .map(|d| d.metadata["file_name"].as_str().unwrap())
-            .collect();
+        let names: Vec<&str> = docs.iter().map(|d| d.metadata["file_name"].as_str().unwrap()).collect();
         assert!(names.contains(&"a.txt"));
         assert!(names.contains(&"b.md"));
         assert!(!names.contains(&"c.bin"));

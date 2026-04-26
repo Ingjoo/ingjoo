@@ -23,14 +23,7 @@ const ACTION_COLUMNS: &str =
 
 async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
     if !user.is_admin() {
-        let _ = store.create_audit_log(
-            Some(&user.user_id),
-            "admin_required_denied",
-            "actions",
-            None,
-            None,
-            None,
-        ).await;
+        let _ = store.create_audit_log(Some(&user.user_id), "admin_required_denied", "actions", None, None, None).await;
         return Err(AppError::Forbidden("需要管理员权限".into()));
     }
     Ok(())
@@ -99,17 +92,11 @@ impl ActionRow {
                     .collect()
             })
             .unwrap_or_default();
-        let view_ids: Vec<String> = self
-            .view_ids_str
-            .as_deref()
-            .and_then(|s| serde_json::from_str(s).ok())
-            .unwrap_or_default();
-        let domain: Option<serde_json::Value> =
-            self.domain_str.as_deref().and_then(|s| serde_json::from_str(s).ok());
-        let context: Option<serde_json::Value> =
-            self.context_str.as_deref().and_then(|s| serde_json::from_str(s).ok());
-        let group_ids: Vec<String> =
-            serde_json::from_str(&self.group_ids_str).unwrap_or_default();
+        let view_ids: Vec<String> =
+            self.view_ids_str.as_deref().and_then(|s| serde_json::from_str(s).ok()).unwrap_or_default();
+        let domain: Option<serde_json::Value> = self.domain_str.as_deref().and_then(|s| serde_json::from_str(s).ok());
+        let context: Option<serde_json::Value> = self.context_str.as_deref().and_then(|s| serde_json::from_str(s).ok());
+        let group_ids: Vec<String> = serde_json::from_str(&self.group_ids_str).unwrap_or_default();
 
         ActionDescriptor {
             id: self.id.clone(),
@@ -139,15 +126,15 @@ pub async fn get_action(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let sql = resolved_db.dialect.prepare(&format!(
-        "SELECT {} FROM ir_action WHERE id = ?",
-        ACTION_COLUMNS
-    ));
+    let sql = resolved_db.dialect.prepare(&format!("SELECT {} FROM ir_action WHERE id = ?", ACTION_COLUMNS));
     let row = sqlx::query(&sql)
         .bind(&id)
         .fetch_optional(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询动作失败: {}", e)))?
+        .map_err(|e| {
+            tracing::error!("查询动作失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("查询动作失败"))
+        })?
         .ok_or_else(|| AppError::NotFound(format!("动作 '{}' 不存在", id)))?;
 
     let action = ActionRow::from_row(&row).to_descriptor();
@@ -187,14 +174,11 @@ pub async fn list_actions(
 ) -> Result<Json<Vec<ActionDescriptor>>, AppError> {
     require_admin(&current_user, &state.store).await?;
 
-    let sql = resolved_db.dialect.prepare(&format!(
-        "SELECT {} FROM ir_action ORDER BY name",
-        ACTION_COLUMNS
-    ));
-    let rows = sqlx::query(&sql)
-        .fetch_all(&*resolved_db.pool)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询动作失败: {}", e)))?;
+    let sql = resolved_db.dialect.prepare(&format!("SELECT {} FROM ir_action ORDER BY name", ACTION_COLUMNS));
+    let rows = sqlx::query(&sql).fetch_all(&*resolved_db.pool).await.map_err(|e| {
+        tracing::error!("查询动作失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("查询动作失败"))
+    })?;
 
     Ok(Json(rows.iter().map(|r| ActionRow::from_row(r).to_descriptor()).collect()))
 }
@@ -218,7 +202,7 @@ pub async fn create_action(
     let target = req.target.as_deref().unwrap_or("current");
 
     let sql = resolved_db.dialect.prepare(
-        "INSERT INTO ir_action (id, name, type, res_model, view_mode, view_ids, domain, context, page_limit, target, url, help, group_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO ir_action (id, name, type, res_model, view_mode, view_ids, domain, context, page_limit, target, search_view_id, url, help, group_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     );
     sqlx::query(&sql)
         .bind(&id)
@@ -231,29 +215,36 @@ pub async fn create_action(
         .bind(&context_str)
         .bind(req.limit)
         .bind(target)
+        .bind(&req.search_view_id)
         .bind(&req.url)
         .bind(&req.help)
         .bind(&group_ids_str)
         .execute(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("创建动作失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("创建动作失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("创建动作失败"))
+        })?;
 
-    Ok((StatusCode::CREATED, Json(ActionDescriptor {
-        id,
-        name: req.name,
-        action_type: req.action_type,
-        res_model: req.res_model,
-        view_mode: req.view_mode,
-        view_ids: req.view_ids,
-        domain: req.domain,
-        context: req.context,
-        limit: req.limit,
-        target: Some(target.to_string()),
-        search_view_id: None,
-        url: req.url,
-        help: req.help,
-        group_ids,
-    })))
+    Ok((
+        StatusCode::CREATED,
+        Json(ActionDescriptor {
+            id,
+            name: req.name,
+            action_type: req.action_type,
+            res_model: req.res_model,
+            view_mode: req.view_mode,
+            view_ids: req.view_ids,
+            domain: req.domain,
+            context: req.context,
+            limit: req.limit,
+            target: Some(target.to_string()),
+            search_view_id: req.search_view_id,
+            url: req.url,
+            help: req.help,
+            group_ids,
+        }),
+    ))
 }
 
 /// PUT /api/actions/{id} — 更新动作（管理员）
@@ -266,15 +257,15 @@ pub async fn update_action(
 ) -> Result<Json<ActionDescriptor>, AppError> {
     require_admin(&current_user, &state.store).await?;
 
-    let sql = resolved_db.dialect.prepare(&format!(
-        "SELECT {} FROM ir_action WHERE id = ?",
-        ACTION_COLUMNS
-    ));
+    let sql = resolved_db.dialect.prepare(&format!("SELECT {} FROM ir_action WHERE id = ?", ACTION_COLUMNS));
     let row = sqlx::query(&sql)
         .bind(&id)
         .fetch_optional(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询动作失败: {}", e)))?
+        .map_err(|e| {
+            tracing::error!("查询动作失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("查询动作失败"))
+        })?
         .ok_or_else(|| AppError::NotFound(format!("动作 '{}' 不存在", id)))?;
 
     let existing = ActionRow::from_row(&row);
@@ -301,30 +292,15 @@ pub async fn update_action(
             .unwrap_or_default()
     });
     let view_ids = req.view_ids.unwrap_or_else(|| {
-        existing
-            .view_ids_str
-            .as_deref()
-            .and_then(|s| serde_json::from_str(s).ok())
-            .unwrap_or_default()
+        existing.view_ids_str.as_deref().and_then(|s| serde_json::from_str(s).ok()).unwrap_or_default()
     });
-    let domain = req.domain.or_else(|| {
-        existing
-            .domain_str
-            .as_deref()
-            .and_then(|s| serde_json::from_str(s).ok())
-    });
-    let context = req.context.or_else(|| {
-        existing
-            .context_str
-            .as_deref()
-            .and_then(|s| serde_json::from_str(s).ok())
-    });
+    let domain = req.domain.or_else(|| existing.domain_str.as_deref().and_then(|s| serde_json::from_str(s).ok()));
+    let context = req.context.or_else(|| existing.context_str.as_deref().and_then(|s| serde_json::from_str(s).ok()));
     let limit = req.limit.or(existing.limit);
     let target = req.target.or(existing.target).unwrap_or_else(|| "current".into());
     let help = req.help.or(existing.help);
-    let group_ids = req.group_ids.unwrap_or_else(|| {
-        serde_json::from_str(&existing.group_ids_str).unwrap_or_default()
-    });
+    let group_ids = req.group_ids.unwrap_or_else(|| serde_json::from_str(&existing.group_ids_str).unwrap_or_default());
+    let search_view_id = req.search_view_id.or(existing.search_view_id);
 
     let view_mode_str: String = view_mode.iter().map(|t| t.as_str()).collect::<Vec<_>>().join(",");
     let view_ids_str = serde_json::to_string(&view_ids).unwrap_or_else(|_| "[]".into());
@@ -333,7 +309,7 @@ pub async fn update_action(
     let group_ids_str = serde_json::to_string(&group_ids).unwrap_or_else(|_| "[]".into());
 
     let sql = resolved_db.dialect.prepare(
-        "UPDATE ir_action SET name = ?, res_model = ?, view_mode = ?, view_ids = ?, domain = ?, context = ?, page_limit = ?, target = ?, help = ?, group_ids = ?, updated_at = datetime('now') WHERE id = ?",
+        "UPDATE ir_action SET name = ?, res_model = ?, view_mode = ?, view_ids = ?, domain = ?, context = ?, page_limit = ?, target = ?, search_view_id = ?, help = ?, group_ids = ?, updated_at = datetime('now') WHERE id = ?",
     );
     sqlx::query(&sql)
         .bind(&name)
@@ -344,12 +320,16 @@ pub async fn update_action(
         .bind(&context_str)
         .bind(limit)
         .bind(&target)
+        .bind(&search_view_id)
         .bind(&help)
         .bind(&group_ids_str)
         .bind(&id)
         .execute(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("更新动作失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("更新动作失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("更新动作失败"))
+        })?;
 
     Ok(Json(ActionDescriptor {
         id,
@@ -367,7 +347,7 @@ pub async fn update_action(
         context,
         limit,
         target: Some(target),
-        search_view_id: existing.search_view_id,
+        search_view_id,
         url: existing.url,
         help,
         group_ids,
@@ -384,11 +364,10 @@ pub async fn delete_action(
     require_admin(&current_user, &state.store).await?;
 
     let sql = resolved_db.dialect.prepare("DELETE FROM ir_action WHERE id = ?");
-    let result = sqlx::query(&sql)
-        .bind(&id)
-        .execute(&*resolved_db.pool)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("删除动作失败: {}", e)))?;
+    let result = sqlx::query(&sql).bind(&id).execute(&*resolved_db.pool).await.map_err(|e| {
+        tracing::error!("删除动作失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("删除动作失败"))
+    })?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound(format!("动作 '{}' 不存在", id)));
@@ -406,7 +385,9 @@ async fn fetch_views_by_ids(
     let ph_str = placeholders.join(",");
     let sql_str = format!(
         "SELECT {} FROM ir_view WHERE id IN ({}) AND active = {}",
-        VIEW_COLUMNS, ph_str, resolved_db.dialect.bool_true()
+        VIEW_COLUMNS,
+        ph_str,
+        resolved_db.dialect.bool_true()
     );
     let sql = resolved_db.dialect.prepare(&sql_str);
 
@@ -414,48 +395,39 @@ async fn fetch_views_by_ids(
     for vid in view_ids {
         q = q.bind(vid.clone());
     }
-    let rows = q
-        .fetch_all(&*resolved_db.pool)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?;
+    let rows = q.fetch_all(&*resolved_db.pool).await.map_err(|e| {
+        tracing::error!("查询视图失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("查询视图失败"))
+    })?;
 
     let mut map = serde_json::Map::new();
     for row in &rows {
         let desc = ViewRow::from_row(row).to_descriptor();
         let key = desc.view_type.as_str().to_string();
         if !map.contains_key(&key) {
-            map.insert(
-                key,
-                serde_json::to_value(&desc).unwrap_or(serde_json::Value::Null),
-            );
+            map.insert(key, serde_json::to_value(&desc).unwrap_or(serde_json::Value::Null));
         }
     }
     Ok(serde_json::Value::Object(map))
 }
 
-async fn fetch_views_by_model(
-    resolved_db: &ResolvedDatabase,
-    res_model: &str,
-) -> Result<serde_json::Value, AppError> {
+async fn fetch_views_by_model(resolved_db: &ResolvedDatabase, res_model: &str) -> Result<serde_json::Value, AppError> {
     let sql = resolved_db.dialect.prepare(&format!(
         "SELECT {} FROM ir_view WHERE model = ? AND active = {} ORDER BY priority",
-        VIEW_COLUMNS, resolved_db.dialect.bool_true()
+        VIEW_COLUMNS,
+        resolved_db.dialect.bool_true()
     ));
-    let rows = sqlx::query(&sql)
-        .bind(res_model)
-        .fetch_all(&*resolved_db.pool)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?;
+    let rows = sqlx::query(&sql).bind(res_model).fetch_all(&*resolved_db.pool).await.map_err(|e| {
+        tracing::error!("查询视图失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("查询视图失败"))
+    })?;
 
     let mut map = serde_json::Map::new();
     for row in &rows {
         let desc = ViewRow::from_row(row).to_descriptor();
         let key = desc.view_type.as_str().to_string();
         if !map.contains_key(&key) {
-            map.insert(
-                key,
-                serde_json::to_value(&desc).unwrap_or(serde_json::Value::Null),
-            );
+            map.insert(key, serde_json::to_value(&desc).unwrap_or(serde_json::Value::Null));
         }
     }
     Ok(serde_json::Value::Object(map))
@@ -474,6 +446,7 @@ pub struct CreateActionRequest {
     pub context: Option<serde_json::Value>,
     pub limit: Option<i32>,
     pub target: Option<String>,
+    pub search_view_id: Option<String>,
     pub url: Option<String>,
     pub help: Option<String>,
     pub group_ids: Option<Vec<String>>,
@@ -489,6 +462,7 @@ pub struct UpdateActionRequest {
     pub context: Option<serde_json::Value>,
     pub limit: Option<i32>,
     pub target: Option<String>,
+    pub search_view_id: Option<String>,
     pub help: Option<String>,
     pub group_ids: Option<Vec<String>>,
 }

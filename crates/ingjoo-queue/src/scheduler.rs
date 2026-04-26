@@ -10,12 +10,12 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use cron::Schedule;
 use ingjoo_core::db::error::StoreResult;
-use ingjoo_core::{Dialect, pool::Pool};
+use ingjoo_core::{pool::Pool, Dialect};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::Row;
 
-use crate::{QueuedJob, Queue};
+use crate::{Queue, QueuedJob};
 
 /// 定时任务状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,16 +97,12 @@ impl ScheduledJob {
 
     /// 解析 cron 表达式，计算下次触发时间
     pub fn compute_next_fire_time(&self) -> StoreResult<DateTime<Utc>> {
-        let schedule = Schedule::from_str(&self.cron_expr)
-            .map_err(|e| ingjoo_core::db::error::StoreError::Config(
-                format!("无效 cron 表达式 '{}': {}", self.cron_expr, e)
-            ))?;
-        schedule
-            .upcoming(Utc)
-            .next()
-            .ok_or_else(|| ingjoo_core::db::error::StoreError::Config(
-                format!("cron 表达式 '{}' 无未来触发时间", self.cron_expr)
-            ))
+        let schedule = Schedule::from_str(&self.cron_expr).map_err(|e| {
+            ingjoo_core::db::error::StoreError::Config(format!("无效 cron 表达式 '{}': {}", self.cron_expr, e))
+        })?;
+        schedule.upcoming(Utc).next().ok_or_else(|| {
+            ingjoo_core::db::error::StoreError::Config(format!("cron 表达式 '{}' 无未来触发时间", self.cron_expr))
+        })
     }
 }
 
@@ -209,14 +205,8 @@ impl<'a> ScheduleStore for SqlScheduleStore<'a> {
     }
 
     async fn get(&self, id: &str) -> StoreResult<Option<ScheduledJob>> {
-        let sql = self.sql(&format!(
-            "SELECT * FROM scheduled_jobs WHERE id = {}",
-            self.dialect.placeholder(1),
-        ));
-        let row = sqlx::query(&sql)
-            .bind(id)
-            .fetch_optional(self.pool)
-            .await?;
+        let sql = self.sql(&format!("SELECT * FROM scheduled_jobs WHERE id = {}", self.dialect.placeholder(1),));
+        let row = sqlx::query(&sql).bind(id).fetch_optional(self.pool).await?;
         Ok(row.map(|r| self.row_to_job(&r)))
     }
 
@@ -227,16 +217,11 @@ impl<'a> ScheduleStore for SqlScheduleStore<'a> {
                     "SELECT * FROM scheduled_jobs WHERE status = {} ORDER BY created_at DESC",
                     self.dialect.placeholder(1),
                 ));
-                sqlx::query(&sql)
-                    .bind(s.as_str())
-                    .fetch_all(self.pool)
-                    .await?
+                sqlx::query(&sql).bind(s.as_str()).fetch_all(self.pool).await?
             }
             None => {
                 let sql = self.sql("SELECT * FROM scheduled_jobs ORDER BY created_at DESC");
-                sqlx::query(&sql)
-                    .fetch_all(self.pool)
-                    .await?
+                sqlx::query(&sql).fetch_all(self.pool).await?
             }
         };
         Ok(rows.iter().map(|r| self.row_to_job(r)).collect())
@@ -283,29 +268,19 @@ impl<'a> ScheduleStore for SqlScheduleStore<'a> {
     }
 
     async fn delete(&self, id: &str) -> StoreResult<()> {
-        let sql = self.sql(&format!(
-            "DELETE FROM scheduled_jobs WHERE id = {}",
-            self.dialect.placeholder(1),
-        ));
-        sqlx::query(&sql)
-            .bind(id)
-            .execute(self.pool)
-            .await?;
+        let sql = self.sql(&format!("DELETE FROM scheduled_jobs WHERE id = {}", self.dialect.placeholder(1),));
+        sqlx::query(&sql).bind(id).execute(self.pool).await?;
         Ok(())
     }
 
     async fn fetch_due(&self) -> StoreResult<Vec<ScheduledJob>> {
         let now = Utc::now().to_rfc3339();
         let sql = self.sql(&format!(
-            "SELECT * FROM scheduled_jobs WHERE status = {} AND (next_fire_time IS NULL OR next_fire_time <= {}) ORDER BY next_fire_time ASC",
+            "SELECT * FROM scheduled_jobs WHERE status = {} AND (next_fire_time IS NULL OR next_fire_time <= {}) ORDER BY next_fire_time ASC LIMIT 100",
             self.dialect.placeholder(1),
             self.dialect.placeholder(1),
         ));
-        let rows = sqlx::query(&sql)
-            .bind(ScheduleStatus::Active.as_str())
-            .bind(&now)
-            .fetch_all(self.pool)
-            .await?;
+        let rows = sqlx::query(&sql).bind(ScheduleStatus::Active.as_str()).bind(&now).fetch_all(self.pool).await?;
         Ok(rows.iter().map(|r| self.row_to_job(r)).collect())
     }
 }
@@ -319,10 +294,7 @@ pub struct Scheduler<'a, Q: Queue> {
 impl<'a, Q: Queue> Scheduler<'a, Q> {
     /// 创建调度器，绑定连接池、方言和队列
     pub fn new(pool: &'a Pool, dialect: &'a Dialect, queue: &'a Q) -> Self {
-        Self {
-            store: SqlScheduleStore::new(pool, dialect),
-            queue,
-        }
+        Self { store: SqlScheduleStore::new(pool, dialect), queue }
     }
 
     /// 执行一次 tick：取出到期任务，入队执行，更新触发时间
@@ -334,8 +306,8 @@ impl<'a, Q: Queue> Scheduler<'a, Q> {
             let now = Utc::now();
 
             // 构造队列任务并入队
-            let queued = QueuedJob::new(&job.queue, &job.job_name, job.payload.clone())
-                .with_max_attempts(job.max_attempts);
+            let queued =
+                QueuedJob::new(&job.queue, &job.job_name, job.payload.clone()).with_max_attempts(job.max_attempts);
             self.queue.enqueue(queued).await?;
 
             // 更新触发时间
@@ -366,16 +338,15 @@ impl<'a, Q: Queue> Scheduler<'a, Q> {
         };
 
         let now = Utc::now();
-        let min_wait = jobs.iter().filter_map(|job| job.next_fire_time).map(|next| {
-            (next - now).to_std().unwrap_or(std::time::Duration::from_millis(100))
-        }).min();
+        let min_wait = jobs
+            .iter()
+            .filter_map(|job| job.next_fire_time)
+            .map(|next| (next - now).to_std().unwrap_or(std::time::Duration::from_millis(100)))
+            .min();
 
         min_wait
             .unwrap_or(std::time::Duration::from_secs(30))
-            .clamp(
-                std::time::Duration::from_millis(100),
-                std::time::Duration::from_secs(60),
-            )
+            .clamp(std::time::Duration::from_millis(100), std::time::Duration::from_secs(60))
     }
 
     /// 启动后台调度循环

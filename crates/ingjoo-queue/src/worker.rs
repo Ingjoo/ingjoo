@@ -5,11 +5,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
-use tokio::sync::{Semaphore, broadcast};
+use tokio::sync::{broadcast, Semaphore};
 use tokio::time::sleep;
 use tracing::{error, info, warn};
 
-use crate::{JobResult, QueuedJob, Queue, RetryPolicy};
+use crate::{JobResult, Queue, QueuedJob, RetryPolicy};
 
 /// 任务处理器 trait，按任务名称路由到具体实现
 pub trait JobHandler: Send + Sync {

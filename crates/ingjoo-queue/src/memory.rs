@@ -6,7 +6,7 @@ use chrono::Utc;
 use ingjoo_core::db::error::StoreResult;
 use tracing::warn;
 
-use crate::{JobStatus, QueuedJob, Queue};
+use crate::{JobStatus, Queue, QueuedJob};
 
 /// 基于内存的双端队列实现，用于开发和测试
 pub struct InMemoryQueue {
@@ -15,9 +15,7 @@ pub struct InMemoryQueue {
 
 impl InMemoryQueue {
     pub fn new() -> Self {
-        Self {
-            jobs: Mutex::new(VecDeque::new()),
-        }
+        Self { jobs: Mutex::new(VecDeque::new()) }
     }
 }
 

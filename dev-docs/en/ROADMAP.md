@@ -7,15 +7,15 @@
 
 | Crate | Lines | Tests | Maturity | Status |
 |-------|-------|-------|----------|--------|
-| `ingjoo-core` | 2,137 | 68 | **Mature** | Domain DSL, Store traits, Dialect — production-ready |
-| `ingjoo-infra` | 5,900 | 125 | **Mature** | Full DB impl, auth, storage, handlers, middleware, router, 14 extension impls |
-| `ingjoo-security` | 478 | 16 | **Mature** | 3-layer RBAC engine — wired to CRUD handlers |
-| `ingjoo-cache` | 216 | 5 | **Complete** | Moka-based caching — working |
-| `ingjoo-queue` | 1,168 | 25 | **Complete** | In-memory + SQL queue, WorkerPool, retry policy, cron scheduler |
-| `ingjoo-bin` | 306 | 7 | **Working** | Full axum router with integration tests passing |
-| `ingjoo-macros` | 180 | 4 | **Working** | `#[derive(IngjooModel)]` proc macro for ModelDescriptor generation |
+| `ingjoo-core` | 3,920 | 82 | **Mature** | Domain DSL, Store traits, Dialect, NotificationStore |
+| `ingjoo-infra` | 15,800 | 197 | **Mature** | Full DB impl, auth, storage, handlers, middleware, router, 15 extension impls |
+| `ingjoo-security` | 622 | 22 | **Mature** | 3-layer RBAC engine — wired to CRUD handlers |
+| `ingjoo-cache` | 342 | 5 | **Complete** | Moka-based caching — working |
+| `ingjoo-queue` | 1,585 | 25 | **Complete** | In-memory + SQL queue, WorkerPool, retry policy, cron scheduler |
+| `ingjoo-bin` | 2,650 | 80 | **Working** | Full axum router with 80 integration tests passing |
+| `ingjoo-macros` | 210 | 4 | **Working** | `#[derive(IngjooModel)]` proc macro |
 
-**Total**: ~24,300 lines, 272+ tests, 127+ source files.
+**Total**: ~24,300 lines, 411 tests, 130+ source files.
 
 ### Frontend Repos
 
@@ -158,7 +158,7 @@ Attribute syntax:
 | T4.1 | Plugin/module hot-loading system | P1 | T3.1 | ✅ |
 | T4.2 | Public API rustdoc (`///` on all public items) | P1 | Phase 2 | ✅ |
 | T4.3 | Performance benchmarks (criterion) | P2 | Phase 2 | ✅ |
-| T4.4 | Full integration test suite | P2 | Phase 2 | 🔄 |
+| T4.4 | Full integration test suite | P2 | Phase 2 | ✅ |
 | T4.5 | `ingjoo-cli` management tool | P2 | Phase 2 | ✅ |
 | T4.6 | Multi-tenant collection isolation tests | P2 | T3.3 | ✅ |
 | T4.7 | Database connection pooling observability | P3 | — | ✅ |

@@ -250,7 +250,7 @@ impl Dialect {
                         } else {
                             result.push_str(&format!("${}", n));
                             n += 1;
-                             i += 1;
+                            i += 1;
                         }
                     } else {
                         result.push(ch);
@@ -265,10 +265,7 @@ impl Dialect {
     /// 检查列是否存在的 SQL（SQLite 用 `pragma_table_info`，Postgres 用 `information_schema`）
     pub fn column_exists_sql(&self, table: &str, column: &str) -> String {
         match self {
-            Self::Sqlite => format!(
-                "SELECT COUNT(*) FROM pragma_table_info('{}') WHERE name = '{}'",
-                table, column
-            ),
+            Self::Sqlite => format!("SELECT COUNT(*) FROM pragma_table_info('{}') WHERE name = '{}'", table, column),
             Self::Postgres => format!(
                 "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = '{}' AND column_name = '{}'",
                 table, column
@@ -278,10 +275,7 @@ impl Dialect {
 
     /// 按分号拆分 DDL 语句，自动去除空白和空项
     pub fn split_ddl(ddl: &str) -> Vec<&str> {
-        ddl.split(';')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect()
+        ddl.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect()
     }
 }
 
@@ -388,10 +382,7 @@ mod tests {
     #[test]
     fn format_sql_sqlite_unchanged() {
         let d = Dialect::Sqlite;
-        assert_eq!(
-            d.format_sql("SELECT * FROM users WHERE id = ?"),
-            "SELECT * FROM users WHERE id = ?"
-        );
+        assert_eq!(d.format_sql("SELECT * FROM users WHERE id = ?"), "SELECT * FROM users WHERE id = ?");
     }
 
     #[test]
@@ -415,19 +406,13 @@ mod tests {
     #[test]
     fn format_sql_no_placeholders() {
         let d = Dialect::Postgres;
-        assert_eq!(
-            d.format_sql("SELECT COUNT(*) FROM users"),
-            "SELECT COUNT(*) FROM users"
-        );
+        assert_eq!(d.format_sql("SELECT COUNT(*) FROM users"), "SELECT COUNT(*) FROM users");
     }
 
     #[test]
     fn format_sql_multiple_placeholders() {
         let d = Dialect::Postgres;
-        assert_eq!(
-            d.format_sql("UPDATE t SET a=?, b=?, c=? WHERE id=?"),
-            "UPDATE t SET a=$1, b=$2, c=$3 WHERE id=$4"
-        );
+        assert_eq!(d.format_sql("UPDATE t SET a=?, b=?, c=? WHERE id=?"), "UPDATE t SET a=$1, b=$2, c=$3 WHERE id=$4");
     }
 
     #[test]
@@ -451,10 +436,7 @@ mod tests {
     #[test]
     fn prepare_skips_datetime_now_with_offset_postgres() {
         let d = Dialect::Postgres;
-        assert_eq!(
-            d.prepare("created_at > datetime('now', '-24 hours')"),
-            "created_at > datetime('now', '-24 hours')"
-        );
+        assert_eq!(d.prepare("created_at > datetime('now', '-24 hours')"), "created_at > datetime('now', '-24 hours')");
     }
 
     #[test]
@@ -469,19 +451,13 @@ mod tests {
     #[test]
     fn prepare_autoincrement_postgres() {
         let d = Dialect::Postgres;
-        assert_eq!(
-            d.prepare("id INTEGER PRIMARY KEY AUTOINCREMENT"),
-            "id BIGSERIAL PRIMARY KEY"
-        );
+        assert_eq!(d.prepare("id INTEGER PRIMARY KEY AUTOINCREMENT"), "id BIGSERIAL PRIMARY KEY");
     }
 
     #[test]
     fn prepare_autoincrement_sqlite_unchanged() {
         let d = Dialect::Sqlite;
-        assert_eq!(
-            d.prepare("id INTEGER PRIMARY KEY AUTOINCREMENT"),
-            "id INTEGER PRIMARY KEY AUTOINCREMENT"
-        );
+        assert_eq!(d.prepare("id INTEGER PRIMARY KEY AUTOINCREMENT"), "id INTEGER PRIMARY KEY AUTOINCREMENT");
     }
 
     #[test]
@@ -505,19 +481,13 @@ mod tests {
     #[test]
     fn format_sql_mixed_positional_and_sequential_postgres() {
         let d = Dialect::Postgres;
-        assert_eq!(
-            d.format_sql("WHERE id = ? AND name LIKE ?1 LIMIT ?2"),
-            "WHERE id = $1 AND name LIKE $1 LIMIT $2"
-        );
+        assert_eq!(d.format_sql("WHERE id = ? AND name LIKE ?1 LIMIT ?2"), "WHERE id = $1 AND name LIKE $1 LIMIT $2");
     }
 
     #[test]
     fn column_exists_sql_sqlite() {
         let sql = Dialect::Sqlite.column_exists_sql("entries", "folder_id");
-        assert_eq!(
-            sql,
-            "SELECT COUNT(*) FROM pragma_table_info('entries') WHERE name = 'folder_id'"
-        );
+        assert_eq!(sql, "SELECT COUNT(*) FROM pragma_table_info('entries') WHERE name = 'folder_id'");
     }
 
     #[test]
@@ -562,7 +532,8 @@ mod tests {
     #[test]
     fn prepare_ddl_roundtrip_postgres() {
         let d = Dialect::Postgres;
-        let ddl = r#"CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')));"#;
+        let ddl =
+            r#"CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')));"#;
         let transformed = d.prepare(ddl);
         let stmts = Dialect::split_ddl(&transformed);
         assert_eq!(stmts.len(), 1);
@@ -575,7 +546,8 @@ mod tests {
     #[test]
     fn prepare_ddl_roundtrip_sqlite_unchanged() {
         let d = Dialect::Sqlite;
-        let ddl = r#"CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')));"#;
+        let ddl =
+            r#"CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL DEFAULT (datetime('now')));"#;
         let transformed = d.prepare(ddl);
         assert_eq!(transformed, ddl);
     }

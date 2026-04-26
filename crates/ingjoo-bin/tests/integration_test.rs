@@ -5,29 +5,32 @@ use axum::Router;
 use http::StatusCode;
 use ingjoo_core::db::ids::GroupId;
 use ingjoo_core::db::models::Group;
-use ingjoo_infra::{AppState, AuthConfig, AuthProvider, JwtAuthProvider, IngjooDb, IngjooStore, PluginManager, DatabaseManager};
 use ingjoo_core::ModelRegistry;
+use ingjoo_infra::{
+    AppState, AuthConfig, AuthProvider, DatabaseManager, IngjooDb, IngjooStore, JwtAuthProvider, PluginManager,
+};
 use tower::ServiceExt;
 
 async fn create_state() -> (Router, Arc<AppState>) {
-    let tmp = tempfile::Builder::new()
-        .prefix("ingjoo_test_")
-        .suffix(".db")
-        .tempfile()
-        .unwrap();
+    let tmp = tempfile::Builder::new().prefix("ingjoo_test_").suffix(".db").tempfile().unwrap();
     let db_path = tmp.path().to_str().unwrap().to_string();
     std::mem::forget(tmp);
 
     let db_url = format!("sqlite://{}?mode=rwc", db_path);
     ingjoo_core::pool::install_drivers();
-    let (pool, dialect) = ingjoo_core::pool::connect_pool(&db_url)
-        .await
-        .unwrap();
+    let (pool, dialect) = ingjoo_core::pool::connect_pool(&db_url).await.unwrap();
     IngjooDb::run_migrations(&pool, &dialect).await.unwrap();
     let store: Arc<dyn IngjooStore> = Arc::new(IngjooDb::with_dialect(pool.clone(), dialect));
     let auth = JwtAuthProvider::new(&AuthConfig::new("test-secret"));
     let registry = Arc::new(ModelRegistry::new());
-    let state = Arc::new(AppState::new(store, auth, registry, Arc::new(pool.clone()), dialect, Arc::new(DatabaseManager::new(pool.clone(), dialect))));
+    let state = Arc::new(AppState::new(
+        store,
+        auth,
+        registry,
+        Arc::new(pool.clone()),
+        dialect,
+        Arc::new(DatabaseManager::new(pool.clone(), dialect)),
+    ));
     let router = ingjoo_infra::router::base_router(state.clone());
     (router, state)
 }
@@ -42,11 +45,7 @@ async fn setup_app_with_state() -> (Router, Arc<AppState>) {
 }
 
 async fn setup_app_with_models(models: Vec<ingjoo_core::module::ModelDescriptor>) -> (Router, Arc<AppState>) {
-    let tmp = tempfile::Builder::new()
-        .prefix("ingjoo_test_")
-        .suffix(".db")
-        .tempfile()
-        .unwrap();
+    let tmp = tempfile::Builder::new().prefix("ingjoo_test_").suffix(".db").tempfile().unwrap();
     let db_path = tmp.path().to_str().unwrap().to_string();
     std::mem::forget(tmp);
 
@@ -63,7 +62,14 @@ async fn setup_app_with_models(models: Vec<ingjoo_core::module::ModelDescriptor>
     }
     let registry = Arc::new(registry);
 
-    let state = Arc::new(AppState::new(store, auth, registry, Arc::new(pool.clone()), dialect, Arc::new(DatabaseManager::new(pool.clone(), dialect))));
+    let state = Arc::new(AppState::new(
+        store,
+        auth,
+        registry,
+        Arc::new(pool.clone()),
+        dialect,
+        Arc::new(DatabaseManager::new(pool.clone(), dialect)),
+    ));
     let router = ingjoo_infra::router::base_router(state.clone());
     (router, state)
 }
@@ -100,23 +106,13 @@ async fn get_admin_token(app: &Router, state: &Arc<AppState>) -> String {
 
     state
         .store
-        .add_user_to_group(
-            &ingjoo_core::db::ids::UserId::new(user_id.to_string()),
-            &admin_group.id,
-        )
+        .add_user_to_group(&ingjoo_core::db::ids::UserId::new(user_id.to_string()), &admin_group.id)
         .await
         .unwrap();
 
-    let groups = state
-        .store
-        .resolve_all_groups(&ingjoo_core::db::ids::UserId::new(user_id.to_string()))
-        .await
-        .unwrap();
+    let groups = state.store.resolve_all_groups(&ingjoo_core::db::ids::UserId::new(user_id.to_string())).await.unwrap();
 
-    state
-        .auth
-        .create_access_token(user_id, "admin", &groups, None)
-        .unwrap()
+    state.auth.create_access_token(user_id, "admin", &groups, None).unwrap()
 }
 
 #[allow(dead_code)]
@@ -140,22 +136,16 @@ fn make_request(method: &str, uri: &str, body: Option<&str>) -> http::Request<Bo
     if body.is_some() {
         builder = builder.header("content-type", "application/json");
     }
-    builder
-        .body(Body::from(body.unwrap_or("").to_string()))
-        .unwrap()
+    builder.body(Body::from(body.unwrap_or("").to_string())).unwrap()
 }
 
 fn auth_request(method: &str, uri: &str, token: &str, body: Option<&str>) -> http::Request<Body> {
-    let mut builder = http::Request::builder()
-        .method(method)
-        .uri(uri)
-        .header("authorization", format!("Bearer {}", token));
+    let mut builder =
+        http::Request::builder().method(method).uri(uri).header("authorization", format!("Bearer {}", token));
     if body.is_some() {
         builder = builder.header("content-type", "application/json");
     }
-    builder
-        .body(Body::from(body.unwrap_or("").to_string()))
-        .unwrap()
+    builder.body(Body::from(body.unwrap_or("").to_string())).unwrap()
 }
 
 #[tokio::test]
@@ -173,9 +163,7 @@ async fn test_register_login_profile_flow() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
 
-    let body = axum::body::to_bytes(resp.into_body(), 4096)
-        .await
-        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let access_token = json["access_token"].as_str().unwrap();
     let refresh_token = json["refresh_token"].as_str().unwrap();
@@ -184,15 +172,9 @@ async fn test_register_login_profile_flow() {
     assert_eq!(json["user"]["email"].as_str().unwrap(), "test@example.com");
     assert_eq!(json["user"]["name"].as_str().unwrap(), "testuser");
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/auth/profile", access_token, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/auth/profile", access_token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(resp.into_body(), 4096)
-        .await
-        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let profile: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(profile["email"].as_str().unwrap(), "test@example.com");
 
@@ -207,9 +189,7 @@ async fn test_register_login_profile_flow() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(resp.into_body(), 4096)
-        .await
-        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let updated: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(updated["name"].as_str().unwrap(), "updated_name");
     assert_eq!(updated["bio"].as_str().unwrap(), "hello world");
@@ -229,17 +209,11 @@ async fn test_login_returns_tokens() {
         .unwrap();
 
     let resp = app
-        .oneshot(make_request(
-            "POST",
-            "/api/auth/login",
-            Some(r#"{"email":"login@test.com","password":"pass123"}"#),
-        ))
+        .oneshot(make_request("POST", "/api/auth/login", Some(r#"{"email":"login@test.com","password":"pass123"}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(resp.into_body(), 4096)
-        .await
-        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(json["access_token"].is_string());
     assert!(json["refresh_token"].is_string());
@@ -259,11 +233,7 @@ async fn test_login_wrong_password() {
         .unwrap();
 
     let resp = app
-        .oneshot(make_request(
-            "POST",
-            "/api/auth/login",
-            Some(r#"{"email":"wrong@test.com","password":"wrongpass"}"#),
-        ))
+        .oneshot(make_request("POST", "/api/auth/login", Some(r#"{"email":"wrong@test.com","password":"wrongpass"}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
@@ -297,10 +267,7 @@ async fn test_duplicate_registration() {
 async fn test_unauthenticated_access_denied() {
     let app = setup_app().await;
 
-    let resp = app
-        .oneshot(make_request("GET", "/api/auth/profile", None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(make_request("GET", "/api/auth/profile", None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
 
@@ -317,9 +284,7 @@ async fn test_refresh_token_flow() {
         ))
         .await
         .unwrap();
-    let body = axum::body::to_bytes(resp.into_body(), 4096)
-        .await
-        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let refresh_token = json["refresh_token"].as_str().unwrap();
 
@@ -332,9 +297,7 @@ async fn test_refresh_token_flow() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(resp.into_body(), 4096)
-        .await
-        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(json["access_token"].is_string());
     assert!(json["refresh_token"].is_string());
@@ -353,16 +316,11 @@ async fn test_settings_requires_admin() {
         ))
         .await
         .unwrap();
-    let body = axum::body::to_bytes(resp.into_body(), 4096)
-        .await
-        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["access_token"].as_str().unwrap();
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/settings", token, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/settings", token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
@@ -371,10 +329,7 @@ async fn test_settings_requires_admin() {
 #[tokio::test]
 async fn test_health_check_ok() {
     let app = setup_app().await;
-    let resp = app
-        .oneshot(make_request("GET", "/api/health", None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(make_request("GET", "/api/health", None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -397,10 +352,7 @@ async fn test_rate_limit_returns_429_after_burst() {
             .oneshot(make_request(
                 "POST",
                 "/api/auth/login",
-                Some(&format!(
-                    r#"{{"email":"ratelimit{}@test.com","password":"wrong"}}"#,
-                    i
-                )),
+                Some(&format!(r#"{{"email":"ratelimit{}@test.com","password":"wrong"}}"#, i)),
             ))
             .await
             .unwrap();
@@ -408,11 +360,7 @@ async fn test_rate_limit_returns_429_after_burst() {
     }
 
     let resp = app
-        .oneshot(make_request(
-            "POST",
-            "/api/auth/login",
-            Some(r#"{"email":"ratelimit@test.com","password":"wrong"}"#),
-        ))
+        .oneshot(make_request("POST", "/api/auth/login", Some(r#"{"email":"ratelimit@test.com","password":"wrong"}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
@@ -422,33 +370,24 @@ async fn test_rate_limit_returns_429_after_burst() {
 
 #[tokio::test]
 async fn test_crud_ensure_table() {
-    let (app, state) = setup_app_with_models(vec![
-        ingjoo_core::module::ModelDescriptor::new("test_item", "test_items")
-            .required_field("name", ingjoo_core::FieldType::Text),
-    ]).await;
+    let (app, state) =
+        setup_app_with_models(vec![ingjoo_core::module::ModelDescriptor::new("test_item", "test_items")
+            .required_field("name", ingjoo_core::FieldType::Text)])
+        .await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("POST", "/api/data/test_item/ensure", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/test_item/ensure", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 }
 
 #[tokio::test]
 async fn test_crud_model_not_found() {
-    let (app, state) = setup_app_with_models(vec![
-        ingjoo_core::module::ModelDescriptor::new("article", "articles")
-            .required_field("title", ingjoo_core::FieldType::Text),
-    ]).await;
+    let (app, state) = setup_app_with_models(vec![ingjoo_core::module::ModelDescriptor::new("article", "articles")
+        .required_field("title", ingjoo_core::FieldType::Text)])
+    .await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/data/nonexistent", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/data/nonexistent", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
@@ -475,11 +414,7 @@ async fn test_groups_crud_admin() {
     let gid = group["id"].as_str().unwrap();
     assert_eq!(group["name"].as_str().unwrap(), "editors");
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/groups", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/groups", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     let resp = app
@@ -494,16 +429,8 @@ async fn test_groups_crud_admin() {
         .unwrap();
     assert!(resp.status() == StatusCode::OK || resp.status() == StatusCode::NO_CONTENT);
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request(
-            "DELETE",
-            &format!("/api/groups/{}", gid),
-            &admin,
-            None,
-        ))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("DELETE", &format!("/api/groups/{}", gid), &admin, None)).await.unwrap();
     assert!(resp.status() == StatusCode::OK || resp.status() == StatusCode::NO_CONTENT);
 }
 
@@ -524,10 +451,7 @@ async fn test_groups_nonadmin_forbidden() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["access_token"].as_str().unwrap();
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/groups", token, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/groups", token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
@@ -540,29 +464,16 @@ async fn test_settings_crud_admin() {
 
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "PUT",
-            "/api/settings/test.key",
-            &admin,
-            Some(r#"{"value":"test_value"}"#),
-        ))
+        .oneshot(auth_request("PUT", "/api/settings/test.key", &admin, Some(r#"{"value":"test_value"}"#)))
         .await
         .unwrap();
     assert!(resp.status() == StatusCode::OK || resp.status() == StatusCode::NO_CONTENT);
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/settings", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/settings", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let found = json
-        .as_object()
-        .unwrap()
-        .keys()
-        .any(|k| k == "test.key");
+    let found = json.as_object().unwrap().keys().any(|k| k == "test.key");
     assert!(found, "settings list should contain test.key");
 }
 
@@ -584,20 +495,14 @@ async fn test_access_rules_requires_admin() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["access_token"].as_str().unwrap();
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/access", token, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/access", token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
 async fn test_health_has_database_field() {
     let app = setup_app().await;
-    let resp = app
-        .oneshot(make_request("GET", "/api/health", None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(make_request("GET", "/api/health", None)).await.unwrap();
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(json["database"].is_boolean());
@@ -620,20 +525,14 @@ async fn test_crud_model_not_registered() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["access_token"].as_str().unwrap();
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/data/nonexistent_model", token, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/data/nonexistent_model", token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
 async fn test_groups_requires_auth() {
     let app = setup_app().await;
-    let resp = app
-        .oneshot(make_request("GET", "/api/groups", None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(make_request("GET", "/api/groups", None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
 
@@ -641,11 +540,7 @@ async fn test_groups_requires_auth() {
 async fn test_register_missing_email() {
     let app = setup_app().await;
     let resp = app
-        .oneshot(make_request(
-            "POST",
-            "/api/auth/register",
-            Some(r#"{"name":"noemail","password":"pass123"}"#),
-        ))
+        .oneshot(make_request("POST", "/api/auth/register", Some(r#"{"name":"noemail","password":"pass123"}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
@@ -655,11 +550,7 @@ async fn test_register_missing_email() {
 async fn test_login_nonexistent_user() {
     let app = setup_app().await;
     let resp = app
-        .oneshot(make_request(
-            "POST",
-            "/api/auth/login",
-            Some(r#"{"email":"nobody@test.com","password":"anything"}"#),
-        ))
+        .oneshot(make_request("POST", "/api/auth/login", Some(r#"{"email":"nobody@test.com","password":"anything"}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
@@ -668,10 +559,7 @@ async fn test_login_nonexistent_user() {
 #[tokio::test]
 async fn test_invalid_token_rejected() {
     let app = setup_app().await;
-    let resp = app
-        .oneshot(auth_request("GET", "/api/auth/profile", "invalid.jwt.token", None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/auth/profile", "invalid.jwt.token", None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
 
@@ -679,11 +567,7 @@ async fn test_invalid_token_rejected() {
 async fn test_refresh_with_invalid_token() {
     let app = setup_app().await;
     let resp = app
-        .oneshot(make_request(
-            "POST",
-            "/api/auth/refresh",
-            Some(r#"{"refresh_token":"completely-invalid-token"}"#),
-        ))
+        .oneshot(make_request("POST", "/api/auth/refresh", Some(r#"{"refresh_token":"completely-invalid-token"}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
@@ -694,10 +578,7 @@ async fn test_models_list_authenticated() {
     let (app, state) = setup_app_with_state().await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/models", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/models", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -714,12 +595,7 @@ async fn test_menu_crud_admin() {
     // 创建菜单
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "POST",
-            "/api/menus",
-            &admin,
-            Some(r#"{"name":"测试菜单","sequence":10}"#),
-        ))
+        .oneshot(auth_request("POST", "/api/menus", &admin, Some(r#"{"name":"测试菜单","sequence":10}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -729,11 +605,7 @@ async fn test_menu_crud_admin() {
     assert_eq!(menu["name"].as_str().unwrap(), "测试菜单");
 
     // 列出菜单
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/menus", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/menus", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -742,22 +614,14 @@ async fn test_menu_crud_admin() {
     // 更新菜单
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "PUT",
-            &format!("/api/menus/{}", menu_id),
-            &admin,
-            Some(r#"{"name":"更新菜单"}"#),
-        ))
+        .oneshot(auth_request("PUT", &format!("/api/menus/{}", menu_id), &admin, Some(r#"{"name":"更新菜单"}"#)))
         .await
         .unwrap();
     assert!(resp.status() == StatusCode::OK);
 
     // 删除菜单
-    let resp = app
-        .clone()
-        .oneshot(auth_request("DELETE", &format!("/api/menus/{}", menu_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("DELETE", &format!("/api/menus/{}", menu_id), &admin, None)).await.unwrap();
     assert!(resp.status() == StatusCode::NO_CONTENT);
 }
 
@@ -766,11 +630,7 @@ async fn test_menu_list_authenticated() {
     let (app, state) = setup_app_with_state().await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/menus", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/menus", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -793,10 +653,7 @@ async fn test_menu_nonadmin_forbidden() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["access_token"].as_str().unwrap();
 
-    let resp = app
-        .oneshot(auth_request("POST", "/api/menus", token, Some(r#"{"name":"x"}"#)))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("POST", "/api/menus", token, Some(r#"{"name":"x"}"#))).await.unwrap();
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
@@ -826,30 +683,20 @@ async fn test_view_crud_admin() {
     assert_eq!(view["type"].as_str().unwrap(), "form");
 
     // 列出视图
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/views", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/views", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     // 获取单个视图
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", &format!("/api/views/{}", view_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("GET", &format!("/api/views/{}", view_id), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let fetched: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(fetched["id"].as_str().unwrap(), view_id);
 
     // 删除视图
-    let resp = app
-        .clone()
-        .oneshot(auth_request("DELETE", &format!("/api/views/{}", view_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("DELETE", &format!("/api/views/{}", view_id), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 }
 
@@ -878,19 +725,12 @@ async fn test_action_crud_admin() {
     assert_eq!(action["name"].as_str().unwrap(), "产品管理");
 
     // 列出动作
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/actions", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/actions", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     // 获取单个动作（含关联视图）
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", &format!("/api/actions/{}", action_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("GET", &format!("/api/actions/{}", action_id), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let fetched: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -912,11 +752,7 @@ async fn test_schedule_list_admin() {
     let (app, state) = setup_app_with_state().await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/schedules", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/schedules", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -939,10 +775,7 @@ async fn test_schedule_nonadmin_forbidden() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["access_token"].as_str().unwrap();
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/schedules", token, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/schedules", token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
@@ -951,10 +784,7 @@ async fn test_schedule_nonadmin_forbidden() {
 #[tokio::test]
 async fn test_record_rules_requires_auth() {
     let app = setup_app().await;
-    let resp = app
-        .oneshot(make_request("GET", "/api/rules", None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(make_request("GET", "/api/rules", None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
 
@@ -976,10 +806,7 @@ async fn test_model_access_nonadmin_forbidden() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["access_token"].as_str().unwrap();
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/access", token, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/access", token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
@@ -999,10 +826,7 @@ async fn test_record_rules_nonadmin_forbidden() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["access_token"].as_str().unwrap();
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/rules", token, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/rules", token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
@@ -1119,22 +943,15 @@ async fn test_model_access_crud_admin() {
     assert_eq!(json["perm_read"], true);
 
     // LIST
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/access", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/access", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(!list.as_array().unwrap().is_empty());
 
     // GET
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", &format!("/api/access/{}", access_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("GET", &format!("/api/access/{}", access_id), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let got: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -1160,19 +977,13 @@ async fn test_model_access_crud_admin() {
     assert_eq!(updated["perm_write"], true);
 
     // DELETE
-    let resp = app
-        .clone()
-        .oneshot(auth_request("DELETE", &format!("/api/access/{}", access_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("DELETE", &format!("/api/access/{}", access_id), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // 确认已删除
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", &format!("/api/access/{}", access_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("GET", &format!("/api/access/{}", access_id), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
@@ -1217,22 +1028,15 @@ async fn test_record_rules_crud_admin() {
     assert_eq!(json["domain"], "[]");
 
     // LIST
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/rules", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/rules", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(!list.as_array().unwrap().is_empty());
 
     // GET
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", &format!("/api/rules/{}", rule_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("GET", &format!("/api/rules/{}", rule_id), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let got: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -1259,19 +1063,13 @@ async fn test_record_rules_crud_admin() {
     assert_eq!(updated["perm_write"], true);
 
     // DELETE
-    let resp = app
-        .clone()
-        .oneshot(auth_request("DELETE", &format!("/api/rules/{}", rule_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("DELETE", &format!("/api/rules/{}", rule_id), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // 确认已删除
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", &format!("/api/rules/{}", rule_id), &admin, None))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("GET", &format!("/api/rules/{}", rule_id), &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
@@ -1305,22 +1103,13 @@ async fn test_generic_crud_full_flow() {
     let admin = get_admin_token(&app, &state).await;
 
     // 先确保表存在
-    let resp = app
-        .clone()
-        .oneshot(auth_request("POST", "/api/data/test_item/ensure", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/test_item/ensure", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // CREATE
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "POST",
-            "/api/data/test_item",
-            &admin,
-            Some(r#"{"name":"item1","value":42}"#),
-        ))
+        .oneshot(auth_request("POST", "/api/data/test_item", &admin, Some(r#"{"name":"item1","value":42}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -1331,11 +1120,7 @@ async fn test_generic_crud_full_flow() {
     assert_eq!(created["value"], 42);
 
     // LIST
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/data/test_item", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/data/test_item", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -1390,11 +1175,7 @@ async fn test_generic_crud_full_flow() {
 
 /// 创建带 PluginManager 的测试状态
 async fn setup_app_with_plugins() -> (Router, Arc<AppState>) {
-    let tmp = tempfile::Builder::new()
-        .prefix("ingjoo_plugin_test_")
-        .suffix(".db")
-        .tempfile()
-        .unwrap();
+    let tmp = tempfile::Builder::new().prefix("ingjoo_plugin_test_").suffix(".db").tempfile().unwrap();
     let db_path = tmp.path().to_str().unwrap().to_string();
     std::mem::forget(tmp);
 
@@ -1407,8 +1188,15 @@ async fn setup_app_with_plugins() -> (Router, Arc<AppState>) {
     let registry = Arc::new(ModelRegistry::new());
     let plugin_manager = Arc::new(PluginManager::new(registry.clone(), Arc::new(pool.clone()), dialect));
     let state = Arc::new(
-        AppState::new(store, auth, registry, Arc::new(pool.clone()), dialect, Arc::new(DatabaseManager::new(pool.clone(), dialect)))
-            .with_plugin_manager(plugin_manager),
+        AppState::new(
+            store,
+            auth,
+            registry,
+            Arc::new(pool.clone()),
+            dialect,
+            Arc::new(DatabaseManager::new(pool.clone(), dialect)),
+        )
+        .with_plugin_manager(plugin_manager),
     );
     let router = ingjoo_infra::router::base_router(state.clone());
     (router, state)
@@ -1441,10 +1229,7 @@ async fn test_plugin_list_empty() {
     let (app, state) = setup_app_with_plugins().await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/admin/plugins", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/admin/plugins", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -1464,10 +1249,7 @@ async fn test_plugin_load_from_dir() {
             "POST",
             "/api/admin/plugins/load",
             &admin,
-            Some(&format!(
-                r#"{{"plugins_dir":"{}"}}"#,
-                plugin_dir.path().display()
-            )),
+            Some(&format!(r#"{{"plugins_dir":"{}"}}"#, plugin_dir.path().display())),
         ))
         .await
         .unwrap();
@@ -1478,31 +1260,19 @@ async fn test_plugin_load_from_dir() {
     assert!(loaded.iter().any(|v| v.as_str() == Some("test_plugin")));
 
     // 插件列表中应包含 test_plugin
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/admin/plugins", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/admin/plugins", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let names: Vec<&str> = list.as_array().unwrap().iter()
-        .filter_map(|p| p["name"].as_str())
-        .collect();
+    let names: Vec<&str> = list.as_array().unwrap().iter().filter_map(|p| p["name"].as_str()).collect();
     assert!(names.contains(&"test_plugin"));
 
     // 模型注册表中应包含 test_item
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/models", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/models", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let models: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let model_names: Vec<&str> = models.as_array().unwrap().iter()
-        .filter_map(|m| m["name"].as_str())
-        .collect();
+    let model_names: Vec<&str> = models.as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).collect();
     assert!(model_names.contains(&"test_item"));
 }
 
@@ -1519,51 +1289,30 @@ async fn test_plugin_unload() {
             "POST",
             "/api/admin/plugins/load",
             &admin,
-            Some(&format!(
-                r#"{{"plugins_dir":"{}"}}"#,
-                plugin_dir.path().display()
-            )),
+            Some(&format!(r#"{{"plugins_dir":"{}"}}"#, plugin_dir.path().display())),
         ))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     // 卸载
-    let resp = app
-        .clone()
-        .oneshot(auth_request(
-            "POST",
-            "/api/admin/plugins/test_plugin/unload",
-            &admin,
-            None,
-        ))
-        .await
-        .unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("POST", "/api/admin/plugins/test_plugin/unload", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
     // 列表应为空
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/admin/plugins", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/admin/plugins", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(list.as_array().unwrap().is_empty());
 
     // 模型应从注册表移除
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/models", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/models", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let models: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let model_names: Vec<&str> = models.as_array().unwrap().iter()
-        .filter_map(|m| m["name"].as_str())
-        .collect();
+    let model_names: Vec<&str> = models.as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).collect();
     assert!(!model_names.contains(&"test_item"));
 }
 
@@ -1585,10 +1334,7 @@ async fn test_plugin_requires_admin() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let token = json["access_token"].as_str().unwrap();
 
-    let resp = app
-        .oneshot(auth_request("GET", "/api/admin/plugins", token, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/admin/plugins", token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
@@ -1633,16 +1379,14 @@ async fn test_collection_isolation_crud_filter() {
     let (app, state) = setup_app_with_models(vec![collection_test_model()]).await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"doc_a1","collection_id":"col_a","status":"published"}"#),
         ))
         .await
@@ -1650,7 +1394,9 @@ async fn test_collection_isolation_crud_filter() {
 
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"doc_a2","collection_id":"col_a","status":"draft"}"#),
         ))
         .await
@@ -1658,7 +1404,9 @@ async fn test_collection_isolation_crud_filter() {
 
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"doc_b1","collection_id":"col_b","status":"published"}"#),
         ))
         .await
@@ -1667,12 +1415,7 @@ async fn test_collection_isolation_crud_filter() {
     let domain_filter = simple_url_encode(r#"["collection_id", "=", "col_a"]"#);
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "GET",
-            &format!("/api/data/col_item?domain={}", domain_filter),
-            &admin,
-            None,
-        ))
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_filter), &admin, None))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -1691,24 +1434,24 @@ async fn test_collection_isolation_cross_collection_denied() {
     let (app, state) = setup_app_with_models(vec![collection_test_model()]).await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // 在 col_a 和 col_b 各创建一条记录
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"doc_a","collection_id":"col_a","status":"published"}"#),
         ))
         .await
         .unwrap();
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"secret_doc","collection_id":"col_b","status":"published"}"#),
         ))
         .await
@@ -1718,12 +1461,7 @@ async fn test_collection_isolation_cross_collection_denied() {
     let domain_filter = simple_url_encode(r#"["collection_id", "=", "col_a"]"#);
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "GET",
-            &format!("/api/data/col_item?domain={}", domain_filter),
-            &admin,
-            None,
-        ))
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_filter), &admin, None))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -1741,16 +1479,14 @@ async fn test_collection_isolation_with_domain_dsl() {
     let (app, state) = setup_app_with_models(vec![collection_test_model()]).await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"item1","collection_id":"col1","status":"active"}"#),
         ))
         .await
@@ -1758,7 +1494,9 @@ async fn test_collection_isolation_with_domain_dsl() {
 
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"item2","collection_id":"col2","status":"active"}"#),
         ))
         .await
@@ -1766,24 +1504,19 @@ async fn test_collection_isolation_with_domain_dsl() {
 
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"item3","collection_id":"col1","status":"inactive"}"#),
         ))
         .await
         .unwrap();
 
     // 使用隐式 AND: [cond1, cond2] — collection_id=col1 AND status=active
-    let domain_filter = simple_url_encode(
-        r#"[["collection_id", "=", "col1"], ["status", "=", "active"]]"#,
-    );
+    let domain_filter = simple_url_encode(r#"[["collection_id", "=", "col1"], ["status", "=", "active"]]"#);
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "GET",
-            &format!("/api/data/col_item?domain={}", domain_filter),
-            &admin,
-            None,
-        ))
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_filter), &admin, None))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -1796,14 +1529,18 @@ async fn test_collection_isolation_with_domain_dsl() {
 
 #[tokio::test]
 async fn test_collection_isolation_security_policy_layer3() {
-    use ingjoo_security::{SecurityBuilder, ModelAccess, AccessOp};
+    use ingjoo_security::{AccessOp, ModelAccess, SecurityBuilder};
 
     let mut builder = SecurityBuilder::new();
     builder.policy().add_model_access(ModelAccess {
         model: "col_item".to_string(),
         role: "tenant_admin".to_string(),
-        read: true, write: true, create: true, delete: true,
-        import: false, export: false,
+        read: true,
+        write: true,
+        create: true,
+        delete: true,
+        import: false,
+        export: false,
     });
     let policy = builder.build();
 
@@ -1820,22 +1557,20 @@ async fn test_collection_isolation_security_policy_layer3() {
 
 #[tokio::test]
 async fn test_collection_isolation_generic_db_filter() {
-    use ingjoo_infra::db::generic::GenericDb;
     use ingjoo_core::query::domain::SqlCondition;
+    use ingjoo_infra::db::generic::GenericDb;
 
     let (app, state) = setup_app_with_models(vec![collection_test_model()]).await;
     let admin = get_admin_token(&app, &state).await;
 
-    let resp = app
-        .clone()
-        .oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"g1","collection_id":"tenant_x"}"#),
         ))
         .await
@@ -1843,7 +1578,9 @@ async fn test_collection_isolation_generic_db_filter() {
 
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"g2","collection_id":"tenant_y"}"#),
         ))
         .await
@@ -1851,7 +1588,9 @@ async fn test_collection_isolation_generic_db_filter() {
 
     app.clone()
         .oneshot(auth_request(
-            "POST", "/api/data/col_item", &admin,
+            "POST",
+            "/api/data/col_item",
+            &admin,
             Some(r#"{"name":"g3","collection_id":"tenant_x"}"#),
         ))
         .await
@@ -1860,10 +1599,7 @@ async fn test_collection_isolation_generic_db_filter() {
     let model = collection_test_model();
     let generic = GenericDb::new(&state.pool, &state.dialect);
 
-    let col_filter = SqlCondition {
-        clause: "collection_id = ?".to_string(),
-        params: vec!["tenant_x".to_string()],
-    };
+    let col_filter = SqlCondition { clause: "collection_id = ?".to_string(), params: vec!["tenant_x".to_string()] };
     let result = generic.generic_list_with_filter(&model, None, Some(&col_filter), 50, 0).await.unwrap();
     assert_eq!(result.items.len(), 2);
     assert_eq!(result.total, 2);
@@ -1871,10 +1607,7 @@ async fn test_collection_isolation_generic_db_filter() {
         assert_eq!(item["collection_id"].as_str().unwrap(), "tenant_x");
     }
 
-    let empty_col_filter = SqlCondition {
-        clause: "1=0".to_string(),
-        params: vec![],
-    };
+    let empty_col_filter = SqlCondition { clause: "1=0".to_string(), params: vec![] };
     let empty_result = generic.generic_list_with_filter(&model, None, Some(&empty_col_filter), 50, 0).await.unwrap();
     assert_eq!(empty_result.items.len(), 0);
 }
@@ -1885,10 +1618,7 @@ async fn test_collection_isolation_generic_db_filter() {
 #[tokio::test]
 async fn test_health_has_pool_stats() {
     let app = setup_app().await;
-    let resp = app
-        .oneshot(make_request("GET", "/api/health", None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(make_request("GET", "/api/health", None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -1931,12 +1661,7 @@ async fn test_profile_update() {
     // 更新用户名
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "PUT",
-            "/api/auth/profile",
-            token,
-            Some(r#"{"name":"Updated Name"}"#),
-        ))
+        .oneshot(auth_request("PUT", "/api/auth/profile", token, Some(r#"{"name":"Updated Name"}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -1945,10 +1670,7 @@ async fn test_profile_update() {
     assert_eq!(updated["name"].as_str().unwrap(), "Updated Name");
 
     // GET 验证更新持久化
-    let resp = app
-        .oneshot(auth_request("GET", "/api/auth/profile", token, None))
-        .await
-        .unwrap();
+    let resp = app.oneshot(auth_request("GET", "/api/auth/profile", token, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let profile: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -1958,30 +1680,20 @@ async fn test_profile_update() {
 /// 3. 验证动态模型记录的更新操作
 #[tokio::test]
 async fn test_crud_update_record() {
-    let (app, state) = setup_app_with_models(vec![
-        ingjoo_core::module::ModelDescriptor::new("upd_item", "upd_items")
-            .required_field("name", ingjoo_core::FieldType::Text)
-            .field("status", ingjoo_core::FieldType::Text),
-    ]).await;
+    let (app, state) = setup_app_with_models(vec![ingjoo_core::module::ModelDescriptor::new("upd_item", "upd_items")
+        .required_field("name", ingjoo_core::FieldType::Text)
+        .field("status", ingjoo_core::FieldType::Text)])
+    .await;
     let admin = get_admin_token(&app, &state).await;
 
     // 确保表存在
-    let resp = app
-        .clone()
-        .oneshot(auth_request("POST", "/api/data/upd_item/ensure", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/upd_item/ensure", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // 创建记录
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "POST",
-            "/api/data/upd_item",
-            &admin,
-            Some(r#"{"name":"item1","status":"active"}"#),
-        ))
+        .oneshot(auth_request("POST", "/api/data/upd_item", &admin, Some(r#"{"name":"item1","status":"active"}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -2020,29 +1732,19 @@ async fn test_crud_update_record() {
 /// 4. 验证动态模型记录的删除操作
 #[tokio::test]
 async fn test_crud_delete_record() {
-    let (app, state) = setup_app_with_models(vec![
-        ingjoo_core::module::ModelDescriptor::new("del_item", "del_items")
-            .required_field("name", ingjoo_core::FieldType::Text),
-    ]).await;
+    let (app, state) = setup_app_with_models(vec![ingjoo_core::module::ModelDescriptor::new("del_item", "del_items")
+        .required_field("name", ingjoo_core::FieldType::Text)])
+    .await;
     let admin = get_admin_token(&app, &state).await;
 
     // 确保表存在
-    let resp = app
-        .clone()
-        .oneshot(auth_request("POST", "/api/data/del_item/ensure", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/del_item/ensure", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // 创建记录
     let resp = app
         .clone()
-        .oneshot(auth_request(
-            "POST",
-            "/api/data/del_item",
-            &admin,
-            Some(r#"{"name":"to_delete"}"#),
-        ))
+        .oneshot(auth_request("POST", "/api/data/del_item", &admin, Some(r#"{"name":"to_delete"}"#)))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -2136,11 +1838,7 @@ async fn test_rate_limit_protected_route() {
     let mut got_429 = false;
     // 受保护路由有 30 token 限制，发送 40+ 请求触发限流
     for _ in 0..45 {
-        let resp = app
-            .clone()
-            .oneshot(auth_request("GET", "/api/models", &admin, None))
-            .await
-            .unwrap();
+        let resp = app.clone().oneshot(auth_request("GET", "/api/models", &admin, None)).await.unwrap();
         if resp.status() == StatusCode::TOO_MANY_REQUESTS {
             got_429 = true;
             break;
@@ -2175,11 +1873,7 @@ async fn test_schedule_crud_full_flow() {
     assert_eq!(created["job_name"].as_str().unwrap(), "test_job");
 
     // 列出调度任务，验证创建成功
-    let resp = app
-        .clone()
-        .oneshot(auth_request("GET", "/api/schedules", &admin, None))
-        .await
-        .unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/schedules", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
     let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -2266,34 +1960,46 @@ async fn test_cache_scope_invalidation() {
 
 #[tokio::test]
 async fn test_search_returns_matching_records() {
-    let (app, state) = setup_app_with_models(vec![
-        ingjoo_core::module::ModelDescriptor::new("search_article", "search_articles")
+    let (app, state) =
+        setup_app_with_models(vec![ingjoo_core::module::ModelDescriptor::new("search_article", "search_articles")
             .required_field("title", ingjoo_core::FieldType::Text)
-            .field("body", ingjoo_core::FieldType::Text),
-    ]).await;
+            .field("body", ingjoo_core::FieldType::Text)])
+        .await;
     let admin = get_admin_token(&app, &state).await;
 
     // ensure 表
-    let resp = app.clone().oneshot(auth_request("POST", "/api/data/search_article/ensure", &admin, None)).await.unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("POST", "/api/data/search_article/ensure", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // 创建两条记录
-    let resp = app.clone().oneshot(auth_request(
-        "POST", "/api/data/search_article",
-        &admin, Some(r#"{"title":"Rust 编程入门","body":"Rust 是一门系统级编程语言"}"#),
-    )).await.unwrap();
+    let resp = app
+        .clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/search_article",
+            &admin,
+            Some(r#"{"title":"Rust 编程入门","body":"Rust 是一门系统级编程语言"}"#),
+        ))
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
 
-    let resp = app.clone().oneshot(auth_request(
-        "POST", "/api/data/search_article",
-        &admin, Some(r#"{"title":"Python 数据分析","body":"Python 适合数据处理"}"#),
-    )).await.unwrap();
+    let resp = app
+        .clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/search_article",
+            &admin,
+            Some(r#"{"title":"Python 数据分析","body":"Python 适合数据处理"}"#),
+        ))
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
 
     // 搜索 "Rust"
-    let resp = app.clone().oneshot(auth_request(
-        "GET", "/api/data/search_article/search?q=Rust", &admin, None,
-    )).await.unwrap();
+    let resp =
+        app.clone().oneshot(auth_request("GET", "/api/data/search_article/search?q=Rust", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -2302,9 +2008,11 @@ async fn test_search_returns_matching_records() {
     assert!(results[0]["title"].as_str().unwrap().contains("Rust"));
 
     // 搜索 "编程" — 匹配第一条的 title
-    let resp = app.clone().oneshot(auth_request(
-        "GET", "/api/data/search_article/search?q=%E7%BC%96%E7%A8%8B", &admin, None,
-    )).await.unwrap();
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/data/search_article/search?q=%E7%BC%96%E7%A8%8B", &admin, None))
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -2313,23 +2021,25 @@ async fn test_search_returns_matching_records() {
 
 #[tokio::test]
 async fn test_search_no_match_returns_empty() {
-    let (app, state) = setup_app_with_models(vec![
-        ingjoo_core::module::ModelDescriptor::new("search_empty", "search_empty_table")
-            .required_field("title", ingjoo_core::FieldType::Text),
-    ]).await;
+    let (app, state) =
+        setup_app_with_models(vec![ingjoo_core::module::ModelDescriptor::new("search_empty", "search_empty_table")
+            .required_field("title", ingjoo_core::FieldType::Text)])
+        .await;
     let admin = get_admin_token(&app, &state).await;
 
     // ensure + 创建一条
     app.clone().oneshot(auth_request("POST", "/api/data/search_empty/ensure", &admin, None)).await.unwrap();
-    app.clone().oneshot(auth_request(
-        "POST", "/api/data/search_empty",
-        &admin, Some(r#"{"title":"hello world"}"#),
-    )).await.unwrap();
+    app.clone()
+        .oneshot(auth_request("POST", "/api/data/search_empty", &admin, Some(r#"{"title":"hello world"}"#)))
+        .await
+        .unwrap();
 
     // 搜索不存在的关键词
-    let resp = app.clone().oneshot(auth_request(
-        "GET", "/api/data/search_empty/search?q=nonexistent_keyword_xyz", &admin, None,
-    )).await.unwrap();
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/data/search_empty/search?q=nonexistent_keyword_xyz", &admin, None))
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -2339,16 +2049,284 @@ async fn test_search_no_match_returns_empty() {
 
 #[tokio::test]
 async fn test_search_empty_query_returns_400() {
-    let (app, state) = setup_app_with_models(vec![
-        ingjoo_core::module::ModelDescriptor::new("search_bad", "search_bad_table")
-            .required_field("title", ingjoo_core::FieldType::Text),
-    ]).await;
+    let (app, state) =
+        setup_app_with_models(vec![ingjoo_core::module::ModelDescriptor::new("search_bad", "search_bad_table")
+            .required_field("title", ingjoo_core::FieldType::Text)])
+        .await;
     let admin = get_admin_token(&app, &state).await;
 
     app.clone().oneshot(auth_request("POST", "/api/data/search_bad/ensure", &admin, None)).await.unwrap();
 
-    let resp = app.clone().oneshot(auth_request(
-        "GET", "/api/data/search_bad/search?q=", &admin, None,
-    )).await.unwrap();
+    let resp = app.clone().oneshot(auth_request("GET", "/api/data/search_bad/search?q=", &admin, None)).await.unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_healthz_liveness() {
+    let app = setup_app().await;
+    let resp = app.clone().oneshot(make_request("GET", "/healthz", None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_readyz_readiness() {
+    let app = setup_app().await;
+    let resp = app.clone().oneshot(make_request("GET", "/readyz", None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "ready");
+}
+
+#[tokio::test]
+async fn test_auth_me_returns_current_user() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("GET", "/api/auth/me", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["email"].as_str().unwrap(), "admin@test.com");
+    assert_eq!(json["name"].as_str().unwrap(), "admin");
+}
+
+#[tokio::test]
+async fn test_auth_logout_with_refresh_token() {
+    let app = setup_app().await;
+
+    let resp = app
+        .clone()
+        .oneshot(make_request(
+            "POST",
+            "/api/auth/register",
+            Some(r#"{"email":"logout@test.com","name":"logoutuser","password":"pass123456"}"#),
+        ))
+        .await
+        .unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let refresh_token = json["refresh_token"].as_str().unwrap();
+
+    let resp = app
+        .clone()
+        .oneshot(make_request("POST", "/api/auth/logout", Some(&format!(r#"{{"refresh_token":"{}"}}"#, refresh_token))))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    let resp = app
+        .clone()
+        .oneshot(make_request("POST", "/api/auth/logout", Some(&format!(r#"{{"refresh_token":"{}"}}"#, refresh_token))))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_auth_change_password() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/auth/change-password",
+            &admin,
+            Some(r#"{"current_password":"adminpass123","new_password":"newpass456"}"#),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    let resp = app
+        .clone()
+        .oneshot(make_request("POST", "/api/auth/login", Some(r#"{"email":"admin@test.com","password":"newpass456"}"#)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_auth_change_password_wrong_current() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/auth/change-password",
+            &admin,
+            Some(r#"{"current_password":"wrongpassword","new_password":"newpass456"}"#),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_auth_preferences_get_and_update() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("GET", "/api/auth/preferences", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let prefs: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(prefs.is_object());
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request(
+            "PUT",
+            "/api/auth/preferences",
+            &admin,
+            Some(r#"{"language":"zh","theme":"dark","notifications_enabled":true}"#),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let updated: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(updated["language"].as_str().unwrap(), "zh");
+    assert_eq!(updated["theme"].as_str().unwrap(), "dark");
+}
+
+#[tokio::test]
+async fn test_settings_definitions_requires_admin() {
+    let app = setup_app().await;
+    let user_token = get_user_token(&app).await;
+
+    let resp = app.clone().oneshot(auth_request("GET", "/api/settings/definitions", &user_token, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_settings_definitions_admin_returns_ok() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("GET", "/api/settings/definitions", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let defs: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(defs.is_array());
+}
+
+#[tokio::test]
+async fn test_dashboard_stats_authenticated() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("GET", "/api/dashboard/stats", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["total_users"].is_number());
+    assert!(json["active_users_24h"].is_number());
+    assert!(json["total_records"].is_number());
+}
+
+#[tokio::test]
+async fn test_dashboard_stats_requires_auth() {
+    let app = setup_app().await;
+    let resp = app.clone().oneshot(make_request("GET", "/api/dashboard/stats", None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_notifications_list_authenticated() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("GET", "/api/notifications", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["items"].is_array());
+}
+
+#[tokio::test]
+async fn test_notifications_unread_count_authenticated() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("GET", "/api/notifications/unread-count", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["count"].is_number());
+}
+
+#[tokio::test]
+async fn test_notifications_mark_all_read() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp =
+        app.clone().oneshot(auth_request("POST", "/api/notifications/mark-all-read", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["updated"].is_number());
+}
+
+#[tokio::test]
+async fn test_audit_log_admin() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("GET", "/api/admin/audit-log", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["items"].is_array());
+    assert!(json["total"].is_number());
+}
+
+#[tokio::test]
+async fn test_global_search_authenticated() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request("POST", "/api/search", &admin, Some(r#"{"text":"test query"}"#)))
+        .await
+        .unwrap();
+    assert!(resp.status() == StatusCode::OK || resp.status() == StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn test_global_search_empty_query_returns_400() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp =
+        app.clone().oneshot(auth_request("POST", "/api/search", &admin, Some(r#"{"text":"  "}"#))).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_search_rebuild_index_admin() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp =
+        app.clone().oneshot(auth_request("POST", "/api/admin/search/rebuild/test_model", &admin, None)).await.unwrap();
+    assert!(resp.status() == StatusCode::NO_CONTENT || resp.status() == StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn test_users_search_authenticated() {
+    let (app, state) = setup_app_with_state().await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("GET", "/api/users/search?q=admin", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let results: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(results.is_array());
 }

@@ -28,9 +28,7 @@ pub struct VerifyCaptchaResponse {
 
 /// 计算过期时间（当前时间 + 5 分钟），返回 RFC 3339 格式字符串
 fn expires_in_5_minutes() -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     let secs = now.as_secs() + 5 * 60;
     format_timestamp(secs as i64)
 }
@@ -70,10 +68,7 @@ fn format_timestamp(secs: i64) -> String {
     }
     let day = remaining_days + 1;
 
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        year, month, day, hour, minute, second
-    )
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", year, month, day, hour, minute, second)
 }
 
 fn is_leap_year(year: i64) -> bool {
@@ -118,21 +113,14 @@ fn parse_timestamp(s: &str) -> Option<i64> {
 pub async fn generate_captcha(
     State(state): State<Arc<AppState>>,
 ) -> Result<(StatusCode, Json<CaptchaResponse>), AppError> {
-    let (answer, data_uri) = CaptchaGenerator::generate()
-        .map_err(AppError::Internal)?;
+    let (answer, data_uri) = CaptchaGenerator::generate().map_err(AppError::Internal)?;
 
     let id = uuid::Uuid::new_v4().to_string();
     let expires_at = expires_in_5_minutes();
 
-    state
-        .store
-        .create_captcha(&id, &answer, &expires_at)
-        .await?;
+    state.store.create_captcha(&id, &answer, &expires_at).await?;
 
-    Ok((
-        StatusCode::OK,
-        Json(CaptchaResponse { id, image: data_uri }),
-    ))
+    Ok((StatusCode::OK, Json(CaptchaResponse { id, image: data_uri })))
 }
 
 /// POST /api/captcha — 验证验证码
@@ -140,22 +128,17 @@ pub async fn verify_captcha(
     State(state): State<Arc<AppState>>,
     Json(req): Json<VerifyCaptchaRequest>,
 ) -> Result<Json<VerifyCaptchaResponse>, AppError> {
-    let (answer, used, expires_at) = state
-        .store
-        .get_captcha(&req.id)
-        .await?
-        .ok_or_else(|| AppError::BadRequest("验证码不存在或已过期".into()))?;
+    let (answer, used, expires_at) =
+        state.store.get_captcha(&req.id).await?.ok_or_else(|| AppError::BadRequest("验证码不存在或已过期".into()))?;
 
     if used == 1 {
         return Err(AppError::BadRequest("验证码已被使用".into()));
     }
 
-    let now_secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-    let expires_secs = parse_timestamp(&expires_at)
-        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("验证码时间格式错误")))?;
+    let now_secs =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
+    let expires_secs =
+        parse_timestamp(&expires_at).ok_or_else(|| AppError::Internal(anyhow::anyhow!("验证码时间格式错误")))?;
     if now_secs > expires_secs {
         return Err(AppError::BadRequest("验证码已过期".into()));
     }

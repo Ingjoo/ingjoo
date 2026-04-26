@@ -19,14 +19,7 @@ use crate::AppState;
 
 async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
     if !user.is_admin() {
-        let _ = store.create_audit_log(
-            Some(&user.user_id),
-            "admin_required_denied",
-            "menus",
-            None,
-            None,
-            None,
-        ).await;
+        let _ = store.create_audit_log(Some(&user.user_id), "admin_required_denied", "menus", None, None, None).await;
         return Err(AppError::Forbidden("需要管理员权限".into()));
     }
     Ok(())
@@ -45,17 +38,7 @@ fn row_to_menu(row: &sqlx::any::AnyRow) -> MenuDescriptor {
     let group_ids_str: String = row.try_get("group_ids").ok().unwrap_or_default();
     let group_ids: Vec<String> = serde_json::from_str(&group_ids_str).unwrap_or_default();
 
-    MenuDescriptor {
-        id,
-        name,
-        parent_id,
-        sequence,
-        action_id,
-        web_icon,
-        active: true,
-        group_ids,
-        children: vec![],
-    }
+    MenuDescriptor { id, name, parent_id, sequence, action_id, web_icon, active: true, group_ids, children: vec![] }
 }
 
 // ==================== 公开 API ====================
@@ -70,10 +53,10 @@ pub async fn list_menus(
         &format!("SELECT id, name, parent_id, sequence, action_id, web_icon, group_ids FROM ir_menu WHERE active = {} ORDER BY sequence",
             resolved_db.dialect.bool_true()),
     );
-    let rows = sqlx::query(&sql)
-        .fetch_all(&*resolved_db.pool)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询菜单失败: {}", e)))?;
+    let rows = sqlx::query(&sql).fetch_all(&*resolved_db.pool).await.map_err(|e| {
+        tracing::error!("查询菜单失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("查询菜单失败"))
+    })?;
 
     // 构建描述符列表
     let all_menus: Vec<MenuDescriptor> = rows.iter().map(row_to_menu).collect();
@@ -117,7 +100,10 @@ pub async fn create_menu(
         .bind(&group_ids_json)
         .execute(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("创建菜单失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("创建菜单失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("创建菜单失败"))
+        })?;
 
     let desc = MenuDescriptor {
         id,
@@ -145,14 +131,17 @@ pub async fn update_menu(
     require_admin(&current_user, &state.store).await?;
 
     // 查询现有记录
-    let sql = resolved_db.dialect.prepare(
-        "SELECT id, name, parent_id, sequence, action_id, web_icon, group_ids FROM ir_menu WHERE id = ?",
-    );
+    let sql = resolved_db
+        .dialect
+        .prepare("SELECT id, name, parent_id, sequence, action_id, web_icon, group_ids FROM ir_menu WHERE id = ?");
     let row = sqlx::query(&sql)
         .bind(&id)
         .fetch_optional(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询菜单失败: {}", e)))?
+        .map_err(|e| {
+            tracing::error!("查询菜单失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("查询菜单失败"))
+        })?
         .ok_or_else(|| AppError::NotFound(format!("菜单 '{}' 不存在", id)))?;
 
     let existing = row_to_menu(&row);
@@ -188,7 +177,10 @@ pub async fn update_menu(
         .bind(&id)
         .execute(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("更新菜单失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("更新菜单失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("更新菜单失败"))
+        })?;
 
     Ok(Json(MenuDescriptor {
         id,
@@ -213,11 +205,10 @@ pub async fn delete_menu(
     require_admin(&current_user, &state.store).await?;
 
     let sql = resolved_db.dialect.prepare("DELETE FROM ir_menu WHERE id = ?");
-    let result = sqlx::query(&sql)
-        .bind(&id)
-        .execute(&*resolved_db.pool)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("删除菜单失败: {}", e)))?;
+    let result = sqlx::query(&sql).bind(&id).execute(&*resolved_db.pool).await.map_err(|e| {
+        tracing::error!("删除菜单失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("删除菜单失败"))
+    })?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound(format!("菜单 '{}' 不存在", id)));

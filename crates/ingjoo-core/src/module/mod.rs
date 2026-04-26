@@ -4,9 +4,9 @@ pub mod metadata;
 pub mod plugin;
 pub mod registry;
 
-pub use registry::{ModelDescriptor, FieldDescriptor, FieldType, IdType, ModelRegistry};
-pub use metadata::{ViewType, ActionType, MenuDescriptor, ViewDescriptor, ActionDescriptor};
-pub use plugin::{PluginManifest, PluginInfo, PluginState};
+pub use metadata::{ActionDescriptor, ActionType, MenuDescriptor, ViewDescriptor, ViewType};
+pub use plugin::{PluginInfo, PluginManifest, PluginState};
+pub use registry::{FieldDescriptor, FieldType, IdType, ModelDescriptor, ModelRegistry};
 
 /// 模块路由注册 — 每个业务模块实现此 trait 以声明 HTTP 路由
 pub trait ModuleRoutes: Send + Sync {

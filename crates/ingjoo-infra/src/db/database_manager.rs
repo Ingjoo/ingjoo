@@ -7,6 +7,9 @@ use tokio::sync::RwLock;
 use ingjoo_core::pool::{connect_pool_with_options, Pool};
 use ingjoo_core::Dialect;
 
+#[cfg(feature = "db")]
+use sqlx::Row;
+
 const DEFAULT_DB_NAME: &str = "main";
 
 /// 多数据库连接池管理器
@@ -91,10 +94,102 @@ impl DatabaseManager {
         Ok(())
     }
 
-    /// 返回所有当前激活的非默认数据库名称
+    /// 返回所有已存在的非默认数据库名称
+    ///
+    /// 从文件系统（SQLite）或 pg_catalog（PostgreSQL）发现数据库，
+    /// 不仅仅是内存中已注册的连接池。
     pub async fn list_databases(&self) -> Vec<String> {
+        match &self.base_url {
+            None => {
+                // 单数据库模式，无额外数据库
+                Vec::new()
+            }
+            Some(base_url) => {
+                if base_url.starts_with("sqlite:") {
+                    self.list_sqlite_databases(base_url)
+                } else {
+                    // PostgreSQL: 查询 pg_database
+                    self.list_postgres_databases().await
+                }
+            }
+        }
+    }
+
+    /// 扫描 SQLite 目录发现 .db 文件
+    fn list_sqlite_databases(&self, base_url: &str) -> Vec<String> {
+        let dir = base_url.trim_start_matches("sqlite:");
+        let dir = dir.trim_end_matches('/');
+        // 如果有查询参数，去掉它们
+        let dir = dir.split('?').next().unwrap_or(dir);
+
+        let path = std::path::Path::new(dir);
+        if !path.exists() {
+            return Vec::new();
+        }
+
+        let mut names = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if let Some(ext) = entry_path.extension() {
+                    if ext == "db" {
+                        if let Some(name) = entry_path.file_stem() {
+                            let name = name.to_string_lossy().to_string();
+                            if name != "main" && name != "ingjoo" {
+                                names.push(name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        names.sort();
+        names
+    }
+
+    /// 查询 PostgreSQL pg_catalog 发现数据库
+    #[cfg(feature = "db")]
+    async fn list_postgres_databases(&self) -> Vec<String> {
+        let result = sqlx::query(
+            "SELECT datname FROM pg_database WHERE datistemplate = false AND datname != current_database()",
+        )
+        .fetch_all(&*self.default_pool)
+        .await;
+
+        match result {
+            Ok(rows) => rows
+                .iter()
+                .filter_map(|row| row.try_get::<String, _>("datname").ok())
+                .filter(|name| name != "main" && name != "postgres")
+                .collect(),
+            Err(_) => {
+                let pools = self.pools.read().await;
+                pools.keys().cloned().collect()
+            }
+        }
+    }
+
+    /// PostgreSQL 发现不可用，回退到内存池列表
+    #[cfg(not(feature = "db"))]
+    async fn list_postgres_databases(&self) -> Vec<String> {
         let pools = self.pools.read().await;
         pools.keys().cloned().collect()
+    }
+
+    /// 启动时发现并注册所有已存在的数据库连接池
+    ///
+    /// 仅在多数据库模式下工作。扫描文件系统/目录获取数据库列表，
+    /// 并为每个数据库预创建连接池。
+    pub async fn discover_and_register(&self) -> Vec<String> {
+        let db_names = self.list_databases().await;
+        for name in &db_names {
+            // get_pool 会自动创建并缓存连接池
+            if let Err(e) = self.get_pool(name).await {
+                tracing::warn!("启动时注册数据库 '{}' 连接池失败: {}", name, e);
+            }
+        }
+        db_names
     }
 
     /// 获取默认连接池
@@ -120,11 +215,7 @@ impl DatabaseManager {
 
     /// 根据基础 URL 和数据库名构建完整连接 URL
     fn build_database_url(base_url: &str, db_name: &str, _default_dialect: &Dialect) -> String {
-        let dialect = if base_url.starts_with("sqlite:") {
-            Dialect::Sqlite
-        } else {
-            Dialect::Postgres
-        };
+        let dialect = if base_url.starts_with("sqlite:") { Dialect::Sqlite } else { Dialect::Postgres };
 
         match dialect {
             Dialect::Sqlite => {
@@ -152,41 +243,27 @@ mod tests {
 
     #[test]
     fn test_build_url_sqlite() {
-        let url = DatabaseManager::build_database_url(
-            "sqlite:./data/",
-            "tenant_acme",
-            &Dialect::Sqlite,
-        );
+        let url = DatabaseManager::build_database_url("sqlite:./data/", "tenant_acme", &Dialect::Sqlite);
         assert_eq!(url, "sqlite:./data/tenant_acme.db");
     }
 
     #[test]
     fn test_build_url_sqlite_with_params() {
-        let url = DatabaseManager::build_database_url(
-            "sqlite:./data/?mode=rwc",
-            "tenant_acme",
-            &Dialect::Sqlite,
-        );
+        let url = DatabaseManager::build_database_url("sqlite:./data/?mode=rwc", "tenant_acme", &Dialect::Sqlite);
         assert_eq!(url, "sqlite:./data/tenant_acme.db?mode=rwc");
     }
 
     #[test]
     fn test_build_url_postgres() {
-        let url = DatabaseManager::build_database_url(
-            "postgres://user:pass@localhost/",
-            "tenant_acme",
-            &Dialect::Postgres,
-        );
+        let url =
+            DatabaseManager::build_database_url("postgres://user:pass@localhost/", "tenant_acme", &Dialect::Postgres);
         assert_eq!(url, "postgres://user:pass@localhost/tenant_acme");
     }
 
     #[test]
     fn test_build_url_postgres_no_trailing_slash() {
-        let url = DatabaseManager::build_database_url(
-            "postgres://user:pass@localhost",
-            "tenant_acme",
-            &Dialect::Postgres,
-        );
+        let url =
+            DatabaseManager::build_database_url("postgres://user:pass@localhost", "tenant_acme", &Dialect::Postgres);
         assert_eq!(url, "postgres://user:pass@localhost/tenant_acme");
     }
 
@@ -230,28 +307,70 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_register_and_list() {
-        let pool = Pool::connect_lazy("sqlite::memory:").unwrap();
-        let mgr = DatabaseManager::new(pool, Dialect::Sqlite).with_base_url("sqlite:./data/");
+    async fn test_list_sqlite_databases_with_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("tenant_test.db");
+        std::fs::File::create(&db_path).unwrap();
 
-        let tenant_pool = Arc::new(Pool::connect_lazy("sqlite::memory:").unwrap());
-        mgr.register_pool("tenant_a", tenant_pool, Dialect::Sqlite).await;
+        let base_url = format!("sqlite:{}/", temp_dir.path().display());
+        let pool = Pool::connect_lazy("sqlite::memory:").unwrap();
+        let mgr = DatabaseManager::new(pool, Dialect::Sqlite).with_base_url(&base_url);
+
+        let dbs = mgr.list_databases().await;
+        assert_eq!(dbs, vec!["tenant_test"]);
+    }
+
+    #[tokio::test]
+    async fn test_list_sqlite_databases_empty_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let base_url = format!("sqlite:{}/", temp_dir.path().display());
+        let pool = Pool::connect_lazy("sqlite::memory:").unwrap();
+        let mgr = DatabaseManager::new(pool, Dialect::Sqlite).with_base_url(&base_url);
+
+        let dbs = mgr.list_databases().await;
+        assert!(dbs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_sqlite_ignores_main_and_ingjoo() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        std::fs::File::create(temp_dir.path().join("main.db")).unwrap();
+        std::fs::File::create(temp_dir.path().join("ingjoo.db")).unwrap();
+        std::fs::File::create(temp_dir.path().join("tenant_a.db")).unwrap();
+
+        let base_url = format!("sqlite:{}/", temp_dir.path().display());
+        let pool = Pool::connect_lazy("sqlite::memory:").unwrap();
+        let mgr = DatabaseManager::new(pool, Dialect::Sqlite).with_base_url(&base_url);
 
         let dbs = mgr.list_databases().await;
         assert_eq!(dbs, vec!["tenant_a"]);
     }
 
     #[tokio::test]
-    async fn test_remove_pool() {
+    async fn test_list_databases_returns_empty_in_single_db_mode() {
         let pool = Pool::connect_lazy("sqlite::memory:").unwrap();
-        let mgr = DatabaseManager::new(pool, Dialect::Sqlite).with_base_url("sqlite:./data/");
+        let mgr = DatabaseManager::new(pool, Dialect::Sqlite);
+        assert!(mgr.list_databases().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_databases_nonexistent_dir() {
+        let pool = Pool::connect_lazy("sqlite::memory:").unwrap();
+        let mgr = DatabaseManager::new(pool, Dialect::Sqlite).with_base_url("sqlite:/nonexistent/path/");
+        assert!(mgr.list_databases().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_remove_pool() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let base_url = format!("sqlite:{}/", temp_dir.path().display());
+        let pool = Pool::connect_lazy("sqlite::memory:").unwrap();
+        let mgr = DatabaseManager::new(pool, Dialect::Sqlite).with_base_url(&base_url);
 
         let tenant_pool = Arc::new(Pool::connect_lazy("sqlite::memory:").unwrap());
         mgr.register_pool("tenant_b", tenant_pool, Dialect::Sqlite).await;
 
         mgr.remove_pool("tenant_b").await.unwrap();
-        let dbs = mgr.list_databases().await;
-        assert!(dbs.is_empty());
     }
 
     #[tokio::test]

@@ -13,9 +13,7 @@ pub struct DefaultIdGenerator {
 
 impl DefaultIdGenerator {
     pub fn new() -> Self {
-        Self {
-            snowflake_counter: AtomicU64::new(0),
-        }
+        Self { snowflake_counter: AtomicU64::new(0) }
     }
 
     pub fn generate_uuid_v4() -> String {
@@ -23,10 +21,7 @@ impl DefaultIdGenerator {
     }
 
     pub fn generate_snowflake_id(counter: &AtomicU64) -> String {
-        let ts = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
+        let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let seq = counter.fetch_add(1, Ordering::Relaxed) & 0xFFF;
         let id = ((ts - EPOCH_MS) << 22) | (MACHINE_ID << 12) | seq;
         id.to_string()

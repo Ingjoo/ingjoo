@@ -26,20 +26,13 @@ impl PgVectorStore {
     /// * `dialect` — 数据库方言（必须为 PostgreSQL）
     /// * `dimension` — 向量维度（如 OpenAI text-embedding-ada-002 为 1536）
     pub fn new(pool: Pool, dialect: Dialect, dimension: usize) -> Self {
-        Self {
-            pool,
-            dialect,
-            dimension,
-        }
+        Self { pool, dialect, dimension }
     }
 
     /// 生成集合对应的表名（仅保留字母数字和下划线，防止 SQL 注入）
     fn table_name(collection: &str) -> String {
-        let safe: String = collection
-            .chars()
-            .filter(|c| c.is_alphanumeric() || *c == '_')
-            .collect::<String>()
-            .to_lowercase();
+        let safe: String =
+            collection.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect::<String>().to_lowercase();
         if safe.is_empty() {
             return "vec_default".to_string();
         }
@@ -68,9 +61,7 @@ impl PgVectorStore {
             )",
             table, dim
         );
-        sqlx::query(&self.sql(&sql))
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(&self.sql(&sql)).execute(&self.pool).await?;
         Ok(())
     }
 }
@@ -87,22 +78,14 @@ impl VectorStore for PgVectorStore {
         self.ensure_table(collection).await?;
         let table = Self::table_name(collection);
         let vec_str = Self::vector_literal(vector);
-        let meta_str = metadata
-            .map(|v| serde_json::to_string(&v))
-            .transpose()?
-            .unwrap_or_default();
+        let meta_str = metadata.map(|v| serde_json::to_string(&v)).transpose()?.unwrap_or_default();
 
         let sql = format!(
             "INSERT INTO {} (id, embedding, metadata) VALUES (?, ?::vector, ?) \
              ON CONFLICT (id) DO UPDATE SET embedding = EXCLUDED.embedding, metadata = EXCLUDED.metadata",
             table
         );
-        sqlx::query(&self.sql(&sql))
-            .bind(id)
-            .bind(&vec_str)
-            .bind(&meta_str)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(&self.sql(&sql)).bind(id).bind(&vec_str).bind(&meta_str).execute(&self.pool).await?;
         Ok(())
     }
 
@@ -124,39 +107,24 @@ impl VectorStore for PgVectorStore {
              LIMIT ?",
             table
         );
-        let rows = sqlx::query(&self.sql(&sql))
-            .bind(&vec_str)
-            .bind(&vec_str)
-            .bind(top_k as i64)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows =
+            sqlx::query(&self.sql(&sql)).bind(&vec_str).bind(&vec_str).bind(top_k as i64).fetch_all(&self.pool).await?;
 
         let mut results = Vec::with_capacity(rows.len());
         for row in &rows {
             let id: String = row.try_get("id")?;
             let score: f64 = row.try_get("score")?;
             let meta_str: Option<String> = row.try_get("metadata").ok();
-            let metadata = meta_str
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .filter(|v: &serde_json::Value| !v.is_null());
-            results.push(VectorResult {
-                id,
-                score: score as f32,
-                metadata,
-            });
+            let metadata =
+                meta_str.and_then(|s| serde_json::from_str(&s).ok()).filter(|v: &serde_json::Value| !v.is_null());
+            results.push(VectorResult { id, score: score as f32, metadata });
         }
         Ok(results)
     }
 
     async fn delete(&self, collection: &str, id: &str) -> Result<(), anyhow::Error> {
         let table = Self::table_name(collection);
-        sqlx::query(&self.sql(&format!(
-            "DELETE FROM {} WHERE id = ?",
-            table
-        )))
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query(&self.sql(&format!("DELETE FROM {} WHERE id = ?", table))).bind(id).execute(&self.pool).await?;
         Ok(())
     }
 }
@@ -169,10 +137,7 @@ mod tests {
     fn test_table_name_sanitization() {
         assert_eq!(PgVectorStore::table_name("products"), "vec_products");
         assert_eq!(PgVectorStore::table_name("my-collection"), "vec_mycollection");
-        assert_eq!(
-            PgVectorStore::table_name("DROP TABLE users;"),
-            "vec_droptableusers"
-        );
+        assert_eq!(PgVectorStore::table_name("DROP TABLE users;"), "vec_droptableusers");
         assert_eq!(PgVectorStore::table_name(""), "vec_default");
         assert_eq!(PgVectorStore::table_name("CamelCase"), "vec_camelcase");
     }

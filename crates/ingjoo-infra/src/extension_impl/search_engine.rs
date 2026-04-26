@@ -4,9 +4,7 @@
 //! 使用 SQL LIKE 做模糊匹配，适用于中小规模数据。
 
 use async_trait::async_trait;
-use ingjoo_core::extension::search::{
-    SearchEngine, SearchHighlight, SearchQuery, SearchResult,
-};
+use ingjoo_core::extension::search::{SearchEngine, SearchHighlight, SearchQuery, SearchResult};
 use ingjoo_core::pool::Pool;
 use ingjoo_core::Dialect;
 
@@ -22,10 +20,7 @@ impl DbSearchEngine {
     }
 
     /// 执行搜索查询，返回匹配结果
-    async fn do_search(
-        &self,
-        query: &SearchQuery,
-    ) -> Result<Vec<SearchResult>, anyhow::Error> {
+    async fn do_search(&self, query: &SearchQuery) -> Result<Vec<SearchResult>, anyhow::Error> {
         let limit = query.limit.unwrap_or(20) as i64;
         let offset = query.offset.unwrap_or(0) as i64;
         let pattern = format!("%{}%", query.text);
@@ -102,10 +97,7 @@ fn extract_highlights(content: &str, keyword: &str) -> Vec<SearchHighlight> {
             snippet = format!("{}...", snippet);
         }
 
-        highlights.push(SearchHighlight {
-            field: "content".to_string(),
-            snippet,
-        });
+        highlights.push(SearchHighlight { field: "content".to_string(), snippet });
 
         start = abs_pos + keyword.len();
         if start >= content.len() {
@@ -144,12 +136,7 @@ fn ceil_char_boundary(s: &str, i: usize) -> usize {
 
 #[async_trait]
 impl SearchEngine for DbSearchEngine {
-    async fn index_record(
-        &self,
-        model: &str,
-        record_id: &str,
-        data: &serde_json::Value,
-    ) -> Result<(), anyhow::Error> {
+    async fn index_record(&self, model: &str, record_id: &str, data: &serde_json::Value) -> Result<(), anyhow::Error> {
         // 提取所有字符串字段值作为索引内容
         let content = extract_text(data);
 
@@ -170,36 +157,22 @@ impl SearchEngine for DbSearchEngine {
     }
 
     async fn remove_record(&self, model: &str, record_id: &str) -> Result<(), anyhow::Error> {
-        let sql = self.dialect.prepare(
-            "DELETE FROM ir_search_index WHERE model = ? AND record_id = ?",
-        );
+        let sql = self.dialect.prepare("DELETE FROM ir_search_index WHERE model = ? AND record_id = ?");
 
-        sqlx::query(&sql)
-            .bind(model)
-            .bind(record_id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(&sql).bind(model).bind(record_id).execute(&self.pool).await?;
 
         Ok(())
     }
 
-    async fn search(
-        &self,
-        query: SearchQuery,
-    ) -> Result<Vec<SearchResult>, anyhow::Error> {
+    async fn search(&self, query: SearchQuery) -> Result<Vec<SearchResult>, anyhow::Error> {
         self.do_search(&query).await
     }
 
     async fn rebuild_index(&self, model: &str) -> Result<(), anyhow::Error> {
         // 清除指定模型的索引，由调用方重新写入
-        let sql = self.dialect.prepare(
-            "DELETE FROM ir_search_index WHERE model = ?",
-        );
+        let sql = self.dialect.prepare("DELETE FROM ir_search_index WHERE model = ?");
 
-        sqlx::query(&sql)
-            .bind(model)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(&sql).bind(model).execute(&self.pool).await?;
 
         Ok(())
     }
@@ -209,18 +182,12 @@ impl SearchEngine for DbSearchEngine {
 fn extract_text(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Object(map) => map
-            .values()
-            .map(extract_text)
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(" "),
-        serde_json::Value::Array(arr) => arr
-            .iter()
-            .map(extract_text)
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(" "),
+        serde_json::Value::Object(map) => {
+            map.values().map(extract_text).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" ")
+        }
+        serde_json::Value::Array(arr) => {
+            arr.iter().map(extract_text).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" ")
+        }
         _ => String::new(),
     }
 }
@@ -230,11 +197,7 @@ mod tests {
     use super::*;
 
     async fn setup() -> (DbSearchEngine, tempfile::TempPath) {
-        let tmp = tempfile::Builder::new()
-            .prefix("ingjoo_search_test_")
-            .suffix(".db")
-            .tempfile()
-            .unwrap();
+        let tmp = tempfile::Builder::new().prefix("ingjoo_search_test_").suffix(".db").tempfile().unwrap();
         let db_path = tmp.into_temp_path();
         let db_url = format!("sqlite://{}?mode=rwc", db_path.to_str().unwrap());
 
@@ -289,10 +252,7 @@ mod tests {
     async fn search_no_match() {
         let (engine, _path) = setup().await;
 
-        engine
-            .index_record("product", "p1", &serde_json::json!({"name": "苹果"}))
-            .await
-            .unwrap();
+        engine.index_record("product", "p1", &serde_json::json!({"name": "苹果"})).await.unwrap();
 
         let results = engine
             .search(SearchQuery {
@@ -312,10 +272,7 @@ mod tests {
     async fn search_remove_record() {
         let (engine, _path) = setup().await;
 
-        engine
-            .index_record("product", "p1", &serde_json::json!({"name": "苹果手机"}))
-            .await
-            .unwrap();
+        engine.index_record("product", "p1", &serde_json::json!({"name": "苹果手机"})).await.unwrap();
 
         engine.remove_record("product", "p1").await.unwrap();
 
@@ -337,14 +294,8 @@ mod tests {
     async fn search_upsert_overwrites() {
         let (engine, _path) = setup().await;
 
-        engine
-            .index_record("product", "p1", &serde_json::json!({"name": "旧名称"}))
-            .await
-            .unwrap();
-        engine
-            .index_record("product", "p1", &serde_json::json!({"name": "新名称手机"}))
-            .await
-            .unwrap();
+        engine.index_record("product", "p1", &serde_json::json!({"name": "旧名称"})).await.unwrap();
+        engine.index_record("product", "p1", &serde_json::json!({"name": "新名称手机"})).await.unwrap();
 
         let results = engine
             .search(SearchQuery {
@@ -365,14 +316,8 @@ mod tests {
     async fn search_multi_model_filter() {
         let (engine, _path) = setup().await;
 
-        engine
-            .index_record("product", "p1", &serde_json::json!({"name": "手机"}))
-            .await
-            .unwrap();
-        engine
-            .index_record("article", "a1", &serde_json::json!({"title": "手机评测"}))
-            .await
-            .unwrap();
+        engine.index_record("product", "p1", &serde_json::json!({"name": "手机"})).await.unwrap();
+        engine.index_record("article", "a1", &serde_json::json!({"title": "手机评测"})).await.unwrap();
 
         // 只搜索 product 模型
         let results = engine
@@ -394,10 +339,7 @@ mod tests {
     async fn search_rebuild_index_clears() {
         let (engine, _path) = setup().await;
 
-        engine
-            .index_record("product", "p1", &serde_json::json!({"name": "手机"}))
-            .await
-            .unwrap();
+        engine.index_record("product", "p1", &serde_json::json!({"name": "手机"})).await.unwrap();
 
         engine.rebuild_index("product").await.unwrap();
 
@@ -419,19 +361,10 @@ mod tests {
     async fn search_empty_models_returns_empty() {
         let (engine, _path) = setup().await;
 
-        engine
-            .index_record("product", "p1", &serde_json::json!({"name": "手机"}))
-            .await
-            .unwrap();
+        engine.index_record("product", "p1", &serde_json::json!({"name": "手机"})).await.unwrap();
 
         let results = engine
-            .search(SearchQuery {
-                text: "手机".into(),
-                models: vec![],
-                limit: Some(10),
-                offset: None,
-                filters: None,
-            })
+            .search(SearchQuery { text: "手机".into(), models: vec![], limit: Some(10), offset: None, filters: None })
             .await
             .unwrap();
 
@@ -455,10 +388,7 @@ mod tests {
 
     #[test]
     fn extract_highlights_finds_matches() {
-        let highlights = super::extract_highlights(
-            "这是一段包含手机关键词的文本内容，手机是重要产品",
-            "手机",
-        );
+        let highlights = super::extract_highlights("这是一段包含手机关键词的文本内容，手机是重要产品", "手机");
         assert!(!highlights.is_empty());
         assert!(highlights.len() <= 3);
         assert_eq!(highlights[0].field, "content");

@@ -44,4 +44,7 @@ pub trait AuditStore: Send + Sync {
 
     /// 获取单条审计日志
     async fn get_audit_log(&self, id: &str) -> Result<Option<AuditEntry>, anyhow::Error>;
+
+    /// 删除指定时间之前的审计日志，返回删除行数
+    async fn delete_logs_before(&self, before: &str) -> Result<u64, anyhow::Error>;
 }

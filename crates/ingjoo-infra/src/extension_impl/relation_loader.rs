@@ -36,13 +36,8 @@ impl RelationLoader for DbRelationLoader {
         }
 
         let placeholders: Vec<&str> = ids.iter().map(|_| "?").collect();
-        let sql = self.sql(&format!(
-            "SELECT id, {} FROM {} WHERE {} IN ({})",
-            field,
-            model,
-            field,
-            placeholders.join(",")
-        ));
+        let sql =
+            self.sql(&format!("SELECT id, {} FROM {} WHERE {} IN ({})", field, model, field, placeholders.join(",")));
 
         let mut query = sqlx::query(&sql);
         for id in ids {
@@ -92,12 +87,7 @@ impl RelationLoader for DbRelationLoader {
         }
 
         let placeholders: Vec<&str> = ids.iter().map(|_| "?").collect();
-        let sql = self.sql(&format!(
-            "SELECT id, {} FROM {} WHERE id IN ({})",
-            field,
-            model,
-            placeholders.join(",")
-        ));
+        let sql = self.sql(&format!("SELECT id, {} FROM {} WHERE id IN ({})", field, model, placeholders.join(",")));
 
         let mut query = sqlx::query(&sql);
         for id in ids {
@@ -109,20 +99,14 @@ impl RelationLoader for DbRelationLoader {
         for row in &rows {
             let record_id: String = row.get("id");
             let fk_value: Option<String> = row.try_get(field).ok();
-            result.insert(
-                record_id,
-                fk_value.map(serde_json::Value::String),
-            );
+            result.insert(record_id, fk_value.map(serde_json::Value::String));
         }
 
         Ok(result)
     }
 }
 
-fn try_raw_to_value(
-    row: &sqlx::any::AnyRow,
-    col: &str,
-) -> Result<serde_json::Value, ()> {
+fn try_raw_to_value(row: &sqlx::any::AnyRow, col: &str) -> Result<serde_json::Value, ()> {
     if let Ok(v) = row.try_get::<String, _>(col) {
         Ok(serde_json::Value::String(v))
     } else if let Ok(v) = row.try_get::<i64, _>(col) {

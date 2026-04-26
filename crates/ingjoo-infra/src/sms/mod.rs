@@ -73,24 +73,26 @@ impl SmsProvider for TencentSmsProvider {
             host, action.to_lowercase(), sha256_hex(payload.as_bytes()));
 
         let credential_scope = format!("{}/{}/tc3_request", date, service);
-        let string_to_sign = format!("TC3-HMAC-SHA256\n{}\n{}\n{}",
-            timestamp, credential_scope, sha256_hex(canonical_request.as_bytes()));
+        let string_to_sign = format!(
+            "TC3-HMAC-SHA256\n{}\n{}\n{}",
+            timestamp,
+            credential_scope,
+            sha256_hex(canonical_request.as_bytes())
+        );
 
         let signature = hmac_sha256_chain(
-            &[
-                format!("TC3{}", self.config.secret_key).as_bytes(),
-                date.as_bytes(),
-                service.as_bytes(),
-                b"tc3_request",
-            ],
+            &[format!("TC3{}", self.config.secret_key).as_bytes(), date.as_bytes(), service.as_bytes(), b"tc3_request"],
             string_to_sign.as_bytes(),
         );
 
-        let authorization = format!("TC3-HMAC-SHA256 Credential={}/{}, SignedHeaders=content-type;host;x-tc-action, Signature={}",
-            self.config.secret_id, credential_scope, signature);
+        let authorization = format!(
+            "TC3-HMAC-SHA256 Credential={}/{}, SignedHeaders=content-type;host;x-tc-action, Signature={}",
+            self.config.secret_id, credential_scope, signature
+        );
 
         let client = Client::new();
-        let resp = client.post(format!("https://{}", host))
+        let resp = client
+            .post(format!("https://{}", host))
             .header("Content-Type", "application/json; charset=utf-8")
             .header("Host", host)
             .header("X-TC-Action", action)
@@ -105,9 +107,11 @@ impl SmsProvider for TencentSmsProvider {
         let resp_json: serde_json::Value = resp.json().await.map_err(|e| anyhow!("SMS 响应解析失败: {}", e))?;
 
         if let Some(err) = resp_json["Response"]["Error"].as_object() {
-            return Err(anyhow!("SMS 发送失败: {} - {}",
+            return Err(anyhow!(
+                "SMS 发送失败: {} - {}",
                 err.get("Code").and_then(|v| v.as_str()).unwrap_or("unknown"),
-                err.get("Message").and_then(|v| v.as_str()).unwrap_or("unknown")));
+                err.get("Message").and_then(|v| v.as_str()).unwrap_or("unknown")
+            ));
         }
 
         let status = resp_json["Response"]["SendStatusSet"][0]["Code"].as_str().unwrap_or("unknown");

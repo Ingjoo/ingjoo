@@ -52,14 +52,44 @@ mod tests {
 
     #[async_trait]
     impl ModuleSettingStore for MockSettings {
-        async fn list_module_settings(&self, _scope: &str, _scope_id: Option<&str>, _module: Option<&str>) -> StoreResult<Vec<ModuleSetting>> { Ok(vec![]) }
-        async fn get_module_setting(&self, scope: &str, scope_id: Option<&str>, module: &str, key: &str) -> StoreResult<Option<String>> {
+        async fn list_module_settings(
+            &self,
+            _scope: &str,
+            _scope_id: Option<&str>,
+            _module: Option<&str>,
+        ) -> StoreResult<Vec<ModuleSetting>> {
+            Ok(vec![])
+        }
+        async fn get_module_setting(
+            &self,
+            scope: &str,
+            scope_id: Option<&str>,
+            module: &str,
+            key: &str,
+        ) -> StoreResult<Option<String>> {
             let k = (scope.to_string(), scope_id.map(String::from), module.to_string(), key.to_string());
             Ok(self.data.get(&k).cloned())
         }
-        async fn set_module_setting(&self, _id: &str, _scope: &str, _scope_id: Option<&str>, _module: &str, _key: &str, _value: &str) -> StoreResult<ModuleSetting> { unimplemented!() }
-        async fn delete_module_setting(&self, _id: &str) -> StoreResult<bool> { unimplemented!() }
-        async fn get_effective_setting(&self, module: &str, key: &str, collection_id: Option<&str>) -> StoreResult<Option<String>> {
+        async fn set_module_setting(
+            &self,
+            _id: &str,
+            _scope: &str,
+            _scope_id: Option<&str>,
+            _module: &str,
+            _key: &str,
+            _value: &str,
+        ) -> StoreResult<ModuleSetting> {
+            unimplemented!()
+        }
+        async fn delete_module_setting(&self, _id: &str) -> StoreResult<bool> {
+            unimplemented!()
+        }
+        async fn get_effective_setting(
+            &self,
+            module: &str,
+            key: &str,
+            collection_id: Option<&str>,
+        ) -> StoreResult<Option<String>> {
             let scopes: Vec<(&str, Option<&str>)> = if let Some(cid) = collection_id {
                 vec![("document_collection", Some(cid)), ("system", None)]
             } else {

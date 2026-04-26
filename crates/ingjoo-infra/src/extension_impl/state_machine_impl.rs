@@ -24,37 +24,29 @@ impl DbStateMachine {
 
 #[async_trait]
 impl StateMachine for DbStateMachine {
-    async fn get_current_state(
-        &self,
-        model: &str,
-        record_id: &str,
-    ) -> Result<String, TransitionError> {
-        let row = sqlx::query(&self.sql(
-            "SELECT current_state FROM ir_state_record WHERE model = ? AND record_id = ?"
-        ))
-        .bind(model)
-        .bind(record_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| TransitionError::Internal(e.into()))?;
+    async fn get_current_state(&self, model: &str, record_id: &str) -> Result<String, TransitionError> {
+        let row = sqlx::query(&self.sql("SELECT current_state FROM ir_state_record WHERE model = ? AND record_id = ?"))
+            .bind(model)
+            .bind(record_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| TransitionError::Internal(e.into()))?;
 
         match row {
             Some(r) => Ok(r.get("current_state")),
             None => {
-                let machine_row = sqlx::query(&self.sql(
-                    "SELECT initial_state FROM ir_state_machine WHERE model = ?"
-                ))
-                .bind(model)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(|e| TransitionError::Internal(e.into()))?;
+                let machine_row = sqlx::query(&self.sql("SELECT initial_state FROM ir_state_machine WHERE model = ?"))
+                    .bind(model)
+                    .fetch_optional(&self.pool)
+                    .await
+                    .map_err(|e| TransitionError::Internal(e.into()))?;
 
                 match machine_row {
                     Some(r) => {
                         let initial: String = r.get("initial_state");
-                        sqlx::query(&self.sql(
-                            "INSERT INTO ir_state_record (model, record_id, current_state) VALUES (?, ?, ?)"
-                        ))
+                        sqlx::query(
+                            &self.sql("INSERT INTO ir_state_record (model, record_id, current_state) VALUES (?, ?, ?)"),
+                        )
                         .bind(model)
                         .bind(record_id)
                         .bind(&initial)
@@ -75,9 +67,9 @@ impl StateMachine for DbStateMachine {
         record_id: &str,
     ) -> Result<Vec<StateTransition>, TransitionError> {
         let current = self.get_current_state(model, record_id).await?;
-        let rows = sqlx::query(&self.sql(
-            "SELECT from_state, to_state, label FROM ir_state_transition WHERE model = ? AND from_state = ?"
-        ))
+        let rows = sqlx::query(
+            &self.sql("SELECT from_state, to_state, label FROM ir_state_transition WHERE model = ? AND from_state = ?"),
+        )
         .bind(model)
         .bind(&current)
         .fetch_all(&self.pool)
@@ -86,11 +78,7 @@ impl StateMachine for DbStateMachine {
 
         Ok(rows
             .iter()
-            .map(|r| StateTransition {
-                from: r.get("from_state"),
-                to: r.get("to_state"),
-                label: r.get("label"),
-            })
+            .map(|r| StateTransition { from: r.get("from_state"), to: r.get("to_state"), label: r.get("label") })
             .collect())
     }
 
@@ -104,7 +92,7 @@ impl StateMachine for DbStateMachine {
         let current = self.get_current_state(model, record_id).await?;
 
         let row = sqlx::query(&self.sql(
-            "SELECT COUNT(*) as cnt FROM ir_state_transition WHERE model = ? AND from_state = ? AND to_state = ?"
+            "SELECT COUNT(*) as cnt FROM ir_state_transition WHERE model = ? AND from_state = ? AND to_state = ?",
         ))
         .bind(model)
         .bind(&current)
@@ -121,15 +109,13 @@ impl StateMachine for DbStateMachine {
             )));
         }
 
-        sqlx::query(&self.sql(
-            "UPDATE ir_state_record SET current_state = ? WHERE model = ? AND record_id = ?"
-        ))
-        .bind(target_state)
-        .bind(model)
-        .bind(record_id)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| TransitionError::Internal(e.into()))?;
+        sqlx::query(&self.sql("UPDATE ir_state_record SET current_state = ? WHERE model = ? AND record_id = ?"))
+            .bind(target_state)
+            .bind(model)
+            .bind(record_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| TransitionError::Internal(e.into()))?;
 
         Ok(target_state.to_string())
     }
@@ -146,7 +132,7 @@ impl StateMachine for DbStateMachine {
         sqlx::query(&self.sql(
             "INSERT INTO ir_state_machine (model, states, initial_state) \
              VALUES (?, ?, ?) \
-             ON CONFLICT(model) DO UPDATE SET states = excluded.states, initial_state = excluded.initial_state"
+             ON CONFLICT(model) DO UPDATE SET states = excluded.states, initial_state = excluded.initial_state",
         ))
         .bind(model)
         .bind(&states_json)
@@ -155,18 +141,16 @@ impl StateMachine for DbStateMachine {
         .await
         .map_err(|e| TransitionError::Internal(e.into()))?;
 
-        sqlx::query(&self.sql(
-            "DELETE FROM ir_state_transition WHERE model = ?"
-        ))
-        .bind(model)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| TransitionError::Internal(e.into()))?;
+        sqlx::query(&self.sql("DELETE FROM ir_state_transition WHERE model = ?"))
+            .bind(model)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| TransitionError::Internal(e.into()))?;
 
         for t in &transitions {
-            sqlx::query(&self.sql(
-                "INSERT INTO ir_state_transition (model, from_state, to_state, label) VALUES (?, ?, ?, ?)"
-            ))
+            sqlx::query(
+                &self.sql("INSERT INTO ir_state_transition (model, from_state, to_state, label) VALUES (?, ?, ?, ?)"),
+            )
             .bind(model)
             .bind(&t.from)
             .bind(&t.to)
@@ -186,11 +170,7 @@ mod tests {
     use ingjoo_core::extension::state_machine::StateMachine;
 
     async fn setup() -> DbStateMachine {
-        let tmp = tempfile::Builder::new()
-            .prefix("state_machine_test_")
-            .suffix(".db")
-            .tempfile()
-            .unwrap();
+        let tmp = tempfile::Builder::new().prefix("state_machine_test_").suffix(".db").tempfile().unwrap();
         let db_path = tmp.path().to_str().unwrap().to_string();
         std::mem::forget(tmp);
 
@@ -217,7 +197,7 @@ mod tests {
                 record_id TEXT NOT NULL,
                 current_state TEXT NOT NULL,
                 UNIQUE(model, record_id)
-            )"
+            )",
         )
         .execute(&pool)
         .await
@@ -237,11 +217,11 @@ mod tests {
         sm.register_machine(
             "order",
             vec!["draft".into(), "confirmed".into(), "done".into()],
-            vec![StateTransition {
-                from: "draft".into(), to: "confirmed".into(), label: "确认".into(),
-            }],
+            vec![StateTransition { from: "draft".into(), to: "confirmed".into(), label: "确认".into() }],
             "draft".into(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         let state = sm.get_current_state("order", "O001").await.unwrap();
         assert_eq!(state, "draft");
@@ -259,7 +239,9 @@ mod tests {
                 StateTransition { from: "draft".into(), to: "cancelled".into(), label: "取消".into() },
             ],
             "draft".into(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         let new = sm.transition("order", "O001", "confirmed", HashMap::new()).await.unwrap();
         assert_eq!(new, "confirmed");
@@ -279,7 +261,9 @@ mod tests {
             vec!["draft".into(), "done".into()],
             vec![StateTransition { from: "draft".into(), to: "done".into(), label: "完成".into() }],
             "draft".into(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         sm.get_current_state("order", "O001").await.unwrap();
         let result = sm.transition("order", "O001", "cancelled", HashMap::new()).await;
@@ -297,7 +281,9 @@ mod tests {
                 StateTransition { from: "draft".into(), to: "cancelled".into(), label: "取消".into() },
             ],
             "draft".into(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         sm.get_current_state("order", "O001").await.unwrap();
         let transitions = sm.get_available_transitions("order", "O001").await.unwrap();
@@ -323,14 +309,18 @@ mod tests {
             vec!["draft".into(), "confirmed".into()],
             vec![StateTransition { from: "draft".into(), to: "confirmed".into(), label: "确认".into() }],
             "draft".into(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         sm.register_machine(
             "order",
             vec!["new".into(), "processed".into()],
             vec![StateTransition { from: "new".into(), to: "processed".into(), label: "处理".into() }],
             "new".into(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         let state = sm.get_current_state("order", "O001").await.unwrap();
         assert_eq!(state, "new");

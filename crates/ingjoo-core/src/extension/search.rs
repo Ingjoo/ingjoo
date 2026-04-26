@@ -34,12 +34,7 @@ pub struct SearchResult {
 #[async_trait]
 pub trait SearchEngine: Send + Sync {
     /// 索引单条记录
-    async fn index_record(
-        &self,
-        model: &str,
-        record_id: &str,
-        data: &serde_json::Value,
-    ) -> Result<(), anyhow::Error>;
+    async fn index_record(&self, model: &str, record_id: &str, data: &serde_json::Value) -> Result<(), anyhow::Error>;
 
     /// 从索引中移除记录
     async fn remove_record(&self, model: &str, record_id: &str) -> Result<(), anyhow::Error>;

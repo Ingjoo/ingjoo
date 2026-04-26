@@ -1,8 +1,8 @@
 //! 插件清单 — 定义插件声明式注册所需的全部元数据
 
+use crate::module::{ActionDescriptor, MenuDescriptor, ModelDescriptor, ViewDescriptor};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::module::{ModelDescriptor, MenuDescriptor, ViewDescriptor, ActionDescriptor};
 
 /// 插件状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -104,8 +104,7 @@ impl PluginManifest {
     /// 从文件路径加载
     pub async fn from_file(path: &std::path::Path) -> Result<Self, std::io::Error> {
         let content = tokio::fs::read_to_string(path).await?;
-        serde_json::from_str(&content)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        serde_json::from_str(&content).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
     /// 转换为运行时信息
@@ -170,8 +169,7 @@ mod tests {
             name: "test".to_string(),
             version: "1.0.0".to_string(),
             description: "测试插件".to_string(),
-            models: vec![ModelDescriptor::new("item", "items")
-                .required_field("name", crate::module::FieldType::Text)],
+            models: vec![ModelDescriptor::new("item", "items").required_field("name", crate::module::FieldType::Text)],
             menus: vec![],
             views: vec![],
             actions: vec![],
@@ -190,10 +188,7 @@ mod tests {
             name: "crm".to_string(),
             version: "2.0.0".to_string(),
             description: "CRM模块".to_string(),
-            models: vec![
-                ModelDescriptor::new("customer", "customers"),
-                ModelDescriptor::new("deal", "deals"),
-            ],
+            models: vec![ModelDescriptor::new("customer", "customers"), ModelDescriptor::new("deal", "deals")],
             menus: vec![],
             views: vec![],
             actions: vec![],

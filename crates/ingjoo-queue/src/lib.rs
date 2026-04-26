@@ -19,7 +19,7 @@ use serde_json::Value;
 
 pub use memory::InMemoryQueue;
 pub use retry::RetryPolicy;
-pub use scheduler::{ScheduledJob, ScheduleStatus, ScheduleStore, Scheduler, SqlScheduleStore};
+pub use scheduler::{ScheduleStatus, ScheduleStore, ScheduledJob, Scheduler, SqlScheduleStore};
 pub use sql::SqlQueue;
 pub use worker::{JobHandler, WorkerPool};
 

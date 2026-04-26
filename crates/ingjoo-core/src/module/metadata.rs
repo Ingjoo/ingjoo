@@ -75,8 +75,12 @@ pub struct MenuDescriptor {
     pub children: Vec<MenuDescriptor>,
 }
 
-fn default_sequence() -> i32 { 10 }
-fn default_true() -> bool { true }
+fn default_sequence() -> i32 {
+    10
+}
+fn default_true() -> bool {
+    true
+}
 
 // ==================== View ====================
 
@@ -100,7 +104,9 @@ pub struct ViewDescriptor {
     pub group_ids: Vec<String>,
 }
 
-fn default_priority() -> i32 { 16 }
+fn default_priority() -> i32 {
+    16
+}
 
 // ==================== Action ====================
 
@@ -144,4 +150,6 @@ pub struct ActionDescriptor {
     pub group_ids: Vec<String>,
 }
 
-fn default_target() -> Option<String> { Some("current".to_string()) }
+fn default_target() -> Option<String> {
+    Some("current".to_string())
+}
