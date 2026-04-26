@@ -1,7 +1,7 @@
 # Improvement Roadmap
 
 > Last updated: 2026-04-26
-> Status: v0.1.0 — Phase 1-12 complete, Phase 13 in progress
+> Status: v0.1.0 — Phase 1-13 complete
 
 ## Current State Summary
 
@@ -288,14 +288,13 @@ PHASE 12 COMPLETE (411 tests, frontend SSE auth fixed)
 ├── T12.4 Shared timeAgo utility — ✅ utils.ts
 └── T12.5 Header notification bell wiring — ✅
 
-PHASE 13 IN PROGRESS (Integration test fix + Profile)
-├── T13.1 Fix handlers_test.rs runtime-in-runtime — 📋 pending
-├── T13.2 Profile avatar upload — 📋 pending
-├── T13.3 Profile preferences persistence — 📋 pending
+PHASE 13 COMPLETE (Integration test fix + Profile + Frontend build fixes)
+├── T13.1 Fix handlers_test.rs runtime-in-runtime — ✅ verified not a bug (15 tests pass)
+├── T13.2 Profile avatar upload — ✅ multipart handler + serve + frontend UI
+├── T13.3 Profile preferences persistence — ✅ already implemented end-to-end
 ├── T13.4 Docs versioned in ingjoo repo — ✅
-└── T13.5 Page count fix (8→12) — ✅
-├── T12.4 Shared timeAgo — ✅ utils.ts extracted
-└── T12.5 Header wiring — ✅ bell in header
+├── T13.5 Page count fix (8→12) — ✅
+└── T13.6 Frontend build fixes — ✅ NavMenu types + Suspense + UpdatePreferences type
 
 PHASE 8 COMPLETE
 

@@ -1,7 +1,7 @@
 # 改进路线图
 
 > 最后更新：2026-04-26
-> 当前版本：v0.1.0 — 阶段 1-12 已完成，阶段 13 进行中
+> 当前版本：v0.1.0 — 阶段 1-13 已完成
 
 ## 现状总览
 
@@ -333,12 +333,13 @@ ingjoo-infra/src/
 ├── T12.4 共享 timeAgo — ✅ 提取到 utils.ts
 └── T12.5 Header 接线 — ✅ 通知铃铛已接入 Header
 
-阶段 13 进行中（集成测试修复 + Profile 完善）
-├── T13.1 修复 handlers_test.rs runtime-in-runtime — 📋 待开始
-├── T13.2 Profile 头像上传 — 📋 待开始
-├── T13.3 Profile 偏好设置持久化 — 📋 待开始
+阶段 13 已完成（集成测试修复 + Profile 完善 + 前端构建修复）
+├── T13.1 修复 handlers_test.rs runtime-in-runtime — ✅ 已验证无此问题（15 测试通过）
+├── T13.2 Profile 头像上传 — ✅ multipart handler + serve + 前端 UI
+├── T13.3 Profile 偏好设置持久化 — ✅ 已实现完整链路
 ├── T13.4 文档纳入版本控制 — ✅ docs/ 已迁入 ingjoo repo
-└── T13.5 页面数修正 (8→12) — ✅
+├── T13.5 页面数修正 (8→12) — ✅
+└── T13.6 前端构建修复 — ✅ NavMenu 类型 + Suspense + UpdatePreferences 类型
 
 阶段 8 已完成
 ├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索

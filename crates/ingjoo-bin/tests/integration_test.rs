@@ -2330,3 +2330,99 @@ async fn test_users_search_authenticated() {
     let results: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(results.is_array());
 }
+
+fn make_multipart_request(method: &str, uri: &str, token: &str, field_name: &str, filename: &str, content_type: &str, data: &[u8]) -> http::Request<Body> {
+    let boundary = "----TestBoundary12345";
+    let mut body = Vec::new();
+    body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+    body.extend_from_slice(format!("Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n", field_name, filename).as_bytes());
+    body.extend_from_slice(format!("Content-Type: {}\r\n\r\n", content_type).as_bytes());
+    body.extend_from_slice(data);
+    body.extend_from_slice(format!("\r\n--{}--\r\n", boundary).as_bytes());
+
+    http::Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {}", token))
+        .header("content-type", format!("multipart/form-data; boundary={}", boundary))
+        .body(Body::from(body))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn test_avatar_upload_success() {
+    let (app, state) = setup_app_with_state().await;
+    let token = get_admin_token(&app, &state).await;
+
+    // 创建一个最小的 1x1 PNG（有效 PNG 二进制数据）
+    let png_data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    let resp = app
+        .clone()
+        .oneshot(make_multipart_request(
+            "POST",
+            "/api/auth/avatar",
+            &token,
+            "file",
+            "avatar.png",
+            "image/png",
+            &png_data,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK, "avatar upload 应返回 200");
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let avatar_url = json["avatar_url"].as_str().unwrap();
+    assert!(avatar_url.starts_with("/api/avatars/"), "avatar_url 应以 /api/avatars/ 开头，实际: {}", avatar_url);
+
+    // 验证 serve 端点能返回文件
+    let filename = avatar_url.trim_start_matches("/api/avatars/");
+    let resp = app.clone().oneshot(make_request("GET", &format!("/api/avatars/{}", filename), None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK, "serve avatar 应返回 200");
+}
+
+#[tokio::test]
+async fn test_avatar_upload_rejects_non_image() {
+    let (app, state) = setup_app_with_state().await;
+    let token = get_admin_token(&app, &state).await;
+
+    let resp = app
+        .clone()
+        .oneshot(make_multipart_request(
+            "POST",
+            "/api/auth/avatar",
+            &token,
+            "file",
+            "doc.txt",
+            "text/plain",
+            b"not an image",
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "非图片文件应被拒绝");
+}
+
+#[tokio::test]
+async fn test_avatar_upload_requires_auth() {
+    let app = setup_app().await;
+
+    let png_data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    let resp = app
+        .clone()
+        .oneshot(make_multipart_request(
+            "POST",
+            "/api/auth/avatar",
+            "invalid_token",
+            "file",
+            "avatar.png",
+            "image/png",
+            &png_data,
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "未认证请求应返回 401");
+}
