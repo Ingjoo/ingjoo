@@ -63,13 +63,13 @@ pub async fn list_favorites(
     };
 
     let rows = if let Some(model) = &query.model {
-        sqlx::query_as::<_, (i64, String, String, String, Option<String>, Option<String>, bool, String, String)>(&sql)
+        sqlx::query_as::<_, (i64, String, String, String, Option<String>, Option<String>, i32, String, String)>(&sql)
             .bind(user_id)
             .bind(model)
             .fetch_all(&*state.pool)
             .await
     } else {
-        sqlx::query_as::<_, (i64, String, String, String, Option<String>, Option<String>, bool, String, String)>(&sql)
+        sqlx::query_as::<_, (i64, String, String, String, Option<String>, Option<String>, i32, String, String)>(&sql)
             .bind(user_id)
             .fetch_all(&*state.pool)
             .await
@@ -88,7 +88,7 @@ pub async fn list_favorites(
             model,
             domain: domain.and_then(|d| serde_json::from_str(&d).ok()),
             context: context.and_then(|c| serde_json::from_str(&c).ok()),
-            is_default,
+            is_default: is_default != 0,
             created_at,
             updated_at,
         })
@@ -107,19 +107,19 @@ pub async fn create_favorite(
     let domain_str = req.domain.as_ref().and_then(|d| serde_json::to_string(d).ok());
     let context_str = req.context.as_ref().and_then(|c| serde_json::to_string(c).ok());
     let is_default = req.is_default.unwrap_or(false);
-    let is_default_literal = if is_default { "TRUE" } else { "FALSE" };
+    let is_default_literal = if is_default { "1" } else { "0" };
 
     let now_fn = match &state.dialect {
         Dialect::Sqlite => "datetime('now')",
         _ => "NOW()",
     };
 
-    let sql = state.dialect.prepare(&format!(
+    let insert_sql = state.dialect.prepare(&format!(
         "INSERT INTO ir_search_favorite (user_id, name, model, domain, context, is_default, created_at, updated_at) \
          VALUES (?, ?, ?, ?, ?, {is_default_literal}, {now_fn}, {now_fn})"
     ));
 
-    let result = sqlx::query(&sql)
+    sqlx::query(&insert_sql)
         .bind(user_id)
         .bind(&req.name)
         .bind(&req.model)
@@ -132,18 +132,40 @@ pub async fn create_favorite(
             AppError::Internal(anyhow::anyhow!("创建搜索收藏失败"))
         })?;
 
-    let id = result.last_insert_id().unwrap_or(0);
+    let ts_cast = match &state.dialect {
+        Dialect::Sqlite => "",
+        _ => "::text",
+    };
+    let fetch_sql = state.dialect.prepare(&format!(
+        "SELECT id, user_id, name, model, domain, context, is_default, created_at{ts_cast}, updated_at{ts_cast} \
+         FROM ir_search_favorite WHERE user_id = ? AND name = ? AND model = ? \
+         ORDER BY id DESC LIMIT 1"
+    ));
+
+    let row: (i64, String, String, String, Option<String>, Option<String>, i32, String, String) =
+        sqlx::query_as(&fetch_sql)
+            .bind(user_id)
+            .bind(&req.name)
+            .bind(&req.model)
+            .fetch_one(&*state.pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("查询新建搜索收藏失败: {:?}", e);
+                AppError::Internal(anyhow::anyhow!("创建搜索收藏失败"))
+            })?;
+
+    let (id, uid, name, model, domain, context, is_default, created_at, updated_at) = row;
 
     Ok(Json(SearchFavorite {
         id,
-        user_id: user_id.clone(),
-        name: req.name,
-        model: req.model,
-        domain: req.domain,
-        context: req.context,
-        is_default,
-        created_at: String::new(),
-        updated_at: String::new(),
+        user_id: uid,
+        name,
+        model,
+        domain: domain.and_then(|d| serde_json::from_str(&d).ok()),
+        context: context.and_then(|c| serde_json::from_str(&c).ok()),
+        is_default: is_default != 0,
+        created_at,
+        updated_at,
     }))
 }
 
@@ -210,8 +232,8 @@ pub async fn set_default_favorite(
     };
 
     let unset_sql = state.dialect.prepare(&format!(
-        "UPDATE ir_search_favorite SET is_default = FALSE, updated_at = {now_fn} \
-         WHERE user_id = ? AND model = ? AND is_default = TRUE"
+        "UPDATE ir_search_favorite SET is_default = 0, updated_at = {now_fn} \
+         WHERE user_id = ? AND model = ? AND is_default = 1"
     ));
     sqlx::query(&unset_sql)
         .bind(user_id)
@@ -224,7 +246,7 @@ pub async fn set_default_favorite(
         })?;
 
     let set_sql = state.dialect.prepare(&format!(
-        "UPDATE ir_search_favorite SET is_default = TRUE, updated_at = {now_fn} WHERE id = ?"
+        "UPDATE ir_search_favorite SET is_default = 1, updated_at = {now_fn} WHERE id = ?"
     ));
     sqlx::query(&set_sql).bind(id).execute(&*state.pool).await.map_err(|e| {
         tracing::error!("设置默认搜索收藏失败: {:?}", e);
