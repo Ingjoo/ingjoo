@@ -1,7 +1,7 @@
 # Improvement Roadmap
 
 > Last updated: 2026-04-26
-> Status: v0.1.0 — Phase 1-9 complete
+> Status: v0.1.0 — Phase 1-12 complete
 
 ## Current State Summary
 
@@ -280,6 +280,13 @@ PHASE 9 COMPLETE (272 tests, 0 clippy warnings, login→Dashboard QA verified)
 ├── T9.6 New API endpoints — ✅ dashboard stats / users search / audit-log
 ├── T9.7 Preferences path — ✅ /auth/preferences
 └── T9.8 Dead code cleanup — ✅ removed providers.tsx
+
+PHASE 12 COMPLETE (411 tests, frontend SSE auth fixed)
+├── T12.1 NotificationBell — ✅ badge + dropdown + mark-read
+├── T12.2 SSE auth fix — ✅ fetch-based SSE with Bearer token
+├── T12.3 Notifications page — ✅ pagination + filtering + SSE refresh
+├── T12.4 Shared timeAgo — ✅ utils.ts extracted
+└── T12.5 Header wiring — ✅ bell in header
 
 PHASE 8 COMPLETE
 

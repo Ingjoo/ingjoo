@@ -1,7 +1,7 @@
 # 改进路线图
 
 > 最后更新：2026-04-26
-> 当前版本：v0.1.0 — 阶段 1-9 已完成
+> 当前版本：v0.1.0 — 阶段 1-12 已完成
 
 ## 现状总览
 
@@ -326,6 +326,13 @@ ingjoo-infra/src/
 ├── T9.7 preferences 路径 — ✅ /auth/preferences
 └── T9.8 死代码清理 — ✅ 删除 providers.tsx
 
+阶段 12 已完成（411 测试，前端 SSE 认证已修复）
+├── T12.1 NotificationBell — ✅ badge + 下拉 + mark-read
+├── T12.2 SSE 认证修复 — ✅ fetch-based SSE 携带 Bearer token
+├── T12.3 通知中心页面 — ✅ 分页 + 筛选 + SSE 实时刷新
+├── T12.4 共享 timeAgo — ✅ 提取到 utils.ts
+└── T12.5 Header 接线 — ✅ 通知铃铛已接入 Header
+
 阶段 8 已完成
 ├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索
 ├── T8.2 搜索接线 — ✅ build_search() + with_search()
@@ -337,13 +344,6 @@ ingjoo-infra/src/
 ├── T8.8 Logout 路由 — ✅ 注册 + 失效校验
 ├── T8.9 /api/auth/me — ✅ 当前用户信息
 └── T8.10 种子数据 — ✅ seed_metadata() 接入 run_migrations()
-
-阶段 9 待开始（前端对接）
-├── T9.1 /register 页面 — 📋 注册表单
-├── T9.2 Auth 持久化 — 📋 localStorage/cookie
-├── T9.3 /me 前端对接 — 📋 token 验证恢复
-├── T9.4 通知 API — 📋 后端实现
-└── T9.5 admin/search 页面 — 📋 基础页面
 
 阶段 7 已完成
 ├── T7.1 EventBus — ✅ tokio broadcast
