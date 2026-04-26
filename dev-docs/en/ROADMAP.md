@@ -22,7 +22,7 @@
 | Repo | Tech | Pages | Status |
 |------|------|-------|--------|
 | `ingjoo-js` (`@ingjoo/web`) | React + TypeScript + Rollup | — | ✅ Shared component library, auth/i18n/fetch/Domain DSL |
-| `web-base` | Next.js 16 + Tailwind CSS 4 | 8 | ✅ Full frontend-backend integration |
+| `web-base` | Next.js 16 + Tailwind CSS 4 | 12 | ✅ Full frontend-backend integration |
 
 ---
 

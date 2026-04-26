@@ -22,7 +22,7 @@
 | 仓库 | 技术 | 页面 | 状态 |
 |------|------|------|------|
 | `ingjoo-js` (`@ingjoo/web`) | React + TypeScript + Rollup | — | ✅ 共享组件库，auth/i18n/fetch/Domain DSL |
-| `web-base` | Next.js 16 + Tailwind CSS 4 | 8 个 | ✅ 完整前后端对接 |
+| `web-base` | Next.js 16 + Tailwind CSS 4 | 12 个 | ✅ 完整前后端对接 |
 
 ---
 
