@@ -16,3 +16,8 @@ anyhow.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+criterion.workspace = true
+
+[[bench]]
+name = "policy_bench"
+harness = false

@@ -2437,3 +2437,323 @@ async fn test_avatar_serve_rejects_path_traversal() {
     let resp = app.clone().oneshot(make_request("GET", "/api/avatars/../../etc/passwd", None)).await.unwrap();
     assert!(resp.status() == StatusCode::BAD_REQUEST || resp.status() == StatusCode::NOT_FOUND, "路径遍历变体应被拒绝");
 }
+
+// ── 多租户隔离集成测试 ──
+
+#[tokio::test]
+async fn test_multi_user_cross_tenant_isolation() {
+    let (app, state) = setup_app_with_models(vec![collection_test_model()]).await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    app.clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/col_item",
+            &admin,
+            Some(r#"{"name":"tenant_a_doc1","collection_id":"tenant_a","status":"active"}"#),
+        ))
+        .await
+        .unwrap();
+    app.clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/col_item",
+            &admin,
+            Some(r#"{"name":"tenant_a_doc2","collection_id":"tenant_a","status":"draft"}"#),
+        ))
+        .await
+        .unwrap();
+    app.clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/col_item",
+            &admin,
+            Some(r#"{"name":"tenant_b_doc1","collection_id":"tenant_b","status":"active"}"#),
+        ))
+        .await
+        .unwrap();
+    app.clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/col_item",
+            &admin,
+            Some(r#"{"name":"tenant_b_doc2","collection_id":"tenant_b","status":"draft"}"#),
+        ))
+        .await
+        .unwrap();
+
+    let domain_a = simple_url_encode(r#"["collection_id", "=", "tenant_a"]"#);
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_a), &admin, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = list["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2, "tenant_a 应看到 2 条记录");
+    for item in items {
+        assert_eq!(item["collection_id"].as_str().unwrap(), "tenant_a");
+        assert!(
+            item["name"].as_str().unwrap().starts_with("tenant_a"),
+            "不应看到其他租户的记录"
+        );
+    }
+
+    let domain_b = simple_url_encode(r#"["collection_id", "=", "tenant_b"]"#);
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_b), &admin, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = list["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2, "tenant_b 应看到 2 条记录");
+    for item in items {
+        assert_eq!(item["collection_id"].as_str().unwrap(), "tenant_b");
+        assert!(
+            item["name"].as_str().unwrap().starts_with("tenant_b"),
+            "不应看到其他租户的记录"
+        );
+    }
+
+    let domain_cross = simple_url_encode(r#"["collection_id", "=", "tenant_a"]"#);
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_cross), &admin, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = list["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2, "domain 过滤 tenant_a 始终只返回 tenant_a 数据");
+    for item in items {
+        assert_eq!(item["collection_id"].as_str().unwrap(), "tenant_a");
+    }
+
+    use ingjoo_core::query::domain::SqlCondition;
+    use ingjoo_infra::db::generic::GenericDb;
+    let model = collection_test_model();
+    let generic = GenericDb::new(&state.pool, &state.dialect);
+    let filter_a = SqlCondition { clause: "collection_id = ?".to_string(), params: vec!["tenant_a".to_string()] };
+    let result_a = generic.generic_list_with_filter(&model, None, Some(&filter_a), 50, 0).await.unwrap();
+    assert_eq!(result_a.items.len(), 2, "DB 层 tenant_a 应有 2 条");
+    let filter_b = SqlCondition { clause: "collection_id = ?".to_string(), params: vec!["tenant_b".to_string()] };
+    let result_b = generic.generic_list_with_filter(&model, None, Some(&filter_b), 50, 0).await.unwrap();
+    assert_eq!(result_b.items.len(), 2, "DB 层 tenant_b 应有 2 条");
+    let filter_all = SqlCondition { clause: "1=1".to_string(), params: vec![] };
+    let result_all = generic.generic_list_with_filter(&model, None, Some(&filter_all), 50, 0).await.unwrap();
+    assert_eq!(result_all.items.len(), 4, "DB 层全部应有 4 条");
+}
+
+#[tokio::test]
+async fn test_three_layer_security_combined() {
+    use ingjoo_security::{AccessOp, ModelAccess, RecordRule, SecurityBuilder};
+
+    let mut builder = SecurityBuilder::new();
+
+    builder.policy().add_model_access(ModelAccess {
+        model: "col_item".to_string(),
+        role: "viewer".to_string(),
+        read: true,
+        write: false,
+        create: false,
+        delete: false,
+        import: false,
+        export: false,
+    });
+
+    builder.policy().add_record_rule(RecordRule {
+        model: "col_item".to_string(),
+        role: "viewer".to_string(),
+        domain: ingjoo_core::query::domain::Domain::Leaf {
+            field: "status".to_string(),
+            op: ingjoo_core::query::domain::DomainOp::Equal,
+            value: ingjoo_core::query::domain::DomainValue::String("published".to_string()),
+        },
+        perm_read: true,
+        perm_write: false,
+        perm_create: false,
+        perm_delete: false,
+    });
+    let policy = builder.build();
+
+    assert!(policy.check_access("col_item", "viewer", AccessOp::Read));
+    assert!(!policy.check_access("col_item", "viewer", AccessOp::Write));
+    assert!(!policy.check_access("col_item", "viewer", AccessOp::Create));
+    assert!(!policy.check_access("col_item", "viewer", AccessOp::Delete));
+
+    let ids = vec!["col_viewer".to_string()];
+    let filter = policy.collection_isolation(&ids, None);
+    assert_eq!(filter.clause, "collection_id IN (?)");
+    assert_eq!(filter.params, vec!["col_viewer"]);
+
+    let (app, state) = setup_app_with_models(vec![collection_test_model()]).await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    app.clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/col_item",
+            &admin,
+            Some(r#"{"name":"published_doc","collection_id":"col_viewer","status":"published"}"#),
+        ))
+        .await
+        .unwrap();
+    app.clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/col_item",
+            &admin,
+            Some(r#"{"name":"draft_doc","collection_id":"col_viewer","status":"draft"}"#),
+        ))
+        .await
+        .unwrap();
+    app.clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/col_item",
+            &admin,
+            Some(r#"{"name":"other_tenant_doc","collection_id":"col_other","status":"published"}"#),
+        ))
+        .await
+        .unwrap();
+
+    let domain_published = simple_url_encode(r#"["status", "=", "published"]"#);
+    let domain_col_viewer = simple_url_encode(r#"["collection_id", "=", "col_viewer"]"#);
+    let combined = simple_url_encode(r#"[["status", "=", "published"], ["collection_id", "=", "col_viewer"]]"#);
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_published), &admin, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let published_items = list["items"].as_array().unwrap();
+    assert_eq!(published_items.len(), 2, "status=published 有 2 条");
+    for item in published_items {
+        assert_eq!(item["status"].as_str().unwrap(), "published");
+    }
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_col_viewer), &admin, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let col_items = list["items"].as_array().unwrap();
+    assert_eq!(col_items.len(), 2, "collection_id=col_viewer 有 2 条");
+    for item in col_items {
+        assert_eq!(item["collection_id"].as_str().unwrap(), "col_viewer");
+    }
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", combined), &admin, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let combined_items = list["items"].as_array().unwrap();
+    assert_eq!(combined_items.len(), 1, "status=published AND collection_id=col_viewer 只有 1 条");
+    assert_eq!(combined_items[0]["name"].as_str().unwrap(), "published_doc");
+    assert_eq!(combined_items[0]["status"].as_str().unwrap(), "published");
+    assert_eq!(combined_items[0]["collection_id"].as_str().unwrap(), "col_viewer");
+
+    let empty_filter = policy.collection_isolation(&[], None);
+    assert_eq!(empty_filter.clause, "1=0");
+}
+
+#[tokio::test]
+async fn test_collection_isolation_create_scoped() {
+    let (app, state) = setup_app_with_models(vec![collection_test_model()]).await;
+    let admin = get_admin_token(&app, &state).await;
+
+    let resp = app.clone().oneshot(auth_request("POST", "/api/data/col_item/ensure", &admin, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/col_item",
+            &admin,
+            Some(r#"{"name":"doc_in_a","collection_id":"col_alpha","status":"active"}"#),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(created["collection_id"].as_str().unwrap(), "col_alpha");
+    assert_eq!(created["name"].as_str().unwrap(), "doc_in_a");
+    let id_a = created["id"].as_str().unwrap().to_string();
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", &format!("/api/data/col_item/{}", id_a), &admin, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let fetched: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(fetched["collection_id"].as_str().unwrap(), "col_alpha");
+
+    let resp = app
+        .clone()
+        .oneshot(auth_request(
+            "POST",
+            "/api/data/col_item",
+            &admin,
+            Some(r#"{"name":"doc_in_b","collection_id":"col_beta","status":"active"}"#),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let created_b: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(created_b["collection_id"].as_str().unwrap(), "col_beta");
+
+    let domain_alpha = simple_url_encode(r#"["collection_id", "=", "col_alpha"]"#);
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_alpha), &admin, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = list["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "col_alpha 应只有 1 条记录");
+    assert_eq!(items[0]["name"].as_str().unwrap(), "doc_in_a");
+    assert_eq!(items[0]["collection_id"].as_str().unwrap(), "col_alpha");
+
+    let domain_beta = simple_url_encode(r#"["collection_id", "=", "col_beta"]"#);
+    let resp = app
+        .clone()
+        .oneshot(auth_request("GET", &format!("/api/data/col_item?domain={}", domain_beta), &admin, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 8192).await.unwrap();
+    let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = list["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "col_beta 应只有 1 条记录");
+    assert_eq!(items[0]["name"].as_str().unwrap(), "doc_in_b");
+    assert_eq!(items[0]["collection_id"].as_str().unwrap(), "col_beta");
+}

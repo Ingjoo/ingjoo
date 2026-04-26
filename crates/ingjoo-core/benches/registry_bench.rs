@@ -67,5 +67,45 @@ fn bench_registry_unregister(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_registry_register, bench_registry_get, bench_registry_list, bench_registry_unregister,);
+/// 1000 模型注册 + 查找
+fn bench_registry_large(c: &mut Criterion) {
+    c.bench_function("registry_large_1000_models", |b| {
+        b.iter_batched(
+            ModelRegistry::new,
+            |reg| {
+                for i in 0..1000 {
+                    reg.register(make_model(&format!("large_model_{}", i), 5));
+                }
+                reg.get("large_model_500");
+                reg
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+/// 50+ 字段的大模型
+fn bench_registry_large_model(c: &mut Criterion) {
+    c.bench_function("registry_large_model_50_fields", |b| {
+        b.iter_batched(
+            ModelRegistry::new,
+            |reg| {
+                reg.register(make_model("big_model", 50));
+                reg.get("big_model");
+                reg
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_registry_register,
+    bench_registry_get,
+    bench_registry_list,
+    bench_registry_unregister,
+    bench_registry_large,
+    bench_registry_large_model,
+);
 criterion_main!(benches);

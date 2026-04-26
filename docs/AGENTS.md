@@ -129,7 +129,7 @@ ingjoo/                              # 项目根目录
 # 构建
 just build
 
-# 全部测试（当前基线: 415 tests）
+# 全部测试（当前基线: 418 tests）
 just test
 
 # 运行
@@ -230,8 +230,8 @@ StateMachine, EventBus, IdGenerator, SearchEngine, PaymentProvider, Lock, Relati
 
 ## 当前状态
 
-- **测试基线**: 415 passed (workspace), 0 failures
-- **代码规模**: ~25,000 行 Rust，130+ 源文件
+- **测试基线**: 418 passed (workspace), 0 failures
+- **代码规模**: ~26,000 行 Rust，140+ 源文件
 - **Phase 1 (HTTP 服务)**: ✅ 完成
 - **Phase 2 (修复/加固)**: ✅ 完成
 - **Phase 3 (扩展特性)**: ✅ 完成 — 8 个扩展 trait
@@ -246,6 +246,7 @@ StateMachine, EventBus, IdGenerator, SearchEngine, PaymentProvider, Lock, Relati
 - **Phase 11 (通知系统)**: ✅ 完成 — NotificationStore + SSE + 管理后台增强
 - **Phase 12 (通知铃铛)**: ✅ 完成 — NotificationBell + fetch-based SSE 认证 + 共享 timeAgo
 - **Phase 13 (集成测试修复+Profile)**: ✅ 完成 — 头像上传 + 偏好持久化 + 前端构建修复
+- **Phase 14 (基础设施接线+多租户测试+性能基准)**: ✅ 完成 — Email/SMS noop + S3 存储 + 多租户测试 + 性能基准
 - **StoreError 类型化**: ✅ 完成
 
 ---

@@ -509,6 +509,38 @@ impl TranslationStore for NoopTranslationStore {
 }
 
 // ---------------------------------------------------------------------------
+// EmailProvider
+// ---------------------------------------------------------------------------
+
+/// 邮件服务的空实现 — 返回"未启用"错误
+#[cfg(feature = "email")]
+pub struct NoopEmailProvider;
+
+#[cfg(feature = "email")]
+#[async_trait]
+impl crate::email::EmailProvider for NoopEmailProvider {
+    async fn send(&self, _to: &str, _subject: &str, _html_body: &str) -> Result<(), anyhow::Error> {
+        Err(anyhow::anyhow!("邮件服务未启用"))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SmsProvider
+// ---------------------------------------------------------------------------
+
+/// 短信服务的空实现 — 返回"未启用"错误
+#[cfg(feature = "sms")]
+pub struct NoopSmsProvider;
+
+#[cfg(feature = "sms")]
+#[async_trait]
+impl crate::sms::SmsProvider for NoopSmsProvider {
+    async fn send_verification_code(&self, _phone: &str, _code: &str) -> Result<(), anyhow::Error> {
+        Err(anyhow::anyhow!("短信服务未启用"))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // NotificationStore
 // ---------------------------------------------------------------------------
 
@@ -756,6 +788,26 @@ mod tests {
 
         let m2o = loader.load_many2one("order", "partner", &["1".to_string()]).await.unwrap();
         assert!(m2o.is_empty());
+    }
+
+    #[cfg(feature = "email")]
+    #[tokio::test]
+    async fn test_noop_email_provider_returns_error() {
+        use crate::email::EmailProvider;
+        let provider = NoopEmailProvider;
+        let result = provider.send("test@example.com", "subject", "<p>body</p>").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("邮件服务未启用"));
+    }
+
+    #[cfg(feature = "sms")]
+    #[tokio::test]
+    async fn test_noop_sms_provider_returns_error() {
+        use crate::sms::SmsProvider;
+        let provider = NoopSmsProvider;
+        let result = provider.send_verification_code("13812345678", "123456").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("短信服务未启用"));
     }
 
     #[tokio::test]

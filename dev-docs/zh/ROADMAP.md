@@ -342,6 +342,12 @@ ingjoo-infra/src/
 ├── T13.6 前端构建修复 — ✅ NavMenu 类型 + Suspense + UpdatePreferences 类型
 └── T13.7 头像安全加固 — ✅ 路径遍历防护 + 集成测试（4 个头像测试）
 
+阶段 14 已完成（基础设施接线 + 多租户测试 + 性能基准）
+├── T14.1 Email/SMS 接线 — ✅ NoopEmailProvider + NoopSmsProvider + AppState + main.rs
+├── T14.2 S3/OSS 文件存储接线 — ✅ build_file_storage() + 环境变量配置 + S3 降级
+├── T14.3 多租户隔离测试 — ✅ 3 个新集成测试（跨租户/三层组合/创建作用域）
+└── T14.4 性能基准 — ✅ policy_bench + domain/registry 扩展 + Justfile bench
+
 阶段 8 已完成
 ├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索
 ├── T8.2 搜索接线 — ✅ build_search() + with_search()

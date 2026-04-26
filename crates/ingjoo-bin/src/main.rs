@@ -7,7 +7,12 @@ use ingjoo_core::pool;
 use ingjoo_core::ModelRegistry;
 use ingjoo_infra::auth::AuthProvider;
 use ingjoo_infra::db::database_manager::DatabaseManager;
-use ingjoo_infra::{AppState, AuthConfig, IngjooDb, IngjooStore, JwtAuthProvider, PluginManager, RateLimitConfig};
+use ingjoo_infra::{
+    AppState, AuthConfig, FileStorage, IngjooDb, IngjooStore, JwtAuthProvider, LocalStorage, PluginManager,
+    RateLimitConfig,
+};
+#[cfg(feature = "s3")]
+use ingjoo_infra::S3Storage;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -89,7 +94,14 @@ async fn main() -> Result<()> {
         .with_translation(build_translation(pool.clone(), dialect))
         .with_search(build_search(pool.clone(), dialect))
         .with_state_machine(build_state_machine(pool, dialect))
-        .with_text_splitter(build_text_splitter());
+        .with_text_splitter(build_text_splitter())
+        .with_file_storage(build_file_storage().await);
+
+    #[cfg(feature = "email")]
+    let app_state = app_state.with_email(build_email());
+
+    #[cfg(feature = "sms")]
+    let app_state = app_state.with_sms(build_sms());
 
     #[cfg(feature = "multi-db")]
     let app_state = app_state.with_multi_db_config(cli.admin_passwd.clone(), cli.list_db, cli.dbfilter.clone());
@@ -150,6 +162,14 @@ use ingjoo_infra::extension_noop::{
     NoopAuditStore, NoopContentFilter, NoopDataMask, NoopNotificationStore, NoopRelationLoader, NoopSearchEngine,
     NoopSignatureVerifier, NoopStateMachine, NoopTranslationStore,
 };
+#[cfg(feature = "email")]
+use ingjoo_infra::extension_noop::NoopEmailProvider;
+#[cfg(feature = "email")]
+use ingjoo_infra::email::EmailProvider;
+#[cfg(feature = "sms")]
+use ingjoo_infra::extension_noop::NoopSmsProvider;
+#[cfg(feature = "sms")]
+use ingjoo_infra::sms::SmsProvider;
 
 #[cfg(feature = "db")]
 fn build_audit(pool: ingjoo_core::pool::Pool, dialect: ingjoo_core::Dialect) -> Arc<dyn AuditStore> {
@@ -243,4 +263,73 @@ fn build_search(_pool: ingjoo_core::pool::Pool, _dialect: ingjoo_core::Dialect) 
 
 fn build_text_splitter() -> Arc<dyn TextSplitter> {
     Arc::new(ingjoo_infra::extension_impl::CharTextSplitter::with_defaults())
+}
+
+async fn build_file_storage() -> Arc<dyn FileStorage> {
+    let backend = std::env::var("INGJOO_STORAGE_BACKEND").unwrap_or_else(|_| "local".to_string());
+
+    match backend.as_str() {
+        "s3" => build_s3_storage().await,
+        _ => {
+            tracing::info!("文件存储后端: {}", backend);
+            build_local_storage(None)
+        }
+    }
+}
+
+fn build_local_storage(custom_path: Option<std::path::PathBuf>) -> Arc<dyn FileStorage> {
+    let path = custom_path.unwrap_or_else(|| {
+        std::env::var("INGJOO_STORAGE_PATH")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| std::path::PathBuf::from("./data/uploads"))
+    });
+    Arc::new(LocalStorage::new(path))
+}
+
+#[cfg(feature = "s3")]
+async fn build_s3_storage() -> Arc<dyn FileStorage> {
+    let bucket = match std::env::var("INGJOO_S3_BUCKET") {
+        Ok(b) => b,
+        Err(_) => {
+            tracing::warn!("S3 后端已选择但未配置 INGJOO_S3_BUCKET，回退到本地存储");
+            return build_local_storage(None);
+        }
+    };
+
+    if let Ok(endpoint) = std::env::var("INGJOO_S3_ENDPOINT") {
+        let region = std::env::var("INGJOO_S3_REGION").unwrap_or_else(|_| "us-east-1".to_string());
+        tracing::info!("文件存储后端: s3 (endpoint: {}, bucket: {}, region: {})", endpoint, bucket, region);
+        match S3Storage::from_endpoint(endpoint, bucket, region).await {
+            Ok(storage) => Arc::new(storage),
+            Err(e) => {
+                tracing::warn!("创建 S3 存储失败: {}，回退到本地存储", e);
+                build_local_storage(None)
+            }
+        }
+    } else {
+        tracing::info!("文件存储后端: s3 (bucket: {})", bucket);
+        match S3Storage::new(bucket).await {
+            Ok(storage) => Arc::new(storage),
+            Err(e) => {
+                tracing::warn!("创建 S3 存储失败: {}，回退到本地存储", e);
+                build_local_storage(None)
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "s3"))]
+async fn build_s3_storage() -> Arc<dyn FileStorage> {
+    tracing::warn!("S3 后端已选择但 s3 feature 未启用，回退到本地存储");
+    build_local_storage(None)
+}
+
+#[cfg(feature = "email")]
+fn build_email() -> Arc<dyn EmailProvider> {
+    Arc::new(NoopEmailProvider)
+}
+
+#[cfg(feature = "sms")]
+fn build_sms() -> Arc<dyn SmsProvider> {
+    Arc::new(NoopSmsProvider)
 }

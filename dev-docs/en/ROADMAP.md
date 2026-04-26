@@ -297,6 +297,12 @@ PHASE 13 COMPLETE (Integration test fix + Profile + Frontend build fixes + Secur
 ├── T13.6 Frontend build fixes — ✅ NavMenu types + Suspense + UpdatePreferences type
 └── T13.7 Avatar security hardening — ✅ path traversal protection + integration tests (4 avatar tests)
 
+PHASE 14 COMPLETE (Infrastructure wiring + Multi-tenant tests + Performance benchmarks)
+├── T14.1 Email/SMS wiring — ✅ NoopEmailProvider + NoopSmsProvider + AppState + main.rs
+├── T14.2 S3/OSS storage wiring — ✅ build_file_storage() + env-var config + S3 fallback
+├── T14.3 Multi-tenant isolation tests — ✅ 3 new integration tests (cross-tenant / 3-layer / create-scoped)
+└── T14.4 Performance benchmarks — ✅ policy_bench + domain/registry expanded + Justfile bench
+
 PHASE 8 COMPLETE
 
 PHASE 7 COMPLETE

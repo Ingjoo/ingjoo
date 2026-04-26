@@ -14,6 +14,10 @@ use ingjoo_core::extension::{
     NotificationStore, PaymentProvider, RelationLoader, SearchEngine, SignatureVerifier, StateMachine, TextSplitter,
     TranslationStore, VectorStore,
 };
+#[cfg(feature = "email")]
+use crate::email::EmailProvider;
+#[cfg(feature = "sms")]
+use crate::sms::SmsProvider;
 use ingjoo_core::pool::Pool;
 use ingjoo_core::Dialect;
 use ingjoo_core::ModelRegistry;
@@ -96,6 +100,12 @@ pub struct AppState {
     pub translation: Arc<dyn TranslationStore>,
     /// 向量存储
     pub vector: Arc<dyn VectorStore>,
+    /// 邮件服务
+    #[cfg(feature = "email")]
+    pub email: Arc<dyn EmailProvider>,
+    /// 短信服务
+    #[cfg(feature = "sms")]
+    pub sms: Arc<dyn SmsProvider>,
 
     // ── 常驻扩展 trait（无 noop，始终有真实实现） ──
     /// 事件总线
@@ -154,6 +164,10 @@ impl AppState {
             relation_loader: Arc::new(NoopRelationLoader),
             translation: Arc::new(NoopTranslationStore),
             vector: Arc::new(NoopVectorStore),
+            #[cfg(feature = "email")]
+            email: Arc::new(NoopEmailProvider),
+            #[cfg(feature = "sms")]
+            sms: Arc::new(NoopSmsProvider),
 
             event_bus: Arc::new(crate::extension_impl::BroadcastEventBus::new(256)),
             id_generator: Arc::new(crate::extension_impl::DefaultIdGenerator::new()),
@@ -260,6 +274,18 @@ impl AppState {
 
     pub fn with_vector(mut self, store: Arc<dyn VectorStore>) -> Self {
         self.vector = store;
+        self
+    }
+
+    #[cfg(feature = "email")]
+    pub fn with_email(mut self, email: Arc<dyn EmailProvider>) -> Self {
+        self.email = email;
+        self
+    }
+
+    #[cfg(feature = "sms")]
+    pub fn with_sms(mut self, sms: Arc<dyn SmsProvider>) -> Self {
+        self.sms = sms;
         self
     }
 

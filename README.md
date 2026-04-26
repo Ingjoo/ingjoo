@@ -124,7 +124,7 @@ just dev            # 启动开发服务器
 
 ## 测试
 
-约 **415 个测试**，覆盖所有 crate：
+约 **418 个测试**，覆盖所有 crate：
 
 ```bash
 cargo test --workspace              # 全 workspace
