@@ -277,11 +277,14 @@ pub async fn upload_avatar(
     Ok(Json(UserPublic::from(&user)))
 }
 
-/// 公开端点 — 提供已上传的头像文件
 pub async fn serve_avatar(
     State(state): State<Arc<AppState>>,
     Path(filename): Path<String>,
 ) -> Result<Response, AppError> {
+    if filename.contains("..") || filename.contains('/') || filename.contains('\\') || filename.contains('\0') {
+        return Err(AppError::BadRequest("非法文件名".into()));
+    }
+
     let path = format!("avatars/{}", filename);
     let data = state
         .file_storage
@@ -300,10 +303,6 @@ pub async fn serve_avatar(
         "webp" => "image/webp",
         _ => "application/octet-stream",
     };
-
-    let mut headers = HeaderMap::new();
-    headers.insert(CONTENT_TYPE, HeaderValue::from_static(content_type));
-    headers.insert(CACHE_CONTROL, HeaderValue::from_static("public, max-age=86400"));
 
     Ok(Response::builder().status(StatusCode::OK).header(CONTENT_TYPE, content_type).header(CACHE_CONTROL, "public, max-age=86400").body(Body::from(data)).unwrap_or_else(|_| {
         Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::from("服务器内部错误")).unwrap()

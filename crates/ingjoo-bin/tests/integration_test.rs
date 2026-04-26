@@ -2426,3 +2426,14 @@ async fn test_avatar_upload_requires_auth() {
 
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED, "未认证请求应返回 401");
 }
+
+#[tokio::test]
+async fn test_avatar_serve_rejects_path_traversal() {
+    let app = setup_app().await;
+
+    let resp = app.clone().oneshot(make_request("GET", "/api/avatars/..%2F..%2Fetc%2Fpasswd", None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "路径遍历应被拒绝");
+
+    let resp = app.clone().oneshot(make_request("GET", "/api/avatars/../../etc/passwd", None)).await.unwrap();
+    assert!(resp.status() == StatusCode::BAD_REQUEST || resp.status() == StatusCode::NOT_FOUND, "路径遍历变体应被拒绝");
+}
