@@ -248,6 +248,7 @@ StateMachine, EventBus, IdGenerator, SearchEngine, PaymentProvider, Lock, Relati
 - **Phase 13 (集成测试修复+Profile)**: ✅ 完成 — 头像上传 + 偏好持久化 + 前端构建修复
 - **Phase 14 (基础设施接线+多租户测试+性能基准)**: ✅ 完成 — Email/SMS noop + S3 存储 + 多租户测试 + 性能基准
 - **StoreError 类型化**: ✅ 完成
+- **Phase 17 (视图管线增强)**: ✅ 完成 — ViewArch types + 看板视图 + 表单内联编辑 + 搜索种子 + 搜索收藏
 
 ---
 
