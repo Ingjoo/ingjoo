@@ -2,7 +2,7 @@
 
 > 生成日期: 2026-04-25
 > 版本: v0.1.0
-> 基线: 411 tests, 0 failures
+> 基线: 418 tests (default) / 426 tests (with mock), 0 failures
 
 ---
 
