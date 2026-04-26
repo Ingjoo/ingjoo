@@ -2,10 +2,10 @@
 
 **日期**: 2026-04-26  
 **版本**: v0.1.0  
-**状态**: ✅ 阶段 1-12 全部完成  
+**状态**: ✅ 阶段 1-13 全部完成  
 **测试基线**: 411 单元测试 + 集成测试通过，0 失败  
 **构建**: 0 errors, 0 clippy warnings, TypeScript 通过, `next build` 通过  
-**代码规模**: ~25,400 行 Rust，130+ 源文件，12 页面  
+**代码规模**: ~25,500 行 Rust，130+ 源文件，12 页面  
 
 ---
 
@@ -25,7 +25,7 @@
 阶段 10  模块系统 + 空库体验     ✅  2026-04-26
 阶段 11  通知系统 + 前端增强     ✅  2026-04-26
 阶段 12  前端通知铃铛 + SSE 修复  ✅  2026-04-26
-```
+阶段 13  集成测试修复 + Profile 完善  ✅  2026-04-26
 
 ---
 
@@ -43,7 +43,7 @@
 | `ingjoo-cache` | 342 | 3 | 5 | **完整** — Moka 缓存 |
 | `ingjoo-macros` | 210 | 1 | — | **可用** — `#[derive(IngjooModel)]` |
 
-**Rust 后端合计**：~25,400 行代码，130+ 文件，411 单元测试 + 集成测试。
+**Rust 后端合计**：~25,500 行代码，130+ 文件，411 单元测试 + 集成测试。
 
 ### 2.2 前端
 
@@ -307,19 +307,27 @@
 
 **退出标准**：✅ NotificationBell 显示未读计数 + 下拉列表，SSE 通过 fetch 发送 Bearer token，timeAgo 共享函数消除重复代码。
 
-### 阶段 13：集成测试修复 + Profile 完善 🔧
+### 阶段 13：集成测试修复 + Profile 完善 ✅
 
 > 目标：解决集成测试 runtime-in-runtime 问题，完善 Profile 页面功能，提升代码质量和用户体验。
 
 | # | 任务 | 改动范围 | 状态 |
 |---|------|---------|------|
-| T13.1 | 修复 handlers_test.rs tokio runtime 嵌套问题 | `ingjoo-infra/tests/handlers_test.rs` | 📋 待开始 |
-| T13.2 | Profile 头像上传（前端 + 后端 storage API） | `profile/page.tsx` + `handlers/storage.rs` | 📋 待开始 |
-| T13.3 | Profile 偏好设置持久化（PUT /api/auth/preferences 对接） | `profile/page.tsx` | 📋 待开始 |
+| T13.1 | 修复 handlers_test.rs tokio runtime 嵌套问题 | `ingjoo-infra/tests/handlers_test.rs` | ✅ 验证通过（15 测试全通过，问题不存在） |
+| T13.2 | Profile 头像上传（前端 + 后端 multipart endpoint） | `profile/page.tsx` + `handlers/auth.rs` + `router.rs` + `api.ts` | ✅ |
+| T13.3 | Profile 偏好设置持久化（PUT /api/auth/preferences 对接） | `profile/page.tsx` | ✅ 已实现（usePreferences → api → 后端完整链路） |
 | T13.4 | 项目文档纳入版本控制（docs/ → ingjoo repo） | `source/ingjoo/docs/` | ✅ |
 | T13.5 | ROADMAP 页面数修正（8→12） | `dev-docs/en/ROADMAP.md` + `dev-docs/zh/ROADMAP.md` | ✅ |
+| T13.6 | 前端构建修复 — NavMenu 类型 + Suspense + usePreferences 类型 | `header.tsx` + `login/page.tsx` + `api.ts` | ✅ |
 
-**退出标准**：集成测试全量通过（411+，0 failures），Profile 页面支持头像上传 + 偏好设置持久化。
+**新增 API 端点**：
+
+| 端点 | 方法 | 认证 | 说明 |
+|------|------|------|------|
+| `/api/auth/avatar` | POST | 受保护 | 上传头像（multipart, 2MB, image-only） |
+| `/api/avatars/{filename}` | GET | 公共 | 头像文件服务 |
+
+**退出标准**：✅ 集成测试全量通过（411，0 failures），Profile 页面支持头像上传 + 偏好设置持久化，前端构建 0 错误。
 
 ---
 
@@ -337,6 +345,8 @@
 | `/api/auth/me` | GET | 受保护 | 当前用户（前端刷新用） |
 | `/api/auth/preferences` | GET/PUT | 受保护 | 用户偏好 |
 | `/api/auth/change-password` | POST | 受保护 | 修改密码 |
+| `/api/auth/avatar` | POST | 受保护 | 上传头像 |
+| `/api/avatars/{filename}` | GET | 公共 | 头像文件服务 |
 
 ### 4.2 数据操作
 
@@ -420,8 +430,6 @@
 
 | 问题 | 严重程度 | 说明 |
 |------|---------|------|
-| 集成测试 runtime-in-runtime | 低 | handlers_test.rs 因 tokio runtime 嵌套失败，单独运行通过 — Phase 13 |
-| Profile 完善 | 低 | 头像上传、偏好设置持久化 — Phase 13 |
 | E2E 测试框架 | 低 | Playwright 自动化 — Phase 14+ |
 
 > **已解决**（Phase 11+集成测试补充）：~~retry 测试偶发失败~~ → jitter 阈值修正（1.5→1.25）；~~WebSocket 前端代理~~ → 已配置 rewrites；~~通知系统后端~~ → 已实现 NotificationStore + handler；~~admin 页面功能~~ → 角色编辑 + 创建用户 + 审计过滤；~~search 页面~~ → 类型筛选 + 防抖 + URL 同步；~~Header 通知铃铛~~ → NotificationBell + fetch-based SSE + 共享 timeAgo；~~项目文档未纳入版本控制~~ → docs/ 已迁入 ingjoo repo；~~ROADMAP 页面数不一致~~ → 统一修正为 12。
@@ -457,14 +465,14 @@
 2026-04-26  Phase 11   ██████       通知系统 + 前端增强
 2026-04-26  Phase 12   ████         前端通知铃铛 + SSE 修复
 2026-04-26  Phase 13   ████         集成测试修复 + Profile 完善
-                                        ↑ 现在
+                                         ✅ 完成
 ```
 
 ---
 
 ## 九、下一步建议
 
-> Phase 13 已启动（集成测试修复 + Profile 完善）。以下为 Phase 14+ 待办。
+> Phase 13 已完成。以下为 Phase 14+ 待办。
 
 | 优先级 | 任务 | 预估工时 | 说明 |
 |--------|------|---------|------|
