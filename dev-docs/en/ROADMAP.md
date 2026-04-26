@@ -15,7 +15,7 @@
 | `ingjoo-bin` | 2,650 | 80 | **Working** | Full axum router with 80 integration tests passing |
 | `ingjoo-macros` | 210 | — | **Working** | `#[derive(IngjooModel)]` proc macro |
 
-**Total**: ~24,300 lines, 411 tests, 130+ source files.
+**Total**: ~25,500 lines, 415 tests, 130+ source files.
 
 ### Frontend Repos
 
@@ -281,7 +281,7 @@ PHASE 9 COMPLETE (272 tests, 0 clippy warnings, login→Dashboard QA verified)
 ├── T9.7 Preferences path — ✅ /auth/preferences
 └── T9.8 Dead code cleanup — ✅ removed providers.tsx
 
-PHASE 12 COMPLETE (411 tests, frontend SSE auth fixed)
+PHASE 12 COMPLETE (414 tests, frontend SSE auth fixed)
 ├── T12.1 NotificationBell — ✅ badge + dropdown + mark-read
 ├── T12.2 SSE auth fix — ✅ fetch-based SSE with Bearer token
 ├── T12.3 Notifications page — ✅ pagination + filtering + SSE refresh

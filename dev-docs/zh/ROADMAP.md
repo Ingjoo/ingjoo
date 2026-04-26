@@ -15,7 +15,7 @@
 | `ingjoo-bin` | 2,650 | 80 | **可用** | 完整 axum 路由、80 集成测试通过 |
 | `ingjoo-macros` | 210 | — | **可用** | `#[derive(IngjooModel)]` 派生宏 |
 
-**合计**：约 24,300 行代码，411 个单元测试 + 集成测试，130+ 个源文件。
+**合计**：约 25,500 行代码，415 个单元测试 + 集成测试，130+ 个源文件。
 
 ### 前端仓库
 
@@ -326,7 +326,7 @@ ingjoo-infra/src/
 ├── T9.7 preferences 路径 — ✅ /auth/preferences
 └── T9.8 死代码清理 — ✅ 删除 providers.tsx
 
-阶段 12 已完成（411 测试，前端 SSE 认证已修复）
+阶段 12 已完成（414 测试，前端 SSE 认证已修复）
 ├── T12.1 NotificationBell — ✅ badge + 下拉 + mark-read
 ├── T12.2 SSE 认证修复 — ✅ fetch-based SSE 携带 Bearer token
 ├── T12.3 通知中心页面 — ✅ 分页 + 筛选 + SSE 实时刷新

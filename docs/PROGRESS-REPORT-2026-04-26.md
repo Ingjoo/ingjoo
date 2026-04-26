@@ -3,7 +3,7 @@
 **日期**: 2026-04-26  
 **版本**: v0.1.0  
 **状态**: ✅ 阶段 1-13 全部完成  
-**测试基线**: 411 单元测试 + 集成测试通过，0 失败  
+**测试基线**: 415 单元测试 + 集成测试通过，0 失败  
 **构建**: 0 errors, 0 clippy warnings, TypeScript 通过, `next build` 通过  
 **代码规模**: ~25,500 行 Rust，130+ 源文件，12 页面  
 
@@ -43,7 +43,7 @@
 | `ingjoo-cache` | 342 | 3 | 5 | **完整** — Moka 缓存 |
 | `ingjoo-macros` | 210 | 1 | — | **可用** — `#[derive(IngjooModel)]` |
 
-**Rust 后端合计**：~25,500 行代码，130+ 文件，411 单元测试 + 集成测试。
+**Rust 后端合计**：~25,500 行代码，130+ 文件，415 单元测试 + 集成测试。
 
 ### 2.2 前端
 
@@ -291,7 +291,7 @@
 | T11.F7 | WebSocket 代理配置（`/ws` → `localhost:3000/ws`） | `next.config.ts` | ✅ |
 | T11.F8 | Toast 通知系统（成功/失败，3s 自动消失） | `admin/page.tsx` | ✅ |
 
-**退出标准**：✅ 411 测试通过，前端构建 0 错误，通知 API 可用，管理后台角色编辑/创建用户/审计过滤完整，搜索页类型筛选+防抖+URL同步完整。
+**退出标准**：✅ 415 测试通过，前端构建 0 错误，通知 API 可用，管理后台角色编辑/创建用户/审计过滤完整，搜索页类型筛选+防抖+URL同步完整。
 
 ### 阶段 12：前端通知铃铛 + SSE 认证修复 ✅
 
@@ -319,6 +319,7 @@
 | T13.4 | 项目文档纳入版本控制（docs/ → ingjoo repo） | `source/ingjoo/docs/` | ✅ |
 | T13.5 | ROADMAP 页面数修正（8→12） | `dev-docs/en/ROADMAP.md` + `dev-docs/zh/ROADMAP.md` | ✅ |
 | T13.6 | 前端构建修复 — NavMenu 类型 + Suspense + usePreferences 类型 | `header.tsx` + `login/page.tsx` + `api.ts` | ✅ |
+| T13.7 | 头像安全加固 — 路径遍历防护 + 死代码清理 + 集成测试 | `handlers/auth.rs` + `integration_test.rs` | ✅ 4 个头像测试 + 路径遍历拒绝 |
 
 **新增 API 端点**：
 
@@ -327,7 +328,7 @@
 | `/api/auth/avatar` | POST | 受保护 | 上传头像（multipart, 2MB, image-only） |
 | `/api/avatars/{filename}` | GET | 公共 | 头像文件服务 |
 
-**退出标准**：✅ 集成测试全量通过（411，0 failures），Profile 页面支持头像上传 + 偏好设置持久化，前端构建 0 错误。
+**退出标准**：✅ 集成测试全量通过（415，0 failures），Profile 页面支持头像上传 + 偏好设置持久化，前端构建 0 错误。
 
 ---
 

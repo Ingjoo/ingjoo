@@ -129,7 +129,7 @@ ingjoo/                              # 项目根目录
 # 构建
 just build
 
-# 全部测试（当前基线: 411 tests）
+# 全部测试（当前基线: 415 tests）
 just test
 
 # 运行
@@ -230,7 +230,7 @@ StateMachine, EventBus, IdGenerator, SearchEngine, PaymentProvider, Lock, Relati
 
 ## 当前状态
 
-- **测试基线**: 411 passed (workspace), 0 failures
+- **测试基线**: 415 passed (workspace), 0 failures
 - **代码规模**: ~25,000 行 Rust，130+ 源文件
 - **Phase 1 (HTTP 服务)**: ✅ 完成
 - **Phase 2 (修复/加固)**: ✅ 完成
