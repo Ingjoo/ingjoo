@@ -10,12 +10,12 @@
 
 | 指标 | 数值 |
 |------|------|
-| 代码量 | ~25,000 行 |
-| 测试数 | 411 个（全部通过） |
-| 源文件 | 130 个 |
+| 代码量 | ~26,000 行 |
+| 测试数 | 418 个（全部通过） |
+| 源文件 | 140 个 |
 | Crate 数 | 7 个 |
 | 迁移版本 | v1-v6 |
-| 开发周期 | Phase 1 ~ Phase 6 (全部完成) |
+| 开发周期 | Phase 1 ~ Phase 17 (全部完成) |
 
 ---
 
@@ -206,14 +206,14 @@
 | `/api/databases` | POST | 创建数据库（JWT admin）— 已有 |
 | `/api/databases/{name}/status` | GET | 数据库状态查询 — 已有 |
 | `/api/databases/{name}` | DELETE | 删除数据库连接池 — 已有 |
-| `/api/database/list` | GET | 公共列出数据库（Basic Auth / list_db 控制）— Phase 12 |
-| `/api/database/create` | POST | 创建+迁移+播种数据库（Basic Auth）— Phase 12 |
-| `/api/database/{name}` | DELETE | 删除数据库含物理文件（Basic Auth）— Phase 12 |
-| `/api/database/{name}/backup` | POST | 备份数据库（Basic Auth）— Phase 12 |
-| `/api/database/{name}/restore` | POST | 恢复数据库（Basic Auth）— Phase 12 |
-| `/api/database/{name}/info` | GET | 数据库详细信息（Basic Auth）— Phase 12 |
-| `/api/database/backup/upload` | POST | 上传备份文件（Basic Auth）— Phase 12 |
-| `/api/database/backup/list` | GET | 列出备份文件（Basic Auth）— Phase 12 |
+| `/api/database/list` | GET | 公共列出数据库（Basic Auth / list_db 控制）— Phase 18 |
+| `/api/database/create` | POST | 创建+迁移+播种数据库（Basic Auth）— Phase 18 |
+| `/api/database/{name}` | DELETE | 删除数据库含物理文件（Basic Auth）— Phase 18 |
+| `/api/database/{name}/backup` | POST | 备份数据库（Basic Auth）— Phase 18 |
+| `/api/database/{name}/restore` | POST | 恢复数据库（Basic Auth）— Phase 18 |
+| `/api/database/{name}/info` | GET | 数据库详细信息（Basic Auth）— Phase 18 |
+| `/api/database/backup/upload` | POST | 上传备份文件（Basic Auth）— Phase 18 |
+| `/api/database/backup/list` | GET | 列出备份文件（Basic Auth）— Phase 18 |
 
 ---
 
@@ -258,19 +258,26 @@
 ├── Phase 7  ✅ ──── 扩展实现（RelationLoader/TranslationStore/StateMachine/TextSplitter）
 ├── Phase 8  ✅ ──── 搜索集成（DbSearchEngine + CRUD 自动索引 + 全局搜索 API + 索引重建）
 ├── Phase 9  ✅ ──── 前端集成（登录/注册/仪表盘/通知/QA）
+├── Phase 10 ✅ ──── 模块系统（安装/卸载/升级 + 空库体验）
 ├── Phase 11 ✅ ──── 通知系统 + 前端增强
+├── Phase 12 ✅ ──── 通知铃铛（NotificationBell + fetch-based SSE）
+├── Phase 13 ✅ ──── 集成测试修复 + Profile
+├── Phase 14 ✅ ──── 基础设施接线 + 多租户测试 + 性能基准
+├── Phase 15 ✅ ──── QA 修复 + 文档同步（健康评分 49→77.5）
+├── Phase 16 ✅ ──── QA 验证 + 控制台修复（0 console errors）
+├── Phase 17 ✅ ──── 视图管线增强（ViewArch + 看板 + 搜索收藏）
 │
 │  ── 以下为计划 ──
 │
-├── Phase 12 多数据库管理     (预估 8d) ← 新增
-│   ├── T12-C1~C4 配置层
-│   ├── T12-B3   feature gate
-│   ├── T12-A1~A8 API 端点（8个）
-│   ├── T12-M1~M2 迁移/播种复用
-│   ├── T12-L1~L4 认证调整
-│   ├── T12-P1~P2 物理管理
-│   ├── T12-J1~J3 前端工具库
-│   └── T12-F1~F7 Admin 面板
+├── Phase 18 多数据库管理     (预估 8d) ← 原 Phase 12，重编号避免冲突
+│   ├── T18-C1~C4 配置层
+│   ├── T18-B3   feature gate
+│   ├── T18-A1~A8 API 端点（8个）
+│   ├── T18-M1~M2 迁移/播种复用
+│   ├── T18-L1~L4 认证调整
+│   ├── T18-P1~P2 物理管理
+│   ├── T18-J1~J3 前端工具库
+│   └── T18-F1~F7 Admin 面板
 │
 ├── T4.1 插件热加载        (预估 5d)
 ├── T4.4 集成测试套件      (预估 3d)
@@ -294,7 +301,7 @@
 
 ---
 
-## 十一、Phase 12 — 多数据库管理（Odoo 对齐）
+## 十一、Phase 18 — 多数据库管理（Odoo 对齐）
 
 > **任务等级**: L（跨三仓库，预估 5-8 天）
 > **目标**: 补充完整的多数据库管理功能，行为对齐 Odoo 的数据库管理器机制
@@ -327,18 +334,18 @@
 
 | 任务ID | 任务 | 说明 |
 |--------|------|------|
-| T12-C1 | `ADMIN_PASSWD` 配置 | 环境变量 `INGJOO_ADMIN_PASSWD`，用于数据库管理 API 的 Basic Auth。不存入 DB |
-| T12-C2 | `LIST_DB` 配置 | 布尔值，默认 `true`。若 `false`，`/api/database/list` 返回 403 |
-| T12-C3 | `DEFAULT_DB` 配置 | 可选字符串。若设置，启动时自动创建该数据库（若不存在）并执行迁移+播种 |
-| T12-C4 | `DBFILTER` 配置 | 正则表达式，默认空（不过滤）。用于限制 `/api/database/list` 返回的范围 |
+| T18-C1 | `ADMIN_PASSWD` 配置 | 环境变量 `INGJOO_ADMIN_PASSWD`，用于数据库管理 API 的 Basic Auth。不存入 DB |
+| T18-C2 | `LIST_DB` 配置 | 布尔值，默认 `true`。若 `false`，`/api/database/list` 返回 403 |
+| T18-C3 | `DEFAULT_DB` 配置 | 可选字符串。若设置，启动时自动创建该数据库（若不存在）并执行迁移+播种 |
+| T18-C4 | `DBFILTER` 配置 | 正则表达式，默认空（不过滤）。用于限制 `/api/database/list` 返回的范围 |
 
 #### 2. 后端 — 启动行为改造
 
 | 任务ID | 任务 | 说明 |
 |--------|------|------|
-| T12-B1 | 无 DEFAULT_DB 启动 | 启动后仅初始化连接池管理器，不连接任何业务数据库，等待管理 API 创建 |
-| T12-B2 | 有 DEFAULT_DB 启动 | 检查数据库是否存在 → 不存在则创建 → 执行全部迁移 + 播种核心种子数据 → 连接 |
-| T12-B3 | `multi-db` Cargo feature | 整个多数据库功能通过 feature gate 控制，默认不开启，保持向后兼容 |
+| T18-B1 | 无 DEFAULT_DB 启动 | 启动后仅初始化连接池管理器，不连接任何业务数据库，等待管理 API 创建 |
+| T18-B2 | 有 DEFAULT_DB 启动 | 检查数据库是否存在 → 不存在则创建 → 执行全部迁移 + 播种核心种子数据 → 连接 |
+| T18-B3 | `multi-db` Cargo feature | 整个多数据库功能通过 feature gate 控制，默认不开启，保持向后兼容 |
 
 #### 3. 后端 — 数据库管理 API（公共，HTTP Basic Auth）
 
@@ -347,72 +354,72 @@
 
 | 任务ID | 端点 | 方法 | 说明 |
 |--------|------|------|------|
-| T12-A1 | `/api/database/list` | GET | 返回数据库名称列表（含 name, created_at, active, size）。受 `LIST_DB` 控制。`list_db=false` 时返回 403。应用 `DBFILTER` 正则过滤。**当 `list_db=true` 时无需认证即可返回** |
-| T12-A2 | `/api/database/create` | POST | 请求体 `{ "name": "xxx" }`。创建数据库 → 自动迁移 → 播种核心数据 → 返回成功 |
-| T12-A3 | `/api/database/{name}` | DELETE | 删除指定数据库（不能删默认库）。关闭连接池 + 移除物理文件/ DROP DATABASE |
-| T12-A4 | `/api/database/{name}/backup` | POST | 执行备份，返回备份文件路径和文件名 |
-| T12-A5 | `/api/database/{name}/restore` | POST | 请求体含 `backup_path`，从该文件恢复数据库 |
-| T12-A6 | `/api/database/{name}/info` | GET | 返回数据库大小、创建时间、是否为当前默认库等信息 |
-| T12-A7 | `/api/database/backup/upload` | POST | 上传备份文件到服务器，返回路径。受 Basic Auth 保护 |
-| T12-A8 | `/api/database/backup/list` | GET | 列出所有备份文件及元数据。受 Basic Auth 保护 |
+| T18-A1 | `/api/database/list` | GET | 返回数据库名称列表（含 name, created_at, active, size）。受 `LIST_DB` 控制。`list_db=false` 时返回 403。应用 `DBFILTER` 正则过滤。**当 `list_db=true` 时无需认证即可返回** |
+| T18-A2 | `/api/database/create` | POST | 请求体 `{ "name": "xxx" }`。创建数据库 → 自动迁移 → 播种核心数据 → 返回成功 |
+| T18-A3 | `/api/database/{name}` | DELETE | 删除指定数据库（不能删默认库）。关闭连接池 + 移除物理文件/ DROP DATABASE |
+| T18-A4 | `/api/database/{name}/backup` | POST | 执行备份，返回备份文件路径和文件名 |
+| T18-A5 | `/api/database/{name}/restore` | POST | 请求体含 `backup_path`，从该文件恢复数据库 |
+| T18-A6 | `/api/database/{name}/info` | GET | 返回数据库大小、创建时间、是否为当前默认库等信息 |
+| T18-A7 | `/api/database/backup/upload` | POST | 上传备份文件到服务器，返回路径。受 Basic Auth 保护 |
+| T18-A8 | `/api/database/backup/list` | GET | 列出所有备份文件及元数据。受 Basic Auth 保护 |
 
 #### 4. 后端 — 创建时迁移+播种
 
 | 任务ID | 任务 | 说明 |
 |--------|------|------|
-| T12-M1 | 迁移函数复用 | 提取 `run_migrations(pool)` 为独立函数，创建新数据库时调用 |
-| T12-M2 | 播种函数复用 | 提取 `run_seed(pool)` 为独立函数，创建新数据库时调用（admin 账户、默认菜单、设置定义等） |
+| T18-M1 | 迁移函数复用 | 提取 `run_migrations(pool)` 为独立函数，创建新数据库时调用 |
+| T18-M2 | 播种函数复用 | 提取 `run_seed(pool)` 为独立函数，创建新数据库时调用（admin 账户、默认菜单、设置定义等） |
 
 #### 5. 后端 — 认证流程调整
 
 | 任务ID | 任务 | 说明 |
 |--------|------|------|
-| T12-L1 | 登录接口增加 `database` 字段 | `POST /api/auth/login` 新增可选字段 `"database"`，未提供则使用 `DEFAULT_DB` |
-| T12-L2 | JWT 载荷含 `db_name` | TokenClaims 增加 `db_name` 字段，后续请求用此定位连接池 |
-| T12-L3 | 中间件提取 `db_name` | 认证中间件从 JWT 提取 `db_name` 并注入请求上下文 |
-| T12-L4 | 数据库删除时 JWT 失效 | 数据库被删除后，对应连接池不存在，该库的 JWT 自然失效 |
+| T18-L1 | 登录接口增加 `database` 字段 | `POST /api/auth/login` 新增可选字段 `"database"`，未提供则使用 `DEFAULT_DB` |
+| T18-L2 | JWT 载荷含 `db_name` | TokenClaims 增加 `db_name` 字段，后续请求用此定位连接池 |
+| T18-L3 | 中间件提取 `db_name` | 认证中间件从 JWT 提取 `db_name` 并注入请求上下文 |
+| T18-L4 | 数据库删除时 JWT 失效 | 数据库被删除后，对应连接池不存在，该库的 JWT 自然失效 |
 
 #### 6. 后端 — 连接池管理增强
 
 | 任务ID | 任务 | 说明 |
 |--------|------|------|
-| T12-P1 | SQLite 物理文件管理 | 每个数据库对应 `./data/{name}.db`，创建/删除时管理物理文件 |
-| T12-P2 | PostgreSQL 动态建库 | 在同一 PostgreSQL 实例上动态 `CREATE DATABASE` / `DROP DATABASE` |
+| T18-P1 | SQLite 物理文件管理 | 每个数据库对应 `./data/{name}.db`，创建/删除时管理物理文件 |
+| T18-P2 | PostgreSQL 动态建库 | 在同一 PostgreSQL 实例上动态 `CREATE DATABASE` / `DROP DATABASE` |
 
 #### 7. 前端工具库（@ingjoo/web）
 
 | 任务ID | 任务 | 说明 |
 |--------|------|------|
-| T12-J1 | 类型定义 | `DatabaseInfo`、`BackupInfo` 类型导出 |
-| T12-J2 | API 函数封装 | `fetchDatabaseList`、`createDatabase`、`deleteDatabase`、`backupDatabase`、`restoreDatabase`、`fetchBackupList`、`uploadBackup` — 自动附加 Basic Auth |
-| T12-J3 | index.ts 导出 | 在包入口导出上述类型和函数 |
+| T18-J1 | 类型定义 | `DatabaseInfo`、`BackupInfo` 类型导出 |
+| T18-J2 | API 函数封装 | `fetchDatabaseList`、`createDatabase`、`deleteDatabase`、`backupDatabase`、`restoreDatabase`、`fetchBackupList`、`uploadBackup` — 自动附加 Basic Auth |
+| T18-J3 | index.ts 导出 | 在包入口导出上述类型和函数 |
 
 #### 8. 前端 Admin 面板（web-base）
 
 | 任务ID | 任务 | 说明 |
 |--------|------|------|
-| T12-F1 | 数据库管理页面 | `app/database-manager/page.tsx` — 无需登录，先输入 Admin Password，后显示管理界面 |
-| T12-F2 | 数据库列表区域 | 显示名称/大小/创建时间，操作按钮：Backup、Restore、Delete |
-| T12-F3 | 创建新数据库区域 | 输入名称 + Create 按钮 |
-| T12-F4 | 备份管理区域 | 列出备份文件 + 上传按钮 + 恢复按钮（选择目标数据库） |
-| T12-F5 | 登录页增加数据库选择器 | 登录表单增加 Database 输入框（文本/下拉）。`list_db=true` 时可从 `/api/database/list` 获取列表 |
-| T12-F6 | 导航菜单调整 | 数据库管理页面出现在公共区域（无需登录）；登录后侧边栏不含此链接 |
-| T12-F7 | 前端不保存 admin 密码 | 每次刷新需重新输入（安全考虑） |
+| T18-F1 | 数据库管理页面 | `app/database-manager/page.tsx` — 无需登录，先输入 Admin Password，后显示管理界面 |
+| T18-F2 | 数据库列表区域 | 显示名称/大小/创建时间，操作按钮：Backup、Restore、Delete |
+| T18-F3 | 创建新数据库区域 | 输入名称 + Create 按钮 |
+| T18-F4 | 备份管理区域 | 列出备份文件 + 上传按钮 + 恢复按钮（选择目标数据库） |
+| T18-F5 | 登录页增加数据库选择器 | 登录表单增加 Database 输入框（文本/下拉）。`list_db=true` 时可从 `/api/database/list` 获取列表 |
+| T18-F6 | 导航菜单调整 | 数据库管理页面出现在公共区域（无需登录）；登录后侧边栏不含此链接 |
+| T18-F7 | 前端不保存 admin 密码 | 每次刷新需重新输入（安全考虑） |
 
 ### 任务依赖图
 
 ```
-T12-C1~C4 (配置层)
+T18-C1~C4 (配置层)
     ↓
-T12-B3 (feature gate) ──→ T12-A1~A8 (API 端点)
+T18-B3 (feature gate) ──→ T18-A1~A8 (API 端点)
     ↓                        ↓
-T12-M1~M2 (迁移/播种)   T12-L1~L4 (认证调整)
+T18-M1~M2 (迁移/播种)   T18-L1~L4 (认证调整)
     ↓                        ↓
-T12-P1~P2 (物理管理)    T12-B1~B2 (启动行为)
+T18-P1~P2 (物理管理)    T18-B1~B2 (启动行为)
                              ↓
-                    T12-J1~J3 (前端工具库)
+                    T18-J1~J3 (前端工具库)
                              ↓
-                    T12-F1~F7 (Admin 面板)
+                    T18-F1~F7 (Admin 面板)
 ```
 
 ### 验证标准
@@ -473,4 +480,4 @@ DATABASE_BASE_URL=sqlite:./data/
 ---
 
 *报告生成: 2026-04-25 | 数据来源: ROADMAP.md / AUDIT-REPORT-2026-04-25.md / CONTINUITY_ses_2424.md*
-*最后更新: 2026-04-26 | 新增 Phase 12 多数据库管理计划*
+*最后更新: 2026-04-27 | 同步 Phase 10-17 完成状态 + 多数据库管理重编号为 Phase 18*

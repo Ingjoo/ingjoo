@@ -316,4 +316,230 @@ mod tests {
         let updated: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(updated["name"].as_str().unwrap(), "flow_updated");
     }
+
+    // ==================== Search Favorites ====================
+
+    async fn setup_app_with_favorites() -> Router {
+        let store: Arc<dyn IngjooStore> = Arc::new(MockIngjooDb::new());
+        let auth = JwtAuthProvider::new(&AuthConfig::new("test-secret"));
+        let registry = Arc::new(ModelRegistry::new());
+        ingjoo_core::pool::install_drivers();
+        let (pool, dialect) =
+            ingjoo_core::pool::connect_pool_with_options("sqlite::memory:", 1, 0, 5, 30, 60)
+                .await
+                .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS ir_search_favorite (\
+             id INTEGER PRIMARY KEY AUTOINCREMENT, \
+             user_id TEXT NOT NULL, \
+             name TEXT NOT NULL, \
+             model TEXT NOT NULL, \
+             domain TEXT, \
+             context TEXT, \
+             is_default INTEGER NOT NULL DEFAULT 0, \
+             created_at TEXT NOT NULL DEFAULT (datetime('now')), \
+             updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let state = Arc::new(AppState::new(
+            store,
+            auth,
+            registry,
+            Arc::new(pool.clone()),
+            dialect,
+            Arc::new(DatabaseManager::new(pool.clone(), dialect)),
+        ));
+        ingjoo_infra::router::base_router(state)
+    }
+
+    #[tokio::test]
+    async fn test_search_favorites_list_empty() {
+        let app = setup_app_with_favorites().await;
+        let reg = register_user(&app, "sf_empty@example.com", "sfuser", "pass123").await;
+        let token = reg["access_token"].as_str().unwrap();
+
+        let resp = app
+            .oneshot(auth_request("GET", "/api/search-favorites?model=article", token, None))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(list.as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_favorites_create_and_list() {
+        let app = setup_app_with_favorites().await;
+        let reg = register_user(&app, "sf_cl@example.com", "sfuser", "pass123").await;
+        let token = reg["access_token"].as_str().unwrap();
+
+        let resp = app
+            .clone()
+            .oneshot(auth_request(
+                "POST",
+                "/api/search-favorites",
+                token,
+                Some(r#"{"name":"My Filter","model":"article","domain":[["status","=","published"]],"is_default":false}"#),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = app
+            .oneshot(auth_request("GET", "/api/search-favorites?model=article", token, None))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let arr = list.as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["name"].as_str().unwrap(), "My Filter");
+        assert_eq!(arr[0]["model"].as_str().unwrap(), "article");
+        assert!(!arr[0]["is_default"].as_bool().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_search_favorites_create_returns_id() {
+        let app = setup_app_with_favorites().await;
+        let reg = register_user(&app, "sf_id@example.com", "sfuser", "pass123").await;
+        let token = reg["access_token"].as_str().unwrap();
+
+        let resp = app
+            .oneshot(auth_request(
+                "POST",
+                "/api/search-favorites",
+                token,
+                Some(r#"{"name":"Test Fav","model":"article","domain":null,"is_default":false}"#),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let fav: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(fav["id"].as_i64().unwrap() > 0);
+        assert_eq!(fav["name"].as_str().unwrap(), "Test Fav");
+    }
+
+    #[tokio::test]
+    async fn test_search_favorites_delete_own() {
+        let app = setup_app_with_favorites().await;
+        let reg = register_user(&app, "sf_del@example.com", "sfuser", "pass123").await;
+        let token = reg["access_token"].as_str().unwrap();
+
+        let resp = app
+            .clone()
+            .oneshot(auth_request(
+                "POST",
+                "/api/search-favorites",
+                token,
+                Some(r#"{"name":"To Delete","model":"article","is_default":false}"#),
+            ))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let fav: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let fav_id = fav["id"].as_i64().unwrap();
+
+        let resp = app
+            .clone()
+            .oneshot(auth_request("DELETE", &format!("/api/search-favorites/{}", fav_id), token, None))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = app
+            .oneshot(auth_request("GET", "/api/search-favorites?model=article", token, None))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(list.as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_favorites_delete_others_forbidden() {
+        let app = setup_app_with_favorites().await;
+        let reg1 = register_user(&app, "sf_u1@example.com", "user1", "pass123").await;
+        let token1 = reg1["access_token"].as_str().unwrap();
+        let reg2 = register_user(&app, "sf_u2@example.com", "user2", "pass123").await;
+        let token2 = reg2["access_token"].as_str().unwrap();
+
+        let resp = app
+            .clone()
+            .oneshot(auth_request(
+                "POST",
+                "/api/search-favorites",
+                token1,
+                Some(r#"{"name":"Owned by u1","model":"article","is_default":false}"#),
+            ))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let fav: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let fav_id = fav["id"].as_i64().unwrap();
+
+        let resp = app
+            .oneshot(auth_request("DELETE", &format!("/api/search-favorites/{}", fav_id), token2, None))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_search_favorites_set_default() {
+        let app = setup_app_with_favorites().await;
+        let reg = register_user(&app, "sf_def@example.com", "sfuser", "pass123").await;
+        let token = reg["access_token"].as_str().unwrap();
+
+        let resp = app
+            .clone()
+            .oneshot(auth_request(
+                "POST",
+                "/api/search-favorites",
+                token,
+                Some(r#"{"name":"Fav A","model":"article","is_default":false}"#),
+            ))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let fav_a: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let id_a = fav_a["id"].as_i64().unwrap();
+
+        let resp = app
+            .clone()
+            .oneshot(auth_request(
+                "POST",
+                "/api/search-favorites",
+                token,
+                Some(r#"{"name":"Fav B","model":"article","is_default":true}"#),
+            ))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let fav_b: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let _id_b = fav_b["id"].as_i64().unwrap();
+
+        let resp = app
+            .clone()
+            .oneshot(auth_request("PUT", &format!("/api/search-favorites/{}/default", id_a), token, None))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = app
+            .oneshot(auth_request("GET", "/api/search-favorites?model=article", token, None))
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let list: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let arr = list.as_array().unwrap();
+        let fav_a_item = arr.iter().find(|f| f["id"].as_i64().unwrap() == id_a).unwrap();
+        assert!(fav_a_item["is_default"].as_bool().unwrap());
+    }
 }

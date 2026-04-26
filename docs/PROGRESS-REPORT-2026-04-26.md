@@ -471,17 +471,29 @@
 
 ---
 
-## 九、下一步建议
+## 九、QA 调查结果 — 已确认预期行为
 
-> Phase 13 已完成。以下为 Phase 14+ 待办。
+> Phase 17 QA 期间发现以下端点返回空数据，经代码调查确认为预期行为：
 
-| 优先级 | 任务 | 预估工时 | 说明 |
-|--------|------|---------|------|
-| **P1** | E2E 测试框架 | 2 天 | Playwright 自动化（登录→Dashboard→Admin 全流程） |
-| **P2** | 邮件/短信 provider 真实实现 | 2-3 天 | 替换 noop，接入 SMTP / 短信网关 |
-| **P2** | 文件存储 provider | 2 天 | S3/OSS 真实实现 |
-| **P2** | 多租户隔离测试 | 1 天 | collection_isolation 端到端验证 |
-| **P3** | 性能基准测试 | 1 天 | Domain DSL + Registry benchmark |
+| 端点 | 返回 | 原因 | 结论 |
+|------|------|------|------|
+| `GET /api/actions` | 0 项 | `require_admin()` 前置检查，QA 使用普通用户 | ✅ 预期：admin-only |
+| `GET /api/menus` | 0 项 | 同上，菜单管理为 admin 功能 | ✅ 预期：admin-only |
+| `GET /api/articles` | 空 | 测试用户无 article 数据，seed 仅创建 admin demo 数据 | ✅ 预期：无数据 |
+| `GET /api/search?q=test` | 空 | `seed_core_data` 仅索引 admin demo records | ✅ 预期：无索引 |
+
+---
+
+## 十、下一步建议
+
+> Phase 17 已完成（424 tests, 0 failures）。以下为 Phase 18+ 待办。
+
+| 优先级 | 任务 | 对应计划 | 预估工时 | 说明 |
+|--------|------|---------|---------|------|
+| **P1** | 多数据库管理（Odoo 对齐） | Phase 18 (PROGRESS-PLAN T18-*) | 8 天 | 配置层 + API + 启动行为 + 前端 |
+| **P1** | E2E 测试框架 | T4.4 | 2 天 | Playwright 自动化（登录→Dashboard→Admin 全流程） |
+| **P2** | 自动化规则引擎 | — | 3-5 天 | 基于事件触发的自动化规则系统 |
+| **P2** | 邮件/短信真实 provider | — | 2-3 天 | 替换 noop，接入 SMTP / 短信网关 |
 
 ---
 
