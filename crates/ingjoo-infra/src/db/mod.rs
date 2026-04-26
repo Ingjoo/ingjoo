@@ -1656,7 +1656,11 @@ impl AuditStore for Db {
     }
 
     async fn delete_logs_before(&self, before: &str) -> Result<u64, anyhow::Error> {
-        let result = sqlx::query(&self.sql("DELETE FROM audit_logs WHERE created_at < ?"))
+        let sql = match self.dialect {
+            Dialect::Sqlite => self.sql("DELETE FROM audit_logs WHERE created_at < ?"),
+            Dialect::Postgres => "DELETE FROM audit_logs WHERE created_at < $1::timestamptz".to_string(),
+        };
+        let result = sqlx::query(&sql)
             .bind(before)
             .execute(&self.pool)
             .await?;

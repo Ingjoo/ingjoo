@@ -1997,6 +1997,9 @@ async fn test_search_returns_matching_records() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
 
+    // 等待后台索引任务完成（tokio::spawn 异步索引）
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
     // 搜索 "Rust"
     let resp =
         app.clone().oneshot(auth_request("GET", "/api/data/search_article/search?q=Rust", &admin, None)).await.unwrap();
