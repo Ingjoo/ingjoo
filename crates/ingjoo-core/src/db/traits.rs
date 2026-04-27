@@ -6,12 +6,12 @@ use std::pin::Pin;
 
 use super::error::StoreResult;
 use super::ids::{GroupId, UserId};
-use crate::PaginatedResult;
-use crate::extension::audit::AuditStore;
 use super::models::{
-    Attachment, CreateAttachment, Group, GroupImplied, ModelAccessRow, ModuleSetting,
-    RecordRuleRow, UpdatePreferences, User, UserPreferences, UserPublic,
+    Attachment, CreateAttachment, Group, GroupImplied, ModelAccessRow, ModuleSetting, RecordRuleRow, UpdatePreferences,
+    User, UserPreferences, UserPublic,
 };
+use crate::extension::audit::AuditStore;
+use crate::PaginatedResult;
 
 /// 用户存储 — 用户 CRUD 和搜索
 #[async_trait]
@@ -23,8 +23,7 @@ pub trait UserStore: Send + Sync {
     /// 按 ID 查找用户
     async fn get_user_by_id(&self, id: &UserId) -> StoreResult<Option<User>>;
     /// 按 OAuth 提供商 + ID 查找用户
-    async fn get_user_by_oauth(&self, provider: &str, oauth_id: &str)
-        -> StoreResult<Option<User>>;
+    async fn get_user_by_oauth(&self, provider: &str, oauth_id: &str) -> StoreResult<Option<User>>;
     /// 按手机号查找用户
     async fn get_user_by_phone(&self, phone: &str) -> StoreResult<Option<User>>;
     /// 更新用户资料（仅更新非 None 的字段）
@@ -38,11 +37,7 @@ pub trait UserStore: Send + Sync {
     /// 更新用户角色
     async fn update_user_role(&self, id: &UserId, role: &str) -> StoreResult<Option<User>>;
     /// 更新用户密码哈希
-    async fn update_user_password(
-        &self,
-        id: &UserId,
-        password_hash: &str,
-    ) -> StoreResult<Option<User>>;
+    async fn update_user_password(&self, id: &UserId, password_hash: &str) -> StoreResult<Option<User>>;
     /// 分页列出用户
     async fn list_users(&self, limit: i64, offset: i64) -> StoreResult<PaginatedResult<User>>;
     /// 按关键词搜索用户（返回公开信息）
@@ -73,10 +68,7 @@ pub trait TokenStore: Send + Sync {
         expires_at: &str,
     ) -> StoreResult<()>;
     /// 查找密码重置 token，返回 (id, user_id, used, expires_at)
-    async fn get_password_reset_token(
-        &self,
-        token: &str,
-    ) -> StoreResult<Option<(String, String, i64, String)>>;
+    async fn get_password_reset_token(&self, token: &str) -> StoreResult<Option<(String, String, i64, String)>>;
     /// 标记密码重置 token 已使用
     async fn mark_password_reset_used(&self, id: &str) -> StoreResult<()>;
 }
@@ -112,12 +104,7 @@ pub trait SmsCodeStore: Send + Sync {
         purpose: &str,
     ) -> StoreResult<Option<(String, String, i64, String)>>;
     /// 检查指定秒数内是否已发送过验证码
-    async fn get_sms_code_sent_within(
-        &self,
-        phone: &str,
-        purpose: &str,
-        seconds: i64,
-    ) -> StoreResult<bool>;
+    async fn get_sms_code_sent_within(&self, phone: &str, purpose: &str, seconds: i64) -> StoreResult<bool>;
     /// 标记短信验证码已使用
     async fn mark_sms_code_used(&self, id: &str) -> StoreResult<()>;
     /// 统计指定 IP 在指定小时数内发送的短信数量
@@ -180,12 +167,7 @@ pub trait AttachmentStore: Send + Sync {
     /// 分页列出所有附件
     async fn list_all_attachments(&self, limit: i64, offset: i64) -> StoreResult<PaginatedResult<Attachment>>;
     /// 更新附件存储路径和类型（迁移时使用）
-    async fn update_attachment_storage(
-        &self,
-        id: &str,
-        storage_path: &str,
-        storage_type: &str,
-    ) -> StoreResult<bool>;
+    async fn update_attachment_storage(&self, id: &str, storage_path: &str, storage_type: &str) -> StoreResult<bool>;
 }
 
 /// 模块配置存储 — 支持级联作用域
@@ -239,7 +221,12 @@ pub trait GroupStore: Send + Sync {
     /// 列出所有组
     async fn list_groups(&self) -> StoreResult<Vec<Group>>;
     /// 更新组信息
-    async fn update_group(&self, id: &GroupId, display_name: Option<&str>, comment: Option<&str>) -> StoreResult<Option<Group>>;
+    async fn update_group(
+        &self,
+        id: &GroupId,
+        display_name: Option<&str>,
+        comment: Option<&str>,
+    ) -> StoreResult<Option<Group>>;
     /// 删除组
     async fn delete_group(&self, id: &GroupId) -> StoreResult<bool>;
     /// 设置组的隐含关系（全量替换）
@@ -289,10 +276,20 @@ pub trait AccessStore: Send + Sync {
 
 /// 聚合存储 trait — 组合所有存储能力，以 `Arc<dyn IngjooStore>` 形式使用
 #[async_trait]
-pub trait IngjooStore: UserStore + TokenStore + CaptchaStore + SmsCodeStore
-    + SettingsStore + PreferenceStore + AttachmentStore + ModuleSettingStore
-    + GroupStore + AccessStore + AuditStore
-    + Send + Sync
+pub trait IngjooStore:
+    UserStore
+    + TokenStore
+    + CaptchaStore
+    + SmsCodeStore
+    + SettingsStore
+    + PreferenceStore
+    + AttachmentStore
+    + ModuleSettingStore
+    + GroupStore
+    + AccessStore
+    + AuditStore
+    + Send
+    + Sync
 {
 }
 
@@ -307,11 +304,19 @@ pub trait IngjooTransaction: IngjooStore {
 }
 
 /// 自动为满足所有约束的类型实现 `IngjooStore`
-impl<T> IngjooStore for T
-where
-    T: UserStore + TokenStore + CaptchaStore + SmsCodeStore
-        + SettingsStore + PreferenceStore + AttachmentStore + ModuleSettingStore
-        + GroupStore + AccessStore + AuditStore
-        + Send + Sync,
+impl<T> IngjooStore for T where
+    T: UserStore
+        + TokenStore
+        + CaptchaStore
+        + SmsCodeStore
+        + SettingsStore
+        + PreferenceStore
+        + AttachmentStore
+        + ModuleSettingStore
+        + GroupStore
+        + AccessStore
+        + AuditStore
+        + Send
+        + Sync
 {
 }

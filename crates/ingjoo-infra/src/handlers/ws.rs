@@ -1,17 +1,14 @@
 use std::sync::Arc;
 
-use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::State;
 use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::broadcast;
 
 use crate::AppState;
 
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state.events.subscribe()))
 }
 

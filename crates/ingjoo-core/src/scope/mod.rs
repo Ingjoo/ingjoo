@@ -2,7 +2,7 @@
 
 pub mod guard;
 
-pub use guard::{ScopeGuard, ScopeError, role_gte};
+pub use guard::{role_gte, ScopeError, ScopeGuard};
 
 /// 四级角色层级（owner > admin > member > viewer）
 pub const SCOPE_HIERARCHY_4: &[&str] = &["owner", "admin", "member", "viewer"];

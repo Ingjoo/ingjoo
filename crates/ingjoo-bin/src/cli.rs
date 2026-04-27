@@ -26,7 +26,31 @@ pub struct Cli {
     #[arg(long, default_value = "ingjoo_bin=info", env = "INGJOO_LOG")]
     pub log_level: String,
 
+    /// 日志格式 (text 或 json)
+    #[arg(long, default_value = "text", env = "INGJOO_LOG_FORMAT")]
+    pub log_format: String,
+
+    /// 审计日志保留天数（超过此天数的记录自动清理）
+    #[arg(long, default_value = "90", env = "INGJOO_AUDIT_RETENTION_DAYS")]
+    pub audit_retention_days: u64,
+
     /// 插件目录路径
     #[arg(long, default_value = "./plugins", env = "PLUGINS_DIR")]
     pub plugins_dir: String,
+
+    /// 数据库管理密码（Basic Auth，仅环境变量）
+    #[arg(long, env = "INGJOO_ADMIN_PASSWD", default_value = "admin")]
+    pub admin_passwd: String,
+
+    /// 是否允许列出数据库（默认 true）
+    #[arg(long, default_value = "true", env = "INGJOO_LIST_DB")]
+    pub list_db: bool,
+
+    /// 默认数据库名（可选，启动时自动创建并迁移）
+    #[arg(long, env = "INGJOO_DEFAULT_DB")]
+    pub default_db: Option<String>,
+
+    /// 数据库名称过滤正则（可选，限制 /api/database/list 返回范围）
+    #[arg(long, env = "INGJOO_DBFILTER")]
+    pub dbfilter: Option<String>,
 }

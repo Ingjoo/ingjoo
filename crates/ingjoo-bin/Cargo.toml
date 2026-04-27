@@ -16,7 +16,11 @@ auth = ["ingjoo-infra/auth"]
 content-filter = ["ingjoo-infra/content-filter"]
 data-mask = ["ingjoo-infra/data-mask"]
 signature = ["ingjoo-infra/signature"]
-full = ["db", "auth", "content-filter", "data-mask", "signature"]
+multi-db = ["ingjoo-infra/multi-db"]
+email = ["ingjoo-infra/email"]
+sms = ["ingjoo-infra/sms"]
+s3 = ["ingjoo-infra/s3"]
+full = ["db", "auth", "content-filter", "data-mask", "signature", "multi-db", "email", "sms", "s3"]
 
 [dependencies]
 ingjoo-core = { path = "../ingjoo-core" }
@@ -30,6 +34,7 @@ sqlx.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 clap.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 tower.workspace = true

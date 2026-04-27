@@ -61,3 +61,11 @@ audit:
 # 查看依赖树
 tree:
     cargo tree --all-features
+
+# 运行指定 crate 的基准测试
+bench crate:
+    cargo bench -p {{crate}}
+
+# 运行全部基准测试
+bench-all:
+    cargo bench

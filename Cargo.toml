@@ -24,7 +24,7 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 anyhow = "1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 axum = { version = "0.8", features = ["multipart", "ws"] }
 tower = "0.5"
 http = "1"

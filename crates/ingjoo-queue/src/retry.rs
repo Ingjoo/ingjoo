@@ -14,10 +14,7 @@ pub struct RetryPolicy {
 impl RetryPolicy {
     /// 创建默认策略（基础延迟 1s，最大延迟 60s）
     pub fn new() -> Self {
-        Self {
-            base_delay: Duration::from_secs(1),
-            max_delay: Duration::from_secs(60),
-        }
+        Self { base_delay: Duration::from_secs(1), max_delay: Duration::from_secs(60) }
     }
 
     /// 设置基础延迟
@@ -62,8 +59,9 @@ mod tests {
         let d2 = policy.delay_for_attempt(2);
         let d3 = policy.delay_for_attempt(3);
         assert!(d1.as_secs_f64() > 0.0);
-        assert!(d2.as_secs_f64() >= d1.as_secs_f64() * 1.5);
-        assert!(d3.as_secs_f64() >= d2.as_secs_f64() * 1.5);
+        // ±20% jitter 下最小比率 = 2*0.8/(1*1.2) ≈ 1.333，用 1.25 保证不 flaky
+        assert!(d2.as_secs_f64() >= d1.as_secs_f64() * 1.25);
+        assert!(d3.as_secs_f64() >= d2.as_secs_f64() * 1.25);
     }
 
     #[test]

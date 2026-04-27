@@ -18,14 +18,7 @@ use crate::AppState;
 
 async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
     if !user.is_admin() {
-        let _ = store.create_audit_log(
-            Some(&user.user_id),
-            "admin_required_denied",
-            "views",
-            None,
-            None,
-            None,
-        ).await;
+        let _ = store.create_audit_log(Some(&user.user_id), "admin_required_denied", "views", None, None, None).await;
         return Err(AppError::Forbidden("需要管理员权限".into()));
     }
     Ok(())
@@ -64,10 +57,8 @@ impl ViewRow {
 
     pub fn to_descriptor(&self) -> ViewDescriptor {
         let view_type = parse_view_type(&self.view_type_str);
-        let arch: serde_json::Value =
-            serde_json::from_str(&self.arch_str).unwrap_or(serde_json::json!({}));
-        let group_ids: Vec<String> =
-            serde_json::from_str(&self.group_ids_str).unwrap_or_default();
+        let arch: serde_json::Value = serde_json::from_str(&self.arch_str).unwrap_or(serde_json::json!({}));
+        let group_ids: Vec<String> = serde_json::from_str(&self.group_ids_str).unwrap_or_default();
 
         ViewDescriptor {
             id: self.id.clone(),
@@ -108,22 +99,30 @@ pub async fn list_views(
     State(_state): State<Arc<AppState>>,
     Query(params): Query<ViewQueryParams>,
 ) -> Result<Json<Vec<ViewDescriptor>>, AppError> {
+    let bt = resolved_db.dialect.bool_true();
     let (sql_str, has_model, has_type) = match (&params.model, &params.r#type) {
         (Some(_), Some(_)) => (
-            format!("SELECT {} FROM ir_view WHERE active = 1 AND model = ? AND type = ? ORDER BY priority", VIEW_COLUMNS),
-            true, true,
+            format!(
+                "SELECT {} FROM ir_view WHERE active = {} AND model = ? AND type = ? ORDER BY priority",
+                VIEW_COLUMNS, bt
+            ),
+            true,
+            true,
         ),
         (Some(_), None) => (
-            format!("SELECT {} FROM ir_view WHERE active = 1 AND model = ? ORDER BY type, priority", VIEW_COLUMNS),
-            true, false,
+            format!("SELECT {} FROM ir_view WHERE active = {} AND model = ? ORDER BY type, priority", VIEW_COLUMNS, bt),
+            true,
+            false,
         ),
         (None, Some(_)) => (
-            format!("SELECT {} FROM ir_view WHERE active = 1 AND type = ? ORDER BY model, priority", VIEW_COLUMNS),
-            false, true,
+            format!("SELECT {} FROM ir_view WHERE active = {} AND type = ? ORDER BY model, priority", VIEW_COLUMNS, bt),
+            false,
+            true,
         ),
         (None, None) => (
-            format!("SELECT {} FROM ir_view WHERE active = 1 ORDER BY model, type, priority", VIEW_COLUMNS),
-            false, false,
+            format!("SELECT {} FROM ir_view WHERE active = {} ORDER BY model, type, priority", VIEW_COLUMNS, bt),
+            false,
+            false,
         ),
     };
 
@@ -136,10 +135,10 @@ pub async fn list_views(
         q = q.bind(params.r#type.as_deref().unwrap());
     }
 
-    let rows = q
-        .fetch_all(&*resolved_db.pool)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?;
+    let rows = q.fetch_all(&*resolved_db.pool).await.map_err(|e| {
+        tracing::error!("查询视图失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("查询视图失败"))
+    })?;
 
     let descriptors: Vec<ViewDescriptor> = rows.iter().map(|r| ViewRow::from_row(r).to_descriptor()).collect();
     Ok(Json(descriptors))
@@ -152,15 +151,11 @@ pub async fn get_view(
     State(_state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<ViewDescriptor>, AppError> {
-    let sql = resolved_db.dialect.prepare(&format!(
-        "SELECT {} FROM ir_view WHERE id = ?",
-        VIEW_COLUMNS
-    ));
-    let row = sqlx::query(&sql)
-        .bind(&id)
-        .fetch_optional(&*resolved_db.pool)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?;
+    let sql = resolved_db.dialect.prepare(&format!("SELECT {} FROM ir_view WHERE id = ?", VIEW_COLUMNS));
+    let row = sqlx::query(&sql).bind(&id).fetch_optional(&*resolved_db.pool).await.map_err(|e| {
+        tracing::error!("查询视图失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("查询视图失败"))
+    })?;
 
     match row {
         Some(r) => Ok(Json(ViewRow::from_row(&r).to_descriptor())),
@@ -197,7 +192,10 @@ pub async fn create_view(
         .bind(&group_ids_str)
         .execute(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("创建视图失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("创建视图失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("创建视图失败"))
+        })?;
 
     let desc = ViewDescriptor {
         id,
@@ -225,33 +223,26 @@ pub async fn update_view(
     require_admin(&current_user, &state.store).await?;
 
     // 查询现有记录
-    let sql = resolved_db.dialect.prepare(&format!(
-        "SELECT {} FROM ir_view WHERE id = ?",
-        VIEW_COLUMNS
-    ));
+    let sql = resolved_db.dialect.prepare(&format!("SELECT {} FROM ir_view WHERE id = ?", VIEW_COLUMNS));
     let row = sqlx::query(&sql)
         .bind(&id)
         .fetch_optional(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询视图失败: {}", e)))?
+        .map_err(|e| {
+            tracing::error!("查询视图失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("查询视图失败"))
+        })?
         .ok_or_else(|| AppError::NotFound(format!("视图 '{}' 不存在", id)))?;
 
     let existing = ViewRow::from_row(&row);
 
     // 合并字段
     let name = req.name.unwrap_or(existing.name);
-    let view_type_str = req
-        .view_type
-        .map(|t| t.as_str().to_string())
-        .unwrap_or(existing.view_type_str);
+    let view_type_str = req.view_type.map(|t| t.as_str().to_string()).unwrap_or(existing.view_type_str);
     let priority = req.priority.unwrap_or(existing.priority);
-    let arch = req
-        .arch
-        .unwrap_or_else(|| serde_json::from_str(&existing.arch_str).unwrap_or(serde_json::json!({})));
+    let arch = req.arch.unwrap_or_else(|| serde_json::from_str(&existing.arch_str).unwrap_or(serde_json::json!({})));
     let arch_str = serde_json::to_string(&arch).unwrap_or_else(|_| "{}".into());
-    let group_ids = req
-        .group_ids
-        .unwrap_or_else(|| serde_json::from_str(&existing.group_ids_str).unwrap_or_default());
+    let group_ids = req.group_ids.unwrap_or_else(|| serde_json::from_str(&existing.group_ids_str).unwrap_or_default());
     let group_ids_str = serde_json::to_string(&group_ids).unwrap_or_else(|_| "[]".into());
 
     let sql = resolved_db.dialect.prepare(
@@ -266,7 +257,10 @@ pub async fn update_view(
         .bind(&id)
         .execute(&*resolved_db.pool)
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("更新视图失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("更新视图失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("更新视图失败"))
+        })?;
 
     Ok(Json(ViewDescriptor {
         id,
@@ -291,11 +285,10 @@ pub async fn delete_view(
     require_admin(&current_user, &state.store).await?;
 
     let sql = resolved_db.dialect.prepare("DELETE FROM ir_view WHERE id = ?");
-    let result = sqlx::query(&sql)
-        .bind(&id)
-        .execute(&*resolved_db.pool)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("删除视图失败: {}", e)))?;
+    let result = sqlx::query(&sql).bind(&id).execute(&*resolved_db.pool).await.map_err(|e| {
+        tracing::error!("删除视图失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("删除视图失败"))
+    })?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound(format!("视图 '{}' 不存在", id)));

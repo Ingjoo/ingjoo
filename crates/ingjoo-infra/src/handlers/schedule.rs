@@ -6,7 +6,7 @@ use axum::Extension;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use ingjoo_queue::{ScheduledJob, ScheduleStatus, ScheduleStore, SqlScheduleStore};
+use ingjoo_queue::{ScheduleStatus, ScheduleStore, ScheduledJob, SqlScheduleStore};
 
 use ingjoo_core::db::traits::IngjooStore;
 
@@ -17,14 +17,8 @@ use crate::AppState;
 
 async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
     if !user.is_admin() {
-        let _ = store.create_audit_log(
-            Some(&user.user_id),
-            "admin_required_denied",
-            "schedules",
-            None,
-            None,
-            None,
-        ).await;
+        let _ =
+            store.create_audit_log(Some(&user.user_id), "admin_required_denied", "schedules", None, None, None).await;
         return Err(AppError::Forbidden("需要管理员权限".into()));
     }
     Ok(())

@@ -66,10 +66,7 @@ impl From<sqlx::Error> for StoreError {
                     || msg.contains("duplicate key")
                     || db_err.code().map(|c| c == "23505").unwrap_or(false);
                 if is_unique {
-                    StoreError::UniqueViolation {
-                        table: String::new(),
-                        column: String::new(),
-                    }
+                    StoreError::UniqueViolation { table: String::new(), column: String::new() }
                 } else if msg.contains("FOREIGN KEY") {
                     StoreError::ForeignKeyViolation(msg)
                 } else {

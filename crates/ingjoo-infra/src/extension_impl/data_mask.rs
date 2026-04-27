@@ -109,10 +109,8 @@ fn apply_mask(value: &str, mask_type: MaskType) -> String {
 impl DataMask for AesDataMask {
     async fn encrypt(&self, plain: &str) -> Result<String, anyhow::Error> {
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-        let ciphertext = self
-            .cipher
-            .encrypt(&nonce, plain.as_bytes())
-            .map_err(|e| anyhow::anyhow!("加密失败: {}", e))?;
+        let ciphertext =
+            self.cipher.encrypt(&nonce, plain.as_bytes()).map_err(|e| anyhow::anyhow!("加密失败: {}", e))?;
         let mut combined = nonce.to_vec();
         combined.extend_from_slice(&ciphertext);
         Ok(base64::engine::general_purpose::STANDARD.encode(&combined))
@@ -127,10 +125,8 @@ impl DataMask for AesDataMask {
         }
         let (nonce_bytes, ciphertext) = combined.split_at(NONCE_SIZE);
         let nonce = Nonce::from_slice(nonce_bytes);
-        let plaintext = self
-            .cipher
-            .decrypt(nonce, ciphertext)
-            .map_err(|_| anyhow::anyhow!("解密失败: 密钥不匹配或密文损坏"))?;
+        let plaintext =
+            self.cipher.decrypt(nonce, ciphertext).map_err(|_| anyhow::anyhow!("解密失败: 密钥不匹配或密文损坏"))?;
         Ok(String::from_utf8(plaintext)?)
     }
 
@@ -200,30 +196,21 @@ mod tests {
     fn test_mask_email() {
         let key = AesDataMask::generate_key();
         let mask = AesDataMask::new(&key);
-        assert_eq!(
-            mask.mask_display("user@example.com", MaskType::Email),
-            "u****@example.com"
-        );
+        assert_eq!(mask.mask_display("user@example.com", MaskType::Email), "u****@example.com");
     }
 
     #[test]
     fn test_mask_bank_card() {
         let key = AesDataMask::generate_key();
         let mask = AesDataMask::new(&key);
-        assert_eq!(
-            mask.mask_display("6222021234561234", MaskType::BankCard),
-            "****1234"
-        );
+        assert_eq!(mask.mask_display("6222021234561234", MaskType::BankCard), "****1234");
     }
 
     #[test]
     fn test_mask_custom() {
         let key = AesDataMask::generate_key();
         let mask = AesDataMask::new(&key);
-        assert_eq!(
-            mask.mask_display("ABCDEFGHIJ", MaskType::Custom { head: 2, tail: 3 }),
-            "AB*****HIJ"
-        );
+        assert_eq!(mask.mask_display("ABCDEFGHIJ", MaskType::Custom { head: 2, tail: 3 }), "AB*****HIJ");
     }
 
     #[test]

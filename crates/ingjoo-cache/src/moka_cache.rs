@@ -29,18 +29,12 @@ impl<M: Clone + Send + Sync + 'static, U: Clone + Send + Sync + 'static> Framewo
                 .time_to_idle(Duration::from_secs(DEFAULT_TTL_SECS))
                 .max_capacity(DEFAULT_MAX_ENTRIES as u64)
                 .build(),
-            user_by_id: Cache::builder()
-                .time_to_idle(Duration::from_secs(DEFAULT_TTL_SECS))
-                .max_capacity(500)
-                .build(),
+            user_by_id: Cache::builder().time_to_idle(Duration::from_secs(DEFAULT_TTL_SECS)).max_capacity(500).build(),
             user_by_email: Cache::builder()
                 .time_to_idle(Duration::from_secs(DEFAULT_TTL_SECS))
                 .max_capacity(500)
                 .build(),
-            effective_setting: Cache::builder()
-                .time_to_idle(Duration::from_secs(60))
-                .max_capacity(2000)
-                .build(),
+            effective_setting: Cache::builder().time_to_idle(Duration::from_secs(60)).max_capacity(2000).build(),
         }
     }
 

@@ -5,11 +5,10 @@ pub struct CaptchaGenerator;
 impl CaptchaGenerator {
     pub fn generate() -> Result<(String, String)> {
         let chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_rng(rand::thread_rng())
-            .map_err(|e| anyhow!("初始化随机数生成器失败: {}", e))?;
-        let answer: String = (0..4)
-            .map(|_| chars.chars().nth(rand::Rng::gen_range(&mut rng, 0..chars.len())).unwrap())
-            .collect();
+        let mut rng: rand::rngs::StdRng =
+            rand::SeedableRng::from_rng(rand::thread_rng()).map_err(|e| anyhow!("初始化随机数生成器失败: {}", e))?;
+        let answer: String =
+            (0..4).map(|_| chars.chars().nth(rand::Rng::gen_range(&mut rng, 0..chars.len())).unwrap()).collect();
 
         let width = 120u32;
         let height = 40u32;
@@ -41,34 +40,342 @@ impl CaptchaGenerator {
         let simple_font: std::collections::HashMap<char, [[bool; 5]; 7]> = {
             let mut f = std::collections::HashMap::new();
             let patterns: &[(char, &[[bool; 5]; 7])] = &[
-                ('A', &[[false,true,true,true,false],[true,false,false,false,true],[true,false,false,false,true],[true,true,true,true,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true]]),
-                ('B', &[[true,true,true,true,false],[true,false,false,false,true],[true,false,false,false,true],[true,true,true,true,false],[true,false,false,false,true],[true,false,false,false,true],[true,true,true,true,false]]),
-                ('C', &[[false,true,true,true,false],[true,false,false,false,true],[true,false,false,false,false],[true,false,false,false,false],[true,false,false,false,false],[true,false,false,false,true],[false,true,true,true,false]]),
-                ('D', &[[true,true,true,true,false],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[true,true,true,true,false]]),
-                ('E', &[[true,true,true,true,true],[true,false,false,false,false],[true,false,false,false,false],[true,true,true,true,false],[true,false,false,false,false],[true,false,false,false,false],[true,true,true,true,true]]),
-                ('F', &[[true,true,true,true,true],[true,false,false,false,false],[true,false,false,false,false],[true,true,true,true,false],[true,false,false,false,false],[true,false,false,false,false],[true,false,false,false,false]]),
-                ('G', &[[false,true,true,true,false],[true,false,false,false,true],[true,false,false,false,false],[true,false,true,true,true],[true,false,false,false,true],[true,false,false,false,true],[false,true,true,true,false]]),
-                ('H', &[[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[true,true,true,true,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true]]),
-                ('J', &[[false,false,true,true,true],[false,false,false,false,true],[false,false,false,false,true],[false,false,false,false,true],[false,false,false,false,true],[true,false,false,false,true],[false,true,true,true,false]]),
-                ('K', &[[true,false,false,false,true],[true,false,false,true,false],[true,false,true,false,false],[true,true,false,false,false],[true,false,true,false,false],[true,false,false,true,false],[true,false,false,false,true]]),
-                ('L', &[[true,false,false,false,false],[true,false,false,false,false],[true,false,false,false,false],[true,false,false,false,false],[true,false,false,false,false],[true,false,false,false,false],[true,true,true,true,true]]),
-                ('M', &[[true,false,false,false,true],[true,true,false,true,true],[true,false,true,false,true],[true,false,true,false,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true]]),
-                ('N', &[[true,false,false,false,true],[true,true,false,false,true],[true,false,true,false,true],[true,false,false,true,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true]]),
-                ('P', &[[true,true,true,true,false],[true,false,false,false,true],[true,false,false,false,true],[true,true,true,true,false],[true,false,false,false,false],[true,false,false,false,false],[true,false,false,false,false]]),
-                ('U', &[[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[false,true,true,true,false]]),
-                ('V', &[[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[false,true,false,true,false],[false,true,false,true,false],[false,false,true,false,false],[false,false,true,false,false]]),
-                ('W', &[[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true],[true,false,true,false,true],[true,false,true,false,true],[true,true,false,true,true],[true,false,false,false,true]]),
-                ('X', &[[true,false,false,false,true],[false,true,false,true,false],[false,false,true,false,false],[false,true,false,true,false],[true,false,false,false,true],[true,false,false,false,true],[true,false,false,false,true]]),
-                ('Y', &[[true,false,false,false,true],[false,true,false,true,false],[false,false,true,false,false],[false,false,true,false,false],[false,false,true,false,false],[false,false,true,false,false],[false,false,true,false,false]]),
-                ('Z', &[[true,true,true,true,true],[false,false,false,true,false],[false,false,true,false,false],[false,true,false,false,false],[true,false,false,false,false],[true,false,false,false,false],[true,true,true,true,true]]),
-                ('2', &[[false,true,true,true,false],[true,false,false,false,true],[false,false,false,false,true],[false,false,false,true,false],[false,true,false,false,false],[true,false,false,false,false],[true,true,true,true,true]]),
-                ('3', &[[false,true,true,true,false],[true,false,false,false,true],[false,false,false,false,true],[false,false,true,true,false],[false,false,false,false,true],[true,false,false,false,true],[false,true,true,true,false]]),
-                ('4', &[[true,false,false,true,false],[true,false,false,true,false],[true,false,false,true,false],[true,true,true,true,true],[false,false,false,true,false],[false,false,false,true,false],[false,false,false,true,false]]),
-                ('5', &[[true,true,true,true,true],[true,false,false,false,false],[true,false,false,false,false],[true,true,true,true,false],[false,false,false,false,true],[false,false,false,false,true],[true,true,true,true,false]]),
-                ('6', &[[false,true,true,true,false],[true,false,false,false,false],[true,false,false,false,false],[true,true,true,true,false],[true,false,false,false,true],[true,false,false,false,true],[false,true,true,true,false]]),
-                ('7', &[[true,true,true,true,true],[false,false,false,false,true],[false,false,false,true,false],[false,false,true,false,false],[false,false,true,false,false],[false,true,false,false,false],[false,true,false,false,false]]),
-                ('8', &[[false,true,true,true,false],[true,false,false,false,true],[true,false,false,false,true],[false,true,true,true,false],[true,false,false,false,true],[true,false,false,false,true],[false,true,true,true,false]]),
-                ('9', &[[false,true,true,true,false],[true,false,false,false,true],[true,false,false,false,true],[false,true,true,true,true],[false,false,false,false,true],[false,false,false,false,true],[false,true,true,true,false]]),
+                (
+                    'A',
+                    &[
+                        [false, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, true, true, true, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                    ],
+                ),
+                (
+                    'B',
+                    &[
+                        [true, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, true, true, true, false],
+                    ],
+                ),
+                (
+                    'C',
+                    &[
+                        [false, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, true],
+                        [false, true, true, true, false],
+                    ],
+                ),
+                (
+                    'D',
+                    &[
+                        [true, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, true, true, true, false],
+                    ],
+                ),
+                (
+                    'E',
+                    &[
+                        [true, true, true, true, true],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, true, true, true, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, true, true, true, true],
+                    ],
+                ),
+                (
+                    'F',
+                    &[
+                        [true, true, true, true, true],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, true, true, true, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                    ],
+                ),
+                (
+                    'G',
+                    &[
+                        [false, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, false],
+                        [true, false, true, true, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [false, true, true, true, false],
+                    ],
+                ),
+                (
+                    'H',
+                    &[
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, true, true, true, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                    ],
+                ),
+                (
+                    'J',
+                    &[
+                        [false, false, true, true, true],
+                        [false, false, false, false, true],
+                        [false, false, false, false, true],
+                        [false, false, false, false, true],
+                        [false, false, false, false, true],
+                        [true, false, false, false, true],
+                        [false, true, true, true, false],
+                    ],
+                ),
+                (
+                    'K',
+                    &[
+                        [true, false, false, false, true],
+                        [true, false, false, true, false],
+                        [true, false, true, false, false],
+                        [true, true, false, false, false],
+                        [true, false, true, false, false],
+                        [true, false, false, true, false],
+                        [true, false, false, false, true],
+                    ],
+                ),
+                (
+                    'L',
+                    &[
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, true, true, true, true],
+                    ],
+                ),
+                (
+                    'M',
+                    &[
+                        [true, false, false, false, true],
+                        [true, true, false, true, true],
+                        [true, false, true, false, true],
+                        [true, false, true, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                    ],
+                ),
+                (
+                    'N',
+                    &[
+                        [true, false, false, false, true],
+                        [true, true, false, false, true],
+                        [true, false, true, false, true],
+                        [true, false, false, true, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                    ],
+                ),
+                (
+                    'P',
+                    &[
+                        [true, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, true, true, true, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                    ],
+                ),
+                (
+                    'U',
+                    &[
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [false, true, true, true, false],
+                    ],
+                ),
+                (
+                    'V',
+                    &[
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [false, true, false, true, false],
+                        [false, true, false, true, false],
+                        [false, false, true, false, false],
+                        [false, false, true, false, false],
+                    ],
+                ),
+                (
+                    'W',
+                    &[
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, true, false, true],
+                        [true, false, true, false, true],
+                        [true, true, false, true, true],
+                        [true, false, false, false, true],
+                    ],
+                ),
+                (
+                    'X',
+                    &[
+                        [true, false, false, false, true],
+                        [false, true, false, true, false],
+                        [false, false, true, false, false],
+                        [false, true, false, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                    ],
+                ),
+                (
+                    'Y',
+                    &[
+                        [true, false, false, false, true],
+                        [false, true, false, true, false],
+                        [false, false, true, false, false],
+                        [false, false, true, false, false],
+                        [false, false, true, false, false],
+                        [false, false, true, false, false],
+                        [false, false, true, false, false],
+                    ],
+                ),
+                (
+                    'Z',
+                    &[
+                        [true, true, true, true, true],
+                        [false, false, false, true, false],
+                        [false, false, true, false, false],
+                        [false, true, false, false, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, true, true, true, true],
+                    ],
+                ),
+                (
+                    '2',
+                    &[
+                        [false, true, true, true, false],
+                        [true, false, false, false, true],
+                        [false, false, false, false, true],
+                        [false, false, false, true, false],
+                        [false, true, false, false, false],
+                        [true, false, false, false, false],
+                        [true, true, true, true, true],
+                    ],
+                ),
+                (
+                    '3',
+                    &[
+                        [false, true, true, true, false],
+                        [true, false, false, false, true],
+                        [false, false, false, false, true],
+                        [false, false, true, true, false],
+                        [false, false, false, false, true],
+                        [true, false, false, false, true],
+                        [false, true, true, true, false],
+                    ],
+                ),
+                (
+                    '4',
+                    &[
+                        [true, false, false, true, false],
+                        [true, false, false, true, false],
+                        [true, false, false, true, false],
+                        [true, true, true, true, true],
+                        [false, false, false, true, false],
+                        [false, false, false, true, false],
+                        [false, false, false, true, false],
+                    ],
+                ),
+                (
+                    '5',
+                    &[
+                        [true, true, true, true, true],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, true, true, true, false],
+                        [false, false, false, false, true],
+                        [false, false, false, false, true],
+                        [true, true, true, true, false],
+                    ],
+                ),
+                (
+                    '6',
+                    &[
+                        [false, true, true, true, false],
+                        [true, false, false, false, false],
+                        [true, false, false, false, false],
+                        [true, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [false, true, true, true, false],
+                    ],
+                ),
+                (
+                    '7',
+                    &[
+                        [true, true, true, true, true],
+                        [false, false, false, false, true],
+                        [false, false, false, true, false],
+                        [false, false, true, false, false],
+                        [false, false, true, false, false],
+                        [false, true, false, false, false],
+                        [false, true, false, false, false],
+                    ],
+                ),
+                (
+                    '8',
+                    &[
+                        [false, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [false, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [false, true, true, true, false],
+                    ],
+                ),
+                (
+                    '9',
+                    &[
+                        [false, true, true, true, false],
+                        [true, false, false, false, true],
+                        [true, false, false, false, true],
+                        [false, true, true, true, true],
+                        [false, false, false, false, true],
+                        [false, false, false, false, true],
+                        [false, true, true, true, false],
+                    ],
+                ),
             ];
             for &(ch, pattern) in patterns {
                 f.insert(ch, *pattern);
@@ -116,8 +423,7 @@ impl CaptchaGenerator {
         }
 
         let mut png_buf = std::io::Cursor::new(Vec::new());
-        img.write_to(&mut png_buf, image::ImageFormat::Png)
-            .map_err(|e| anyhow!("生成验证码图片失败: {}", e))?;
+        img.write_to(&mut png_buf, image::ImageFormat::Png).map_err(|e| anyhow!("生成验证码图片失败: {}", e))?;
         let base64_img = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, png_buf.into_inner());
         let data_uri = format!("data:image/png;base64,{}", base64_img);
 

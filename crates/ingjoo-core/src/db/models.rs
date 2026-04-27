@@ -206,8 +206,35 @@ pub struct ModelAccessRow {
     pub perm_write: bool,
     pub perm_create: bool,
     pub perm_delete: bool,
+    #[serde(default)]
     pub perm_import: bool,
+    #[serde(default)]
     pub perm_export: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct MailMessage {
+    pub id: String,
+    pub author_id: Option<String>,
+    pub subject: String,
+    pub body: String,
+    pub message_type: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct MailNotification {
+    pub id: String,
+    pub message_id: String,
+    pub user_id: String,
+    pub is_read: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationItem {
+    pub notification: MailNotification,
+    pub message: MailMessage,
 }
 
 /// 写入模型级权限请求

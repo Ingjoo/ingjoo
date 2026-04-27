@@ -228,8 +228,7 @@ mod tests {
     #[test]
     fn test_model_registry() {
         let registry = ModelRegistry::new();
-        let model = ModelDescriptor::new("article", "articles")
-            .required_field("title", FieldType::Text);
+        let model = ModelDescriptor::new("article", "articles").required_field("title", FieldType::Text);
         registry.register(model);
 
         assert!(registry.get("article").is_some());
@@ -240,9 +239,8 @@ mod tests {
 
     #[test]
     fn test_field_names() {
-        let model = ModelDescriptor::new("article", "articles")
-            .field("title", FieldType::Text)
-            .field("body", FieldType::Text);
+        let model =
+            ModelDescriptor::new("article", "articles").field("title", FieldType::Text).field("body", FieldType::Text);
         assert_eq!(model.field_names(), vec!["title", "body"]);
     }
 

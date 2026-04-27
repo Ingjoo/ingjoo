@@ -4,16 +4,19 @@ use std::time::Instant;
 use crate::auth::JwtAuthProvider;
 use crate::db::database_manager::DatabaseManager;
 use crate::db::seed;
+#[cfg(feature = "email")]
+use crate::email::EmailProvider;
 use crate::extension_noop::*;
 use crate::plugin::PluginManager;
+#[cfg(feature = "sms")]
+use crate::sms::SmsProvider;
 use crate::storage::FileStorage;
 use crate::IngjooStore;
 use ingjoo_cache::FrameworkCache;
 use ingjoo_core::extension::{
-    AuditStore, ContentFilter, DataMask, DocumentLoader, InputSanitizer,
-    LlmProvider, PaymentProvider, RelationLoader, SearchEngine, SignatureVerifier,
-    StateMachine, TextSplitter, TranslationStore, VectorStore,
-    EventBus, IdGenerator, Lock,
+    AuditStore, ContentFilter, DataMask, DocumentLoader, EventBus, IdGenerator, InputSanitizer, LlmProvider, Lock,
+    NotificationStore, PaymentProvider, RelationLoader, SearchEngine, SignatureVerifier, StateMachine, TextSplitter,
+    TranslationStore, VectorStore,
 };
 use ingjoo_core::pool::Pool;
 use ingjoo_core::Dialect;
@@ -34,10 +37,7 @@ pub struct RateLimitConfig {
 
 impl Default for RateLimitConfig {
     fn default() -> Self {
-        Self {
-            max_tokens: 10,
-            refill_per_sec: 1.0,
-        }
+        Self { max_tokens: 10, refill_per_sec: 1.0 }
     }
 }
 
@@ -72,6 +72,8 @@ pub struct AppState {
     // ── 扩展 trait（均有 noop 默认） ──
     /// 审计日志
     pub audit: Arc<dyn AuditStore>,
+    /// 通知
+    pub notification: Arc<dyn NotificationStore>,
     /// 内容过滤
     pub content_filter: Arc<dyn ContentFilter>,
     /// 数据脱敏
@@ -98,6 +100,12 @@ pub struct AppState {
     pub translation: Arc<dyn TranslationStore>,
     /// 向量存储
     pub vector: Arc<dyn VectorStore>,
+    /// 邮件服务
+    #[cfg(feature = "email")]
+    pub email: Arc<dyn EmailProvider>,
+    /// 短信服务
+    #[cfg(feature = "sms")]
+    pub sms: Arc<dyn SmsProvider>,
 
     // ── 常驻扩展 trait（无 noop，始终有真实实现） ──
     /// 事件总线
@@ -106,6 +114,14 @@ pub struct AppState {
     pub id_generator: Arc<dyn IdGenerator>,
     /// 分布式锁
     pub lock: Arc<dyn Lock>,
+
+    // ── 多数据库配置（multi-db feature gate） ──
+    /// 数据库管理密码（Basic Auth）
+    pub admin_passwd: String,
+    /// 是否允许列出数据库
+    pub list_db: bool,
+    /// 数据库名称过滤正则
+    pub dbfilter: Option<String>,
 }
 
 impl AppState {
@@ -134,6 +150,7 @@ impl AppState {
 
             // 扩展 trait — 有真实实现的用真实默认，其余 noop
             audit: Arc::new(NoopAuditStore),
+            notification: Arc::new(NoopNotificationStore),
             content_filter: Arc::new(NoopContentFilter),
             data_mask: Arc::new(NoopDataMask),
             document_loader: Arc::new(crate::extension_impl::FsDocumentLoader::default()),
@@ -147,10 +164,18 @@ impl AppState {
             relation_loader: Arc::new(NoopRelationLoader),
             translation: Arc::new(NoopTranslationStore),
             vector: Arc::new(NoopVectorStore),
+            #[cfg(feature = "email")]
+            email: Arc::new(NoopEmailProvider),
+            #[cfg(feature = "sms")]
+            sms: Arc::new(NoopSmsProvider),
 
             event_bus: Arc::new(crate::extension_impl::BroadcastEventBus::new(256)),
             id_generator: Arc::new(crate::extension_impl::DefaultIdGenerator::new()),
             lock: Arc::new(crate::extension_impl::InMemoryLock::new()),
+
+            admin_passwd: String::new(),
+            list_db: false,
+            dbfilter: None,
         }
     }
 
@@ -179,6 +204,11 @@ impl AppState {
 
     pub fn with_audit(mut self, audit: Arc<dyn AuditStore>) -> Self {
         self.audit = audit;
+        self
+    }
+
+    pub fn with_notification(mut self, notification: Arc<dyn NotificationStore>) -> Self {
+        self.notification = notification;
         self
     }
 
@@ -247,6 +277,18 @@ impl AppState {
         self
     }
 
+    #[cfg(feature = "email")]
+    pub fn with_email(mut self, email: Arc<dyn EmailProvider>) -> Self {
+        self.email = email;
+        self
+    }
+
+    #[cfg(feature = "sms")]
+    pub fn with_sms(mut self, sms: Arc<dyn SmsProvider>) -> Self {
+        self.sms = sms;
+        self
+    }
+
     pub fn with_event_bus(mut self, bus: Arc<dyn EventBus>) -> Self {
         self.event_bus = bus;
         self
@@ -259,6 +301,14 @@ impl AppState {
 
     pub fn with_lock(mut self, lock: Arc<dyn Lock>) -> Self {
         self.lock = lock;
+        self
+    }
+
+    /// 设置多数据库管理配置（admin_passwd, list_db, dbfilter）
+    pub fn with_multi_db_config(mut self, admin_passwd: String, list_db: bool, dbfilter: Option<String>) -> Self {
+        self.admin_passwd = admin_passwd;
+        self.list_db = list_db;
+        self.dbfilter = dbfilter;
         self
     }
 }

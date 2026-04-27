@@ -10,10 +10,7 @@ pub struct CharTextSplitter {
 
 impl CharTextSplitter {
     pub fn new(chunk_size: usize, chunk_overlap: usize) -> Self {
-        Self {
-            chunk_size,
-            chunk_overlap,
-        }
+        Self { chunk_size, chunk_overlap }
     }
 
     pub fn with_defaults() -> Self {
@@ -52,21 +49,11 @@ impl TextSplitter for CharTextSplitter {
 
                 let mut metadata = doc.metadata.clone();
                 if let Some(obj) = metadata.as_object_mut() {
-                    obj.insert(
-                        "chunk_index".to_string(),
-                        serde_json::json!(idx),
-                    );
-                    obj.insert(
-                        "parent_id".to_string(),
-                        serde_json::json!(doc.id),
-                    );
+                    obj.insert("chunk_index".to_string(), serde_json::json!(idx));
+                    obj.insert("parent_id".to_string(), serde_json::json!(doc.id));
                 }
 
-                result.push(Document {
-                    id: format!("{}#{}", doc.id, idx),
-                    content: chunk.to_string(),
-                    metadata,
-                });
+                result.push(Document { id: format!("{}#{}", doc.id, idx), content: chunk.to_string(), metadata });
 
                 start += step;
                 idx += 1;
@@ -82,11 +69,7 @@ mod tests {
     use super::*;
 
     fn make_doc(content: &str) -> Document {
-        Document {
-            id: "test".to_string(),
-            content: content.to_string(),
-            metadata: serde_json::json!({}),
-        }
+        Document { id: "test".to_string(), content: content.to_string(), metadata: serde_json::json!({}) }
     }
 
     #[test]

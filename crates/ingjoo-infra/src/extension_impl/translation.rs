@@ -31,9 +31,9 @@ impl TranslationStore for DbTranslationStore {
         field: &str,
         record_id: &str,
     ) -> Result<Option<String>, anyhow::Error> {
-        let row = sqlx::query(&self.sql(
-            "SELECT value FROM ir_translation WHERE lang = ? AND model = ? AND field = ? AND record_id = ?"
-        ))
+        let row = sqlx::query(
+            &self.sql("SELECT value FROM ir_translation WHERE lang = ? AND model = ? AND field = ? AND record_id = ?"),
+        )
         .bind(lang)
         .bind(model)
         .bind(field)
@@ -44,14 +44,11 @@ impl TranslationStore for DbTranslationStore {
         Ok(row.map(|r| r.get("value")))
     }
 
-    async fn set(
-        &self,
-        translation: Translation,
-    ) -> Result<(), anyhow::Error> {
+    async fn set(&self, translation: Translation) -> Result<(), anyhow::Error> {
         sqlx::query(&self.sql(
             "INSERT INTO ir_translation (lang, model, field, record_id, value) \
              VALUES (?, ?, ?, ?, ?) \
-             ON CONFLICT(lang, model, field, record_id) DO UPDATE SET value = excluded.value"
+             ON CONFLICT(lang, model, field, record_id) DO UPDATE SET value = excluded.value",
         ))
         .bind(&translation.lang)
         .bind(&translation.model)
@@ -82,10 +79,7 @@ impl TranslationStore for DbTranslationStore {
             placeholders.join(",")
         ));
 
-        let mut query = sqlx::query(&sql)
-            .bind(lang)
-            .bind(model)
-            .bind(field);
+        let mut query = sqlx::query(&sql).bind(lang).bind(model).bind(field);
         for id in record_ids {
             query = query.bind(id);
         }
@@ -100,16 +94,10 @@ impl TranslationStore for DbTranslationStore {
         Ok(result)
     }
 
-    async fn remove(
-        &self,
-        lang: &str,
-        model: &str,
-        field: &str,
-        record_id: &str,
-    ) -> Result<(), anyhow::Error> {
-        sqlx::query(&self.sql(
-            "DELETE FROM ir_translation WHERE lang = ? AND model = ? AND field = ? AND record_id = ?"
-        ))
+    async fn remove(&self, lang: &str, model: &str, field: &str, record_id: &str) -> Result<(), anyhow::Error> {
+        sqlx::query(
+            &self.sql("DELETE FROM ir_translation WHERE lang = ? AND model = ? AND field = ? AND record_id = ?"),
+        )
         .bind(lang)
         .bind(model)
         .bind(field)
@@ -120,12 +108,10 @@ impl TranslationStore for DbTranslationStore {
     }
 
     async fn list_languages(&self, model: &str) -> Result<Vec<String>, anyhow::Error> {
-        let rows = sqlx::query(&self.sql(
-            "SELECT DISTINCT lang FROM ir_translation WHERE model = ? ORDER BY lang"
-        ))
-        .bind(model)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows = sqlx::query(&self.sql("SELECT DISTINCT lang FROM ir_translation WHERE model = ? ORDER BY lang"))
+            .bind(model)
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(rows.iter().map(|r| r.get("lang")).collect())
     }
@@ -136,11 +122,7 @@ mod tests {
     use super::*;
 
     async fn setup() -> DbTranslationStore {
-        let tmp = tempfile::Builder::new()
-            .prefix("translation_test_")
-            .suffix(".db")
-            .tempfile()
-            .unwrap();
+        let tmp = tempfile::Builder::new().prefix("translation_test_").suffix(".db").tempfile().unwrap();
         let db_path = tmp.path().to_str().unwrap().to_string();
         std::mem::forget(tmp);
 
@@ -156,7 +138,7 @@ mod tests {
                 record_id TEXT NOT NULL,
                 value TEXT NOT NULL,
                 UNIQUE(lang, model, field, record_id)
-            )"
+            )",
         )
         .execute(&pool)
         .await
@@ -192,14 +174,26 @@ mod tests {
     #[tokio::test]
     async fn translation_set_upserts() {
         let store = setup().await;
-        store.set(Translation {
-            lang: "zh".into(), model: "product".into(), field: "name".into(),
-            record_id: "p1".into(), value: "旧名称".into(),
-        }).await.unwrap();
-        store.set(Translation {
-            lang: "zh".into(), model: "product".into(), field: "name".into(),
-            record_id: "p1".into(), value: "新名称".into(),
-        }).await.unwrap();
+        store
+            .set(Translation {
+                lang: "zh".into(),
+                model: "product".into(),
+                field: "name".into(),
+                record_id: "p1".into(),
+                value: "旧名称".into(),
+            })
+            .await
+            .unwrap();
+        store
+            .set(Translation {
+                lang: "zh".into(),
+                model: "product".into(),
+                field: "name".into(),
+                record_id: "p1".into(),
+                value: "新名称".into(),
+            })
+            .await
+            .unwrap();
 
         let val = store.get("zh", "product", "name", "p1").await.unwrap();
         assert_eq!(val, Some("新名称".into()));
@@ -209,10 +203,16 @@ mod tests {
     async fn translation_get_batch() {
         let store = setup().await;
         for (id, name) in [("p1", "产品A"), ("p2", "产品B"), ("p3", "产品C")] {
-            store.set(Translation {
-                lang: "zh".into(), model: "product".into(), field: "name".into(),
-                record_id: id.into(), value: name.into(),
-            }).await.unwrap();
+            store
+                .set(Translation {
+                    lang: "zh".into(),
+                    model: "product".into(),
+                    field: "name".into(),
+                    record_id: id.into(),
+                    value: name.into(),
+                })
+                .await
+                .unwrap();
         }
 
         let batch = store.get_batch("zh", "product", "name", &["p1".into(), "p3".into()]).await.unwrap();
@@ -224,10 +224,16 @@ mod tests {
     #[tokio::test]
     async fn translation_remove() {
         let store = setup().await;
-        store.set(Translation {
-            lang: "zh".into(), model: "product".into(), field: "name".into(),
-            record_id: "p1".into(), value: "产品A".into(),
-        }).await.unwrap();
+        store
+            .set(Translation {
+                lang: "zh".into(),
+                model: "product".into(),
+                field: "name".into(),
+                record_id: "p1".into(),
+                value: "产品A".into(),
+            })
+            .await
+            .unwrap();
 
         store.remove("zh", "product", "name", "p1").await.unwrap();
         let val = store.get("zh", "product", "name", "p1").await.unwrap();
@@ -238,15 +244,27 @@ mod tests {
     async fn translation_list_languages() {
         let store = setup().await;
         for lang in ["zh", "en", "ja"] {
-            store.set(Translation {
-                lang: lang.into(), model: "product".into(), field: "name".into(),
-                record_id: "p1".into(), value: format!("name_{}", lang),
-            }).await.unwrap();
+            store
+                .set(Translation {
+                    lang: lang.into(),
+                    model: "product".into(),
+                    field: "name".into(),
+                    record_id: "p1".into(),
+                    value: format!("name_{}", lang),
+                })
+                .await
+                .unwrap();
         }
-        store.set(Translation {
-            lang: "zh".into(), model: "order".into(), field: "status".into(),
-            record_id: "o1".into(), value: "已发货".into(),
-        }).await.unwrap();
+        store
+            .set(Translation {
+                lang: "zh".into(),
+                model: "order".into(),
+                field: "status".into(),
+                record_id: "o1".into(),
+                value: "已发货".into(),
+            })
+            .await
+            .unwrap();
 
         let langs = store.list_languages("product").await.unwrap();
         assert_eq!(langs, vec!["en", "ja", "zh"]);

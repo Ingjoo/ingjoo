@@ -20,65 +20,30 @@ pub struct SettingsPromptManager {
 }
 
 impl SettingsPromptManager {
-    pub fn new(
-        store: Arc<dyn ModuleSettingStore>,
-        scope: impl Into<String>,
-        scope_id: Option<String>,
-    ) -> Self {
-        Self {
-            inner: PromptManager::new(),
-            store,
-            scope: scope.into(),
-            scope_id,
-        }
+    pub fn new(store: Arc<dyn ModuleSettingStore>, scope: impl Into<String>, scope_id: Option<String>) -> Self {
+        Self { inner: PromptManager::new(), store, scope: scope.into(), scope_id }
     }
 
     /// 获取模板内容
     pub async fn get_template(&self, key: &str) -> StoreResult<Option<String>> {
-        self.store
-            .get_module_setting(&self.scope, self.scope_id.as_deref(), "prompt", key)
-            .await
+        self.store.get_module_setting(&self.scope, self.scope_id.as_deref(), "prompt", key).await
     }
 
     /// 保存模板
-    pub async fn save_template(
-        &self,
-        key: &str,
-        template: &str,
-    ) -> StoreResult<()> {
+    pub async fn save_template(&self, key: &str, template: &str) -> StoreResult<()> {
         let id = uuid::Uuid::new_v4().to_string();
-        self.store
-            .set_module_setting(
-                &id,
-                &self.scope,
-                self.scope_id.as_deref(),
-                "prompt",
-                key,
-                template,
-            )
-            .await?;
+        self.store.set_module_setting(&id, &self.scope, self.scope_id.as_deref(), "prompt", key, template).await?;
         Ok(())
     }
 
     /// 渲染模板 — 将 `{{variable}}` 占位符替换为实际值
-    pub async fn render_template(
-        &self,
-        key: &str,
-        vars: &HashMap<String, String>,
-    ) -> Result<String, anyhow::Error> {
-        let template = self
-            .get_template(key)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("模板不存在: {}", key))?;
+    pub async fn render_template(&self, key: &str, vars: &HashMap<String, String>) -> Result<String, anyhow::Error> {
+        let template = self.get_template(key).await?.ok_or_else(|| anyhow::anyhow!("模板不存在: {}", key))?;
         self.inner.render(&template, vars)
     }
 
     /// 使用原始模板字符串直接渲染（不经过存储）
-    pub fn render_raw(
-        &self,
-        template: &str,
-        vars: &HashMap<String, String>,
-    ) -> Result<String, anyhow::Error> {
+    pub fn render_raw(&self, template: &str, vars: &HashMap<String, String>) -> Result<String, anyhow::Error> {
         self.inner.render(template, vars)
     }
 }
@@ -95,9 +60,7 @@ mod tests {
 
     impl MockSettingsStore {
         fn new() -> Self {
-            Self {
-                settings: tokio::sync::Mutex::new(HashMap::new()),
-            }
+            Self { settings: tokio::sync::Mutex::new(HashMap::new()) }
         }
     }
 
@@ -165,9 +128,7 @@ mod tests {
     async fn test_save_and_get_template() {
         let store = make_store();
         let mgr = SettingsPromptManager::new(store, "system", None);
-        mgr.save_template("greeting", "你好，{{name}}！")
-            .await
-            .unwrap();
+        mgr.save_template("greeting", "你好，{{name}}！").await.unwrap();
         let tmpl = mgr.get_template("greeting").await.unwrap();
         assert_eq!(tmpl, Some("你好，{{name}}！".to_string()));
     }
@@ -176,9 +137,7 @@ mod tests {
     async fn test_render_template() {
         let store = make_store();
         let mgr = SettingsPromptManager::new(store, "system", None);
-        mgr.save_template("hello", "Hello {{name}}, welcome to {{place}}!")
-            .await
-            .unwrap();
+        mgr.save_template("hello", "Hello {{name}}, welcome to {{place}}!").await.unwrap();
         let mut vars = HashMap::new();
         vars.insert("name".to_string(), "Alice".to_string());
         vars.insert("place".to_string(), "Wonderland".to_string());

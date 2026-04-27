@@ -1,14 +1,10 @@
 use ingjoo_core::pool::Pool;
 use ingjoo_core::Dialect;
-use ingjoo_queue::{JobStatus, QueuedJob, SqlQueue, Queue};
+use ingjoo_queue::{JobStatus, Queue, QueuedJob, SqlQueue};
 use serde_json::json;
 
 async fn setup_pool() -> Pool {
-    let tmp = tempfile::Builder::new()
-        .prefix("queue_test_")
-        .suffix(".db")
-        .tempfile()
-        .unwrap();
+    let tmp = tempfile::Builder::new().prefix("queue_test_").suffix(".db").tempfile().unwrap();
     let db_path = tmp.path().to_str().unwrap().to_string();
     std::mem::forget(tmp);
 
@@ -34,7 +30,7 @@ async fn setup_pool() -> Pool {
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_queue_jobs_status ON queue_jobs(queue, status);
-        CREATE INDEX IF NOT EXISTS idx_queue_jobs_priority ON queue_jobs(priority ASC, created_at ASC)"#
+        CREATE INDEX IF NOT EXISTS idx_queue_jobs_priority ON queue_jobs(priority ASC, created_at ASC)"#,
     );
     for stmt in Dialect::split_ddl(&create_sql) {
         sqlx::query(stmt).execute(&pool).await.unwrap();

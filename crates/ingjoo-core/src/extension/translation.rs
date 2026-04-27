@@ -18,19 +18,11 @@ pub struct Translation {
 #[async_trait]
 pub trait TranslationStore: Send + Sync {
     /// 获取单条翻译
-    async fn get(
-        &self,
-        lang: &str,
-        model: &str,
-        field: &str,
-        record_id: &str,
-    ) -> Result<Option<String>, anyhow::Error>;
+    async fn get(&self, lang: &str, model: &str, field: &str, record_id: &str)
+        -> Result<Option<String>, anyhow::Error>;
 
     /// 写入一条翻译（存在则覆盖）
-    async fn set(
-        &self,
-        translation: Translation,
-    ) -> Result<(), anyhow::Error>;
+    async fn set(&self, translation: Translation) -> Result<(), anyhow::Error>;
 
     /// 批量获取翻译（返回 record_id → value 映射）
     async fn get_batch(
@@ -42,13 +34,7 @@ pub trait TranslationStore: Send + Sync {
     ) -> Result<HashMap<String, String>, anyhow::Error>;
 
     /// 删除一条翻译
-    async fn remove(
-        &self,
-        lang: &str,
-        model: &str,
-        field: &str,
-        record_id: &str,
-    ) -> Result<(), anyhow::Error>;
+    async fn remove(&self, lang: &str, model: &str, field: &str, record_id: &str) -> Result<(), anyhow::Error>;
 
     /// 列出指定模型已有翻译的所有语言代码
     async fn list_languages(&self, model: &str) -> Result<Vec<String>, anyhow::Error>;

@@ -26,9 +26,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, LitStr,
-};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, LitStr};
 
 fn field_type_tokens(type_str: &str) -> Option<TokenStream2> {
     match type_str {
@@ -57,20 +55,16 @@ fn parse_struct_attrs(input: &DeriveInput) -> syn::Result<(String, bool)> {
             } else if meta.path.is_ident("audit") {
                 audit = true;
             } else {
-                return Err(meta.error(format!(
-                    "未知的结构体属性 `{}`，支持: table, audit",
-                    meta.path.require_ident()?
-                )));
+                return Err(
+                    meta.error(format!("未知的结构体属性 `{}`，支持: table, audit", meta.path.require_ident()?))
+                );
             }
             Ok(())
         })?;
     }
 
     if table_name.is_empty() {
-        return Err(syn::Error::new_spanned(
-            &input.ident,
-            "#[ingjoo(table = \"...\")] 是必填属性",
-        ));
+        return Err(syn::Error::new_spanned(&input.ident, "#[ingjoo(table = \"...\")] 是必填属性"));
     }
 
     Ok((table_name, audit))
@@ -84,12 +78,7 @@ struct FieldAttrs {
 }
 
 fn parse_field_attrs(field: &syn::Field) -> syn::Result<FieldAttrs> {
-    let mut attrs = FieldAttrs {
-        field_type: String::from("text"),
-        required: false,
-        unique: false,
-        related: None,
-    };
+    let mut attrs = FieldAttrs { field_type: String::from("text"), required: false, unique: false, related: None };
 
     for attr in &field.attrs {
         if !attr.path().is_ident("ingjoo") {
@@ -154,19 +143,9 @@ fn impl_ingjoo_model(input: &DeriveInput) -> syn::Result<TokenStream2> {
     let fields = match &input.data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => &fields.named,
-            _ => {
-                return Err(syn::Error::new_spanned(
-                    input,
-                    "IngjooModel 只支持具名字段的结构体（Named Fields）",
-                ))
-            }
+            _ => return Err(syn::Error::new_spanned(input, "IngjooModel 只支持具名字段的结构体（Named Fields）")),
         },
-        _ => {
-            return Err(syn::Error::new_spanned(
-                input,
-                "IngjooModel 只支持结构体",
-            ))
-        }
+        _ => return Err(syn::Error::new_spanned(input, "IngjooModel 只支持结构体")),
     };
 
     let mut field_calls = Vec::new();

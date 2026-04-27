@@ -12,6 +12,6 @@
 pub mod policy;
 
 pub use policy::{
-    AccessOp, ModelAccess, RecordRule, SecurityPolicy, SecurityBuilder,
-    PolicyDocument, ModelAccessDef, RecordRuleDef, SecurityError,
+    AccessOp, ModelAccess, ModelAccessDef, PolicyDocument, RecordRule, RecordRuleDef, SecurityBuilder, SecurityError,
+    SecurityPolicy,
 };

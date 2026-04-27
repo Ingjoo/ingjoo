@@ -12,9 +12,21 @@ pub trait GenericRecordStore: Send + Sync {
     async fn ensure_table(&self, model: &ModelDescriptor) -> StoreResult<()>;
     async fn generic_create(&self, model: &ModelDescriptor, data: &Value, uid: Option<&str>) -> StoreResult<Value>;
     async fn generic_read(&self, model: &ModelDescriptor, id: &str) -> StoreResult<Option<Value>>;
-    async fn generic_update(&self, model: &ModelDescriptor, id: &str, data: &Value, uid: Option<&str>) -> StoreResult<Option<Value>>;
+    async fn generic_update(
+        &self,
+        model: &ModelDescriptor,
+        id: &str,
+        data: &Value,
+        uid: Option<&str>,
+    ) -> StoreResult<Option<Value>>;
     async fn generic_delete(&self, model: &ModelDescriptor, id: &str) -> StoreResult<bool>;
-    async fn generic_list(&self, model: &ModelDescriptor, domain: Option<&Domain>, limit: i64, offset: i64) -> StoreResult<PaginatedResult<Value>>;
+    async fn generic_list(
+        &self,
+        model: &ModelDescriptor,
+        domain: Option<&Domain>,
+        limit: i64,
+        offset: i64,
+    ) -> StoreResult<PaginatedResult<Value>>;
     async fn generic_count(&self, model: &ModelDescriptor, domain: Option<&Domain>) -> StoreResult<i64>;
 }
 
@@ -84,27 +96,43 @@ fn row_to_json(row: &sqlx::any::AnyRow, model: &ModelDescriptor) -> Value {
 
     let id: Option<String> = row.try_get("id").ok();
     match id {
-        Some(s) => { map.insert("id".to_string(), json!(s)); }
+        Some(s) => {
+            map.insert("id".to_string(), json!(s));
+        }
         None => {
             let iid: Option<i64> = row.try_get("id").ok();
-            if let Some(i) = iid { map.insert("id".to_string(), json!(i)); }
+            if let Some(i) = iid {
+                map.insert("id".to_string(), json!(i));
+            }
         }
     }
 
     let created_at: Option<String> = row.try_get("created_at").ok();
-    if let Some(v) = created_at { map.insert("created_at".to_string(), json!(v)); }
+    if let Some(v) = created_at {
+        map.insert("created_at".to_string(), json!(v));
+    }
     let updated_at: Option<String> = row.try_get("updated_at").ok();
-    if let Some(v) = updated_at { map.insert("updated_at".to_string(), json!(v)); }
+    if let Some(v) = updated_at {
+        map.insert("updated_at".to_string(), json!(v));
+    }
 
     if model.audit_fields {
         let create_uid: Option<String> = row.try_get("create_uid").ok().flatten();
-        if let Some(v) = create_uid { map.insert("create_uid".to_string(), json!(v)); }
+        if let Some(v) = create_uid {
+            map.insert("create_uid".to_string(), json!(v));
+        }
         let write_uid: Option<String> = row.try_get("write_uid").ok().flatten();
-        if let Some(v) = write_uid { map.insert("write_uid".to_string(), json!(v)); }
+        if let Some(v) = write_uid {
+            map.insert("write_uid".to_string(), json!(v));
+        }
         let create_date: Option<String> = row.try_get("create_date").ok();
-        if let Some(v) = create_date { map.insert("create_date".to_string(), json!(v)); }
+        if let Some(v) = create_date {
+            map.insert("create_date".to_string(), json!(v));
+        }
         let write_date: Option<String> = row.try_get("write_date").ok();
-        if let Some(v) = write_date { map.insert("write_date".to_string(), json!(v)); }
+        if let Some(v) = write_date {
+            map.insert("write_date".to_string(), json!(v));
+        }
     }
 
     for f in &model.fields {
@@ -129,14 +157,22 @@ fn row_to_json(row: &sqlx::any::AnyRow, model: &ModelDescriptor) -> Value {
                 let int_val: Option<i64> = row.try_get(f.name.as_str()).ok();
                 match int_val {
                     Some(i) => match f.field_type {
-                        FieldType::Boolean => { map.insert(f.name.clone(), json!(i != 0)); }
-                        _ => { map.insert(f.name.clone(), json!(i)); }
+                        FieldType::Boolean => {
+                            map.insert(f.name.clone(), json!(i != 0));
+                        }
+                        _ => {
+                            map.insert(f.name.clone(), json!(i));
+                        }
                     },
                     None => {
                         let real_val: Option<f64> = row.try_get(f.name.as_str()).ok();
                         match real_val {
-                            Some(r) => { map.insert(f.name.clone(), json!(r)); }
-                            None => { map.insert(f.name.clone(), Value::Null); }
+                            Some(r) => {
+                                map.insert(f.name.clone(), json!(r));
+                            }
+                            None => {
+                                map.insert(f.name.clone(), Value::Null);
+                            }
                         }
                     }
                 }
@@ -204,9 +240,7 @@ impl<'a> GenericRecordStore for GenericDb<'a> {
                 vals.push(self.dialect.placeholder(1));
                 params.push(v);
             } else if f.required {
-                return Err(ingjoo_core::db::error::StoreError::BadRequest(
-                    format!("缺少必填字段: {}", f.name),
-                ));
+                return Err(ingjoo_core::db::error::StoreError::BadRequest(format!("缺少必填字段: {}", f.name)));
             }
         }
 
@@ -221,12 +255,8 @@ impl<'a> GenericRecordStore for GenericDb<'a> {
             }
         }
 
-        let sql = self.sql(&format!(
-            "INSERT INTO {} ({}) VALUES ({})",
-            model.table_name,
-            cols.join(", "),
-            vals.join(", "),
-        ));
+        let sql =
+            self.sql(&format!("INSERT INTO {} ({}) VALUES ({})", model.table_name, cols.join(", "), vals.join(", "),));
 
         let mut query = sqlx::query(&sql);
         for p in &params {
@@ -254,7 +284,13 @@ impl<'a> GenericRecordStore for GenericDb<'a> {
         Ok(row.map(|r| row_to_json(&r, model)))
     }
 
-    async fn generic_update(&self, model: &ModelDescriptor, id: &str, data: &Value, uid: Option<&str>) -> StoreResult<Option<Value>> {
+    async fn generic_update(
+        &self,
+        model: &ModelDescriptor,
+        id: &str,
+        data: &Value,
+        uid: Option<&str>,
+    ) -> StoreResult<Option<Value>> {
         let mut sets = Vec::new();
         let mut params = Vec::new();
 
@@ -305,7 +341,13 @@ impl<'a> GenericRecordStore for GenericDb<'a> {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn generic_list(&self, model: &ModelDescriptor, domain: Option<&Domain>, limit: i64, offset: i64) -> StoreResult<PaginatedResult<Value>> {
+    async fn generic_list(
+        &self,
+        model: &ModelDescriptor,
+        domain: Option<&Domain>,
+        limit: i64,
+        offset: i64,
+    ) -> StoreResult<PaginatedResult<Value>> {
         let mut where_clause = String::new();
         let mut domain_params = Vec::new();
 
@@ -326,7 +368,10 @@ impl<'a> GenericRecordStore for GenericDb<'a> {
 
         let list_sql = self.sql(&format!(
             "SELECT * FROM {}{} ORDER BY id DESC LIMIT {} OFFSET {}",
-            model.table_name, where_clause, self.dialect.placeholder(1), self.dialect.placeholder(1)
+            model.table_name,
+            where_clause,
+            self.dialect.placeholder(1),
+            self.dialect.placeholder(1)
         ));
         let mut list_query = sqlx::query(&list_sql);
         for p in &domain_params {
@@ -390,11 +435,8 @@ impl<'a> GenericDb<'a> {
             }
         }
 
-        let where_clause = if where_parts.is_empty() {
-            String::new()
-        } else {
-            format!(" WHERE {}", where_parts.join(" AND "))
-        };
+        let where_clause =
+            if where_parts.is_empty() { String::new() } else { format!(" WHERE {}", where_parts.join(" AND ")) };
 
         let count_sql = self.sql(&format!("SELECT COUNT(*) FROM {}{}", model.table_name, where_clause));
         let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
@@ -405,7 +447,10 @@ impl<'a> GenericDb<'a> {
 
         let list_sql = self.sql(&format!(
             "SELECT * FROM {}{} ORDER BY id DESC LIMIT {} OFFSET {}",
-            model.table_name, where_clause, self.dialect.placeholder(1), self.dialect.placeholder(1)
+            model.table_name,
+            where_clause,
+            self.dialect.placeholder(1),
+            self.dialect.placeholder(1)
         ));
         let mut list_query = sqlx::query(&list_sql);
         for p in &all_params {

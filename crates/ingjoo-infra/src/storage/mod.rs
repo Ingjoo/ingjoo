@@ -87,11 +87,7 @@ impl S3Storage {
 
     pub async fn from_endpoint(endpoint: String, bucket: String, region: String) -> Result<Self> {
         use aws_sdk_s3::config::Region;
-        let config = aws_config::from_env()
-            .region(Region::new(region))
-            .endpoint_url(endpoint)
-            .load()
-            .await;
+        let config = aws_config::from_env().region(Region::new(region)).endpoint_url(endpoint).load().await;
         let client = aws_sdk_s3::Client::new(&config);
         Ok(Self { client, bucket })
     }
@@ -101,54 +97,27 @@ impl S3Storage {
 #[async_trait]
 impl FileStorage for S3Storage {
     async fn save(&self, path: &str, data: &[u8]) -> Result<()> {
-        self.client
-            .put_object()
-            .bucket(&self.bucket)
-            .key(path)
-            .body(data.to_vec().into())
-            .send()
-            .await?;
+        self.client.put_object().bucket(&self.bucket).key(path).body(data.to_vec().into()).send().await?;
         Ok(())
     }
 
     async fn load(&self, path: &str) -> Result<Vec<u8>> {
-        let resp = self.client
-            .get_object()
-            .bucket(&self.bucket)
-            .key(path)
-            .send()
-            .await?;
+        let resp = self.client.get_object().bucket(&self.bucket).key(path).send().await?;
         let bytes = resp.body.collect().await?.to_vec();
         Ok(bytes)
     }
 
     async fn delete(&self, path: &str) -> Result<()> {
-        self.client
-            .delete_object()
-            .bucket(&self.bucket)
-            .key(path)
-            .send()
-            .await?;
+        self.client.delete_object().bucket(&self.bucket).key(path).send().await?;
         Ok(())
     }
 
     async fn exists(&self, path: &str) -> bool {
-        self.client
-            .head_object()
-            .bucket(&self.bucket)
-            .key(path)
-            .send()
-            .await
-            .is_ok()
+        self.client.head_object().bucket(&self.bucket).key(path).send().await.is_ok()
     }
 
     async fn size(&self, path: &str) -> Result<u64> {
-        let resp = self.client
-            .head_object()
-            .bucket(&self.bucket)
-            .key(path)
-            .send()
-            .await?;
+        let resp = self.client.head_object().bucket(&self.bucket).key(path).send().await?;
         Ok(resp.content_length().unwrap_or(0) as u64)
     }
 }

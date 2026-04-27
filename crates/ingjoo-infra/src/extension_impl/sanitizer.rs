@@ -18,9 +18,34 @@ impl HtmlInputSanitizer {
 
     pub fn with_defaults() -> Self {
         Self::new(vec![
-            "p", "br", "b", "i", "u", "em", "strong", "a", "ul", "ol", "li",
-            "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "code", "pre",
-            "span", "div", "table", "tr", "td", "th", "thead", "tbody",
+            "p",
+            "br",
+            "b",
+            "i",
+            "u",
+            "em",
+            "strong",
+            "a",
+            "ul",
+            "ol",
+            "li",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "blockquote",
+            "code",
+            "pre",
+            "span",
+            "div",
+            "table",
+            "tr",
+            "td",
+            "th",
+            "thead",
+            "tbody",
         ])
     }
 
@@ -124,10 +149,7 @@ fn slice_chars(chars: &[char], start: usize, end: usize) -> String {
 }
 
 fn extract_tag_name(content: &str) -> &str {
-    content
-        .split(|c: char| c.is_whitespace() || c == '/' || c == '>')
-        .next()
-        .unwrap_or("")
+    content.split(|c: char| c.is_whitespace() || c == '/' || c == '>').next().unwrap_or("")
 }
 
 fn strip_dangerous_attrs(attr_str: &str) -> String {

@@ -29,10 +29,7 @@ pub async fn database_selector_middleware(
     next: Next,
 ) -> Result<Response, AppError> {
     let db_name = extract_database_name(&request)
-        .or_else(|| {
-            request.extensions().get::<CurrentUser>()
-                .and_then(|u| u.database.clone())
-        });
+        .or_else(|| request.extensions().get::<CurrentUser>().and_then(|u| u.database.clone()));
 
     let resolved = resolve_database(&state.db_manager, db_name).await?;
 
@@ -73,15 +70,12 @@ async fn resolve_database(
 
     validate_db_name(&name)?;
 
-    let (pool, dialect) = manager.get_pool(&name).await.map_err(|e| {
-        AppError::Internal(anyhow::anyhow!("获取数据库 '{}' 连接池失败: {}", name, e))
-    })?;
+    let (pool, dialect) = manager
+        .get_pool(&name)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("获取数据库 '{}' 连接池失败: {}", name, e)))?;
 
-    Ok(ResolvedDatabase {
-        db_name: name,
-        pool,
-        dialect,
-    })
+    Ok(ResolvedDatabase { db_name: name, pool, dialect })
 }
 
 fn validate_db_name(name: &str) -> Result<(), AppError> {
@@ -91,20 +85,13 @@ fn validate_db_name(name: &str) -> Result<(), AppError> {
     if name.len() > 64 {
         return Err(AppError::BadRequest("数据库名长度不能超过 64 个字符".into()));
     }
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-    {
-        return Err(AppError::BadRequest(
-            "数据库名只能包含字母、数字、下划线和连字符".into(),
-        ));
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err(AppError::BadRequest("数据库名只能包含字母、数字、下划线和连字符".into()));
     }
     Ok(())
 }
 
-pub fn get_resolved_database(
-    extensions: &axum::http::Extensions,
-) -> Option<&ResolvedDatabase> {
+pub fn get_resolved_database(extensions: &axum::http::Extensions) -> Option<&ResolvedDatabase> {
     extensions.get::<ResolvedDatabase>()
 }
 
@@ -139,10 +126,8 @@ mod tests {
 
     #[test]
     fn test_extract_database_name_from_header() {
-        let req = axum::http::Request::builder()
-            .header(DB_HEADER, "tenant_acme")
-            .body(axum::body::Body::empty())
-            .unwrap();
+        let req =
+            axum::http::Request::builder().header(DB_HEADER, "tenant_acme").body(axum::body::Body::empty()).unwrap();
         assert_eq!(extract_database_name(&req), Some("tenant_acme".to_string()));
     }
 
@@ -157,10 +142,7 @@ mod tests {
 
     #[test]
     fn test_extract_database_name_none() {
-        let req = axum::http::Request::builder()
-            .uri("/api/data")
-            .body(axum::body::Body::empty())
-            .unwrap();
+        let req = axum::http::Request::builder().uri("/api/data").body(axum::body::Body::empty()).unwrap();
         assert_eq!(extract_database_name(&req), None);
     }
 

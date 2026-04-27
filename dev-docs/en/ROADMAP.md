@@ -1,21 +1,28 @@
 # Improvement Roadmap
 
-> Last updated: 2026-04-25
-> Status: v0.1.0 — Phase 1-6 complete, Phase 7 complete, Phase 7.5 complete
+> Last updated: 2026-04-26
+> Status: v0.1.0 — Phase 1-17 complete
 
 ## Current State Summary
 
 | Crate | Lines | Tests | Maturity | Status |
 |-------|-------|-------|----------|--------|
-| `ingjoo-core` | 2,137 | 68 | **Mature** | Domain DSL, Store traits, Dialect — production-ready |
-| `ingjoo-infra` | 5,900 | 125 | **Mature** | Full DB impl, auth, storage, handlers, middleware, router, 14 extension impls |
-| `ingjoo-security` | 478 | 16 | **Mature** | 3-layer RBAC engine — wired to CRUD handlers |
-| `ingjoo-cache` | 216 | 5 | **Complete** | Moka-based caching — working |
-| `ingjoo-queue` | 1,168 | 25 | **Complete** | In-memory + SQL queue, WorkerPool, retry policy, cron scheduler |
-| `ingjoo-bin` | 306 | 7 | **Working** | Full axum router with integration tests passing |
-| `ingjoo-macros` | 180 | 4 | **Working** | `#[derive(IngjooModel)]` proc macro for ModelDescriptor generation |
+| `ingjoo-core` | 3,920 | 82 | **Mature** | Domain DSL, Store traits, Dialect, NotificationStore |
+| `ingjoo-infra` | 15,800 | 197 | **Mature** | Full DB impl, auth, storage, handlers, middleware, router, 15 extension impls |
+| `ingjoo-security` | 622 | 22 | **Mature** | 3-layer RBAC engine — wired to CRUD handlers |
+| `ingjoo-cache` | 342 | 5 | **Complete** | Moka-based caching — working |
+| `ingjoo-queue` | 1,585 | 25 | **Complete** | In-memory + SQL queue, WorkerPool, retry policy, cron scheduler |
+| `ingjoo-bin` | 2,650 | 80 | **Working** | Full axum router with 80 integration tests passing |
+| `ingjoo-macros` | 210 | — | **Working** | `#[derive(IngjooModel)]` proc macro |
 
-**Total**: ~10,500 lines, 370 tests, 66 source files.
+**Total**: ~25,500 lines, 415 tests, 130+ source files.
+
+### Frontend Repos
+
+| Repo | Tech | Pages | Status |
+|------|------|-------|--------|
+| `ingjoo-js` (`@ingjoo/web`) | React + TypeScript + Rollup | — | ✅ Shared component library, auth/i18n/fetch/Domain DSL |
+| `web-base` | Next.js 16 + Tailwind CSS 4 | 12 | ✅ Full frontend-backend integration |
 
 ---
 
@@ -151,7 +158,7 @@ Attribute syntax:
 | T4.1 | Plugin/module hot-loading system | P1 | T3.1 | ✅ |
 | T4.2 | Public API rustdoc (`///` on all public items) | P1 | Phase 2 | ✅ |
 | T4.3 | Performance benchmarks (criterion) | P2 | Phase 2 | ✅ |
-| T4.4 | Full integration test suite | P2 | Phase 2 | 🔄 |
+| T4.4 | Full integration test suite | P2 | Phase 2 | ✅ |
 | T4.5 | `ingjoo-cli` management tool | P2 | Phase 2 | ✅ |
 | T4.6 | Multi-tenant collection isolation tests | P2 | T3.3 | ✅ |
 | T4.7 | Database connection pooling observability | P3 | — | ✅ |
@@ -264,6 +271,40 @@ PHASE 7.5 COMPLETE (370 tests, 0 failures, 0 clippy warnings)
 ├── T7.5.3 state.rs real defaults — ✅ sanitizer/document_loader/text_splitter
 └── T7.5.4 Integration tests — ✅ 7 translation + 7 state_machine tests
 
+PHASE 9 COMPLETE (272 tests, 0 clippy warnings, login→Dashboard QA verified)
+├── T9.1 /register page — ✅ ?register=1 query param
+├── T9.2 Auth persistence — ✅ localStorage + Authorization header
+├── T9.3 /me frontend — ✅ /auth/profile user state restore
+├── T9.4 Notification stubs — ✅ 4 Next.js Route Handlers
+├── T9.5 admin/search — ✅ skeleton pages
+├── T9.6 New API endpoints — ✅ dashboard stats / users search / audit-log
+├── T9.7 Preferences path — ✅ /auth/preferences
+└── T9.8 Dead code cleanup — ✅ removed providers.tsx
+
+PHASE 12 COMPLETE (414 tests, frontend SSE auth fixed)
+├── T12.1 NotificationBell — ✅ badge + dropdown + mark-read
+├── T12.2 SSE auth fix — ✅ fetch-based SSE with Bearer token
+├── T12.3 Notifications page — ✅ pagination + filtering + SSE refresh
+├── T12.4 Shared timeAgo utility — ✅ utils.ts
+└── T12.5 Header notification bell wiring — ✅
+
+PHASE 13 COMPLETE (Integration test fix + Profile + Frontend build fixes + Security)
+├── T13.1 Fix handlers_test.rs runtime-in-runtime — ✅ verified not a bug (15 tests pass)
+├── T13.2 Profile avatar upload — ✅ multipart handler + serve + frontend UI
+├── T13.3 Profile preferences persistence — ✅ already implemented end-to-end
+├── T13.4 Docs versioned in ingjoo repo — ✅
+├── T13.5 Page count fix (8→12) — ✅
+├── T13.6 Frontend build fixes — ✅ NavMenu types + Suspense + UpdatePreferences type
+└── T13.7 Avatar security hardening — ✅ path traversal protection + integration tests (4 avatar tests)
+
+PHASE 14 COMPLETE (Infrastructure wiring + Multi-tenant tests + Performance benchmarks)
+├── T14.1 Email/SMS wiring — ✅ NoopEmailProvider + NoopSmsProvider + AppState + main.rs
+├── T14.2 S3/OSS storage wiring — ✅ build_file_storage() + env-var config + S3 fallback
+├── T14.3 Multi-tenant isolation tests — ✅ 3 new integration tests (cross-tenant / 3-layer / create-scoped)
+└── T14.4 Performance benchmarks — ✅ policy_bench + domain/registry expanded + Justfile bench
+
+PHASE 8 COMPLETE
+
 PHASE 7 COMPLETE
 ├── T7.1 EventBus — ✅ tokio broadcast
 ├── T7.2 IdGenerator — ✅ UUID v4
@@ -275,7 +316,23 @@ PHASE 7 COMPLETE
 ├── T7.8 Migrations v8/v9 — ✅ DDL
 └── T7.9 Wiring — ✅ state.rs + main.rs
 
-PHASE 6 COMPLETE
+PHASE 14 COMPLETE
+├── T14.1 Email/SMS wiring — ✅ NoopEmailProvider + NoopSmsProvider + AppState
+├── T14.2 S3/OSS file storage — ✅ build_file_storage() + env-var config + S3 fallback
+├── T14.3 Multi-tenant isolation tests — ✅ 3 new integration tests
+└── T14.4 Performance benchmarks — ✅ policy_bench + domain/registry + Justfile bench
+
+PHASE 15 IN PROGRESS (QA Fixes + Documentation Sync)
+├── T15.1 Full QA test — ✅ 12 pages, 10 issues, health score 49→65
+├── T15.2 ISSUE-004 Search fix — ✅ POST + JSON body + response unwrap
+├── T15.3 ISSUE-002 Settings redirect — ✅ /settings → /admin/settings
+├── T15.4 ISSUE-003 Admin users list — ✅ /users/search?q= + type fix
+├── T15.5 ISSUE-006 Test user — ✅ admin2 created
+├── T15.6 QA report — ✅ .gstack/qa-reports/
+├── T15.7 Doc sync — ✅ PROGRESS-PLAN/Roadmap/AGENTS.md
+├── T15.8 ISSUE-010 Audit log API — 📋 in progress
+├── T15.9 ISSUE-005 Forgot password API — 📋 in progress
+└── T15.10 ISSUE-001 WebSocket proxy — 📋 pending
 ├── T6.1 AppState trait wiring — ✅ 14 fields + noop defaults + builder methods
 ├── T6.2 Conditional compilation — ✅ feature-gated build_xxx() + ingjoo-bin feature forwarding
 ├── T6.3 Audit logging — ✅ CRUD success fire-and-forget audit
@@ -319,7 +376,7 @@ PREVIOUS PHASES (ALL COMPLETE)
      └──────────┴──────┬───────┴───────────┘
                        │
                 ┌──────▼──────┐
-                │  ingjoo-infra│  ✅ Complete (60 tests)
+                 │  ingjoo-infra│  ✅ Complete (197 tests)
                 │  (DB/Auth/  │
                 │   Storage)  │
                 └─────────────┘
@@ -328,3 +385,83 @@ PREVIOUS PHASES (ALL COMPLETE)
 Legend:
 - ✅ Complete: Code done with tests
 - ✅ unused: Code done but not called from business flows
+
+---
+
+## Phase 17: View Pipeline Enhancement ✅ COMPLETE
+
+> Goal: Enhance the Action/View rendering pipeline — structured view arch, kanban wiring, form editing, search view expansion, saved filters.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T17.1 | Structured view arch JSON Schema | **P0** | ✅ Done | ViewArch types (ListArch, FormArch, KanbanArch, SearchArch) defined in metadata.rs |
+| T17.2 | Kanban view wiring in ViewRenderer | **P0** | ✅ Done | ViewRenderer supports `activeView === "kanban"` branch, SDK KanbanBoard wired + rollup multi-entry fix |
+| T17.3 | Form view inline editing | **P0** | ✅ Done | ViewRenderer form mode with editing state, dirty field detection, PUT submit, FormField component |
+| T17.4 | Search view seed data expansion | **P1** | ✅ Done | `seed.rs` adds article/product search views + actions + menus |
+| T17.5 | Search favorites (saved filters) | **P2** | ✅ Done | ir_search_favorite table + CRUD API + SearchPanel favorites UI |
+
+---
+
+## Phase 18: Automation Rules Engine 📋 Pending
+
+> Goal: Implement Odoo-style automation rules engine — auto-trigger actions based on conditions (create/update/notify).
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T18.1 | `ir_action_rule` table + migration | **P0** | 📋 | DDL: model, trigger, filter_domain, action_type, action_id, active, sequence |
+| T18.2 | `ActionRule` type definition | **P0** | 📋 | `ingjoo-core` ActionRule + ActionRuleStore trait |
+| T18.3 | EventBus subscription + rule evaluation | **P0** | 📋 | EventBus consumer: model_event → filter_domain evaluation → action trigger |
+| T18.4 | Built-in actions: update field / send notification | **P1** | 📋 | `UpdateField` / `SendNotification` action type implementations |
+| T18.5 | CRUD API `/api/action-rules` | **P1** | 📋 | Admin CRUD handler + route registration |
+| T18.6 | Batch execution optimization | **P2** | 📋 | Batch rule evaluation + N+1 query avoidance |
+
+---
+
+## Phase 19: Computed Fields + Module Inheritance 📋 Pending
+
+> Goal: Implement computed fields and module inheritance mechanisms.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T19.1 | `compute` / `depends` registration | **P0** | 📋 | ModelRegistry supports `computed_fields` + `depends` declarations |
+| T19.2 | Field computation engine | **P0** | 📋 | Dependency change → auto recompute → batch update, cycle detection |
+| T19.3 | View inheritance (`inherit_id` merge) | **P0** | 📋 | `ir_view.inherit_id` runtime merge: extend arch, add fields/buttons |
+| T19.4 | Model extension (non-inheritance) | **P1** | 📋 | Add fields/methods to existing models via `inherit_id` without altering original table |
+
+---
+
+## Phase 20: Module Dependencies + Install Order 📋 Pending
+
+> Goal: Complete module dependency resolution with correct install/uninstall ordering and conflict detection.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T20.1 | Dependency graph resolver | **P0** | 📋 | DAG topological sort + cycle detection + install/uninstall order |
+| T20.2 | Install-time dependency check | **P0** | 📋 | Pre-install check: auto-install missing dependencies |
+| T20.3 | Uninstall-time reverse dependency check | **P0** | 📋 | Pre-uninstall check: reject if other modules depend on it |
+| T20.4 | Module metadata API enhancement | **P1** | 📋 | `/api/modules` returns dependency graph + status |
+
+---
+
+## Phase 21: TestContext Helper 📋 Pending
+
+> Goal: Provide unified test utility struct to simplify integration test authoring.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T21.1 | `TestContext` struct | **P0** | 📋 | Encapsulates Db + AppState + test user, one-line test environment setup |
+| T21.2 | Test fixtures | **P1** | 📋 | Predefined test data factories (create_test_user, create_test_record) |
+| T21.3 | Assertion helper macros | **P2** | 📋 | `assert_record_exists!` / `assert_field_equals!` / `assert_domain_matches!` |
+
+---
+
+## Phase 22: Translation Integration + File Management 📋 Pending
+
+> Goal: Integrate translation into CRUD serialization, implement unified file management.
+
+| # | Task | Priority | Status | Deliverable |
+|---|------|----------|--------|-------------|
+| T22.1 | Translation serialization integration | **P0** | 📋 | GET /api/data/{model} auto-returns translated fields by Accept-Language |
+| T22.2 | Translation management UI | **P1** | 📋 | Admin translation page: language switch + field translation editing |
+| T22.3 | `ir_attachment` unified file management | **P1** | 📋 | Attachment model + upload/download/association API + frontend component |
+| T22.4 | File preview integration | **P2** | 📋 | PDF/image/Office file online preview |

@@ -15,10 +15,7 @@ pub async fn require_admin(
     request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    let current_user = request
-        .extensions()
-        .get::<CurrentUser>()
-        .ok_or(AppError::Unauthorized("未认证".into()))?;
+    let current_user = request.extensions().get::<CurrentUser>().ok_or(AppError::Unauthorized("未认证".into()))?;
 
     if !current_user.is_admin() {
         return Err(AppError::Forbidden("需要管理员权限".into()));

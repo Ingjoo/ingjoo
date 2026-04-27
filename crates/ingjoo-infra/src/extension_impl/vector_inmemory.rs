@@ -24,9 +24,7 @@ pub struct InMemoryVectorStore {
 
 impl InMemoryVectorStore {
     pub fn new() -> Self {
-        Self {
-            collections: Mutex::new(HashMap::new()),
-        }
+        Self { collections: Mutex::new(HashMap::new()) }
     }
 
     /// 计算余弦相似度
@@ -58,13 +56,7 @@ impl VectorStore for InMemoryVectorStore {
     ) -> Result<(), anyhow::Error> {
         let mut collections = self.collections.lock().unwrap();
         let col = collections.entry(collection.to_string()).or_default();
-        col.insert(
-            id.to_string(),
-            VectorEntry {
-                vector: vector.to_vec(),
-                metadata,
-            },
-        );
+        col.insert(id.to_string(), VectorEntry { vector: vector.to_vec(), metadata });
         Ok(())
     }
 
@@ -111,25 +103,11 @@ mod tests {
         let store = InMemoryVectorStore::new();
 
         // 存入两个向量
-        store
-            .store("test", "vec1", &[1.0, 0.0, 0.0], None)
-            .await
-            .unwrap();
-        store
-            .store(
-                "test",
-                "vec2",
-                &[0.0, 1.0, 0.0],
-                Some(serde_json::json!({"label": "y-axis"})),
-            )
-            .await
-            .unwrap();
+        store.store("test", "vec1", &[1.0, 0.0, 0.0], None).await.unwrap();
+        store.store("test", "vec2", &[0.0, 1.0, 0.0], Some(serde_json::json!({"label": "y-axis"}))).await.unwrap();
 
         // 搜索与 x-axis 最相似的
-        let results = store
-            .search("test", &[1.0, 0.0, 0.0], 5, None)
-            .await
-            .unwrap();
+        let results = store.search("test", &[1.0, 0.0, 0.0], 5, None).await.unwrap();
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, "vec1");
         assert!(results[0].score > 0.99); // cosine sim ≈ 1.0
@@ -138,35 +116,20 @@ mod tests {
     #[tokio::test]
     async fn test_delete() {
         let store = InMemoryVectorStore::new();
-        store
-            .store("test", "vec1", &[1.0, 0.0], None)
-            .await
-            .unwrap();
+        store.store("test", "vec1", &[1.0, 0.0], None).await.unwrap();
         store.delete("test", "vec1").await.unwrap();
 
-        let results = store
-            .search("test", &[1.0, 0.0], 5, None)
-            .await
-            .unwrap();
+        let results = store.search("test", &[1.0, 0.0], 5, None).await.unwrap();
         assert!(results.is_empty());
     }
 
     #[tokio::test]
     async fn test_upsert() {
         let store = InMemoryVectorStore::new();
-        store
-            .store("test", "vec1", &[1.0, 0.0], None)
-            .await
-            .unwrap();
-        store
-            .store("test", "vec1", &[0.0, 1.0], None)
-            .await
-            .unwrap(); // 更新
+        store.store("test", "vec1", &[1.0, 0.0], None).await.unwrap();
+        store.store("test", "vec1", &[0.0, 1.0], None).await.unwrap(); // 更新
 
-        let results = store
-            .search("test", &[0.0, 1.0], 5, None)
-            .await
-            .unwrap();
+        let results = store.search("test", &[0.0, 1.0], 5, None).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].score > 0.99);
     }
@@ -174,10 +137,7 @@ mod tests {
     #[tokio::test]
     async fn test_empty_collection() {
         let store = InMemoryVectorStore::new();
-        let results = store
-            .search("nonexistent", &[1.0, 0.0], 5, None)
-            .await
-            .unwrap();
+        let results = store.search("nonexistent", &[1.0, 0.0], 5, None).await.unwrap();
         assert!(results.is_empty());
     }
 
@@ -190,23 +150,11 @@ mod tests {
     #[tokio::test]
     async fn test_collection_isolation() {
         let store = InMemoryVectorStore::new();
-        store
-            .store("col_a", "v1", &[1.0, 0.0], None)
-            .await
-            .unwrap();
-        store
-            .store("col_b", "v2", &[0.0, 1.0], None)
-            .await
-            .unwrap();
+        store.store("col_a", "v1", &[1.0, 0.0], None).await.unwrap();
+        store.store("col_b", "v2", &[0.0, 1.0], None).await.unwrap();
 
-        let results_a = store
-            .search("col_a", &[1.0, 0.0], 5, None)
-            .await
-            .unwrap();
-        let results_b = store
-            .search("col_b", &[0.0, 1.0], 5, None)
-            .await
-            .unwrap();
+        let results_a = store.search("col_a", &[1.0, 0.0], 5, None).await.unwrap();
+        let results_b = store.search("col_b", &[0.0, 1.0], 5, None).await.unwrap();
 
         assert_eq!(results_a.len(), 1);
         assert_eq!(results_b.len(), 1);
@@ -219,16 +167,10 @@ mod tests {
         let store = InMemoryVectorStore::new();
         for i in 0..10 {
             let v = vec![i as f32 / 10.0, 1.0];
-            store
-                .store("test", &format!("v{}", i), &v, None)
-                .await
-                .unwrap();
+            store.store("test", &format!("v{}", i), &v, None).await.unwrap();
         }
 
-        let results = store
-            .search("test", &[1.0, 1.0], 3, None)
-            .await
-            .unwrap();
+        let results = store.search("test", &[1.0, 1.0], 3, None).await.unwrap();
         assert_eq!(results.len(), 3);
     }
 
@@ -236,15 +178,9 @@ mod tests {
     async fn test_metadata_preserved() {
         let store = InMemoryVectorStore::new();
         let meta = serde_json::json!({"source": "test", "version": 2});
-        store
-            .store("test", "v1", &[1.0, 0.0], Some(meta.clone()))
-            .await
-            .unwrap();
+        store.store("test", "v1", &[1.0, 0.0], Some(meta.clone())).await.unwrap();
 
-        let results = store
-            .search("test", &[1.0, 0.0], 1, None)
-            .await
-            .unwrap();
+        let results = store.search("test", &[1.0, 0.0], 1, None).await.unwrap();
         assert_eq!(results[0].metadata, Some(meta));
     }
 
@@ -258,10 +194,7 @@ mod tests {
     #[tokio::test]
     async fn test_default_trait() {
         let store = InMemoryVectorStore::default();
-        let results = store
-            .search("test", &[1.0], 5, None)
-            .await
-            .unwrap();
+        let results = store.search("test", &[1.0], 5, None).await.unwrap();
         assert!(results.is_empty());
     }
 }

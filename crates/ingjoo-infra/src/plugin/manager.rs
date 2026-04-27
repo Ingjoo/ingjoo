@@ -3,13 +3,13 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use anyhow::{anyhow, Context, Result};
+use ingjoo_core::module::plugin::{PluginInfo, PluginManifest, PluginState};
 use ingjoo_core::pool::Pool;
 use ingjoo_core::Dialect;
 use ingjoo_core::ModelRegistry;
-use ingjoo_core::module::plugin::{PluginInfo, PluginManifest, PluginState};
 
-use crate::db::generic::GenericRecordStore;
 use crate::db::generic::GenericDb;
+use crate::db::generic::GenericRecordStore;
 use crate::db::seed::{seed_plugin_metadata, seed_plugin_records};
 
 struct LoadedPlugin {
@@ -26,12 +26,7 @@ pub struct PluginManager {
 
 impl PluginManager {
     pub fn new(registry: Arc<ModelRegistry>, pool: Arc<Pool>, dialect: Dialect) -> Self {
-        Self {
-            plugins: RwLock::new(HashMap::new()),
-            registry,
-            pool,
-            dialect,
-        }
+        Self { plugins: RwLock::new(HashMap::new()), registry, pool, dialect }
     }
 
     pub async fn load_from_dir(&self, dir: &Path) -> Result<Vec<String>> {
@@ -39,9 +34,8 @@ impl PluginManager {
             return Err(anyhow!("插件目录不存在: {}", dir.display()));
         }
 
-        let mut entries = tokio::fs::read_dir(dir)
-            .await
-            .with_context(|| format!("无法读取插件目录: {}", dir.display()))?;
+        let mut entries =
+            tokio::fs::read_dir(dir).await.with_context(|| format!("无法读取插件目录: {}", dir.display()))?;
 
         let mut loaded = Vec::new();
         while let Some(entry) = entries.next_entry().await? {
@@ -59,24 +53,20 @@ impl PluginManager {
     }
 
     pub async fn load_plugin(&self, path: &Path) -> Result<String> {
-        let manifest = PluginManifest::from_file(path)
-            .await
-            .with_context(|| format!("解析插件清单失败: {}", path.display()))?;
+        let manifest =
+            PluginManifest::from_file(path).await.with_context(|| format!("解析插件清单失败: {}", path.display()))?;
 
         let name = manifest.name.clone();
 
         let db = GenericDb::new(&self.pool, &self.dialect);
         for model in &manifest.models {
-            db.ensure_table(model)
-                .await
-                .with_context(|| format!("创建表失败: {}", model.table_name))?;
+            db.ensure_table(model).await.with_context(|| format!("创建表失败: {}", model.table_name))?;
             self.registry.register(model.clone());
         }
 
-        if let Err(e) = seed_plugin_metadata(
-            &self.pool, &self.dialect,
-            &manifest.menus, &manifest.views, &manifest.actions,
-        ).await {
+        if let Err(e) =
+            seed_plugin_metadata(&self.pool, &self.dialect, &manifest.menus, &manifest.views, &manifest.actions).await
+        {
             tracing::warn!("插件 {} 元数据播种失败: {}", name, e);
         }
 
@@ -86,10 +76,7 @@ impl PluginManager {
             }
         }
 
-        let loaded = LoadedPlugin {
-            manifest,
-            source_path: path.to_path_buf(),
-        };
+        let loaded = LoadedPlugin { manifest, source_path: path.to_path_buf() };
 
         let mut plugins = self.plugins.write().map_err(|e| anyhow!("获取写锁失败: {}", e))?;
         plugins.insert(name.clone(), loaded);
@@ -100,9 +87,7 @@ impl PluginManager {
     pub fn unload_plugin(&self, name: &str) -> Result<()> {
         let mut plugins = self.plugins.write().map_err(|e| anyhow!("获取写锁失败: {}", e))?;
 
-        let loaded = plugins
-            .remove(name)
-            .ok_or_else(|| anyhow!("插件不存在: {}", name))?;
+        let loaded = plugins.remove(name).ok_or_else(|| anyhow!("插件不存在: {}", name))?;
 
         for model in &loaded.manifest.models {
             self.registry.unregister(&model.name);
@@ -114,11 +99,7 @@ impl PluginManager {
     pub async fn reload_plugin(&self, name: &str) -> Result<()> {
         let source_path = {
             let plugins = self.plugins.read().map_err(|e| anyhow!("获取读锁失败: {}", e))?;
-            plugins
-                .get(name)
-                .ok_or_else(|| anyhow!("插件不存在: {}", name))?
-                .source_path
-                .clone()
+            plugins.get(name).ok_or_else(|| anyhow!("插件不存在: {}", name))?.source_path.clone()
         };
 
         self.unload_plugin(name)?;
@@ -139,10 +120,7 @@ impl PluginManager {
 
     pub fn list_plugins(&self) -> Vec<PluginInfo> {
         let plugins = self.plugins.read().unwrap_or_else(|e| e.into_inner());
-        plugins
-            .values()
-            .map(|lp| lp.manifest.to_info(PluginState::Active))
-            .collect()
+        plugins.values().map(|lp| lp.manifest.to_info(PluginState::Active)).collect()
     }
 
     pub fn get_plugin(&self, name: &str) -> Option<PluginInfo> {
@@ -161,25 +139,28 @@ mod tests {
 
     async fn test_pool_and_dialect() -> (Arc<Pool>, Dialect) {
         ingjoo_core::pool::install_drivers();
-        let id = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+        let id = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let url = format!("sqlite:file:test_{id}?mode=memory&cache=shared");
         let (pool, dialect) = ingjoo_core::pool::connect_pool(&url).await.unwrap();
         (Arc::new(pool), dialect)
     }
 
     async fn ensure_ir_tables(pool: &Pool) {
-        sqlx::query(r#"
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS ir_menu (
                 id TEXT PRIMARY KEY, name TEXT NOT NULL, parent_id TEXT,
                 sequence INTEGER NOT NULL DEFAULT 10, action_id TEXT, web_icon TEXT,
                 active INTEGER NOT NULL DEFAULT 1, group_ids TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
-        "#).execute(pool).await.unwrap();
-        sqlx::query(r#"
+        "#,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS ir_view (
                 id TEXT PRIMARY KEY, name TEXT NOT NULL, model TEXT NOT NULL,
                 type TEXT NOT NULL DEFAULT 'form', priority INTEGER NOT NULL DEFAULT 16,
@@ -187,8 +168,13 @@ mod tests {
                 active INTEGER NOT NULL DEFAULT 1, group_ids TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
-        "#).execute(pool).await.unwrap();
-        sqlx::query(r#"
+        "#,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS ir_action (
                 id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'act_window',
                 res_model TEXT, view_mode TEXT NOT NULL DEFAULT 'list,form', view_ids TEXT NOT NULL DEFAULT '[]',
@@ -197,7 +183,11 @@ mod tests {
                 group_ids TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
-        "#).execute(pool).await.unwrap();
+        "#,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -308,16 +298,20 @@ mod tests {
         let manager = PluginManager::new(registry.clone(), pool.clone(), dialect);
         manager.load_plugin(&path).await.unwrap();
 
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ir_menu WHERE id = 'menu_blog'")
-            .fetch_one(&*pool).await.unwrap();
+        let (count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM ir_menu WHERE id = 'menu_blog'").fetch_one(&*pool).await.unwrap();
         assert_eq!(count, 1);
 
         let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ir_view WHERE id = 'view_article_list'")
-            .fetch_one(&*pool).await.unwrap();
+            .fetch_one(&*pool)
+            .await
+            .unwrap();
         assert_eq!(count, 1);
 
         let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ir_action WHERE id = 'action_articles'")
-            .fetch_one(&*pool).await.unwrap();
+            .fetch_one(&*pool)
+            .await
+            .unwrap();
         assert_eq!(count, 1);
     }
 
@@ -350,8 +344,7 @@ mod tests {
         let manager = PluginManager::new(registry.clone(), pool.clone(), dialect);
         manager.load_plugin(&path).await.unwrap();
 
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM articles")
-            .fetch_one(&*pool).await.unwrap();
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM articles").fetch_one(&*pool).await.unwrap();
         assert_eq!(count, 2);
     }
 
@@ -385,8 +378,8 @@ mod tests {
         manager.unload_plugin("blog").unwrap();
         manager.load_plugin(&path).await.unwrap();
 
-        let (menu_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ir_menu WHERE id = 'menu_tags'")
-            .fetch_one(&*pool).await.unwrap();
+        let (menu_count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM ir_menu WHERE id = 'menu_tags'").fetch_one(&*pool).await.unwrap();
         assert_eq!(menu_count, 1);
     }
 }

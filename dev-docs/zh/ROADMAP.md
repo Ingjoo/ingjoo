@@ -1,21 +1,28 @@
 # 改进路线图
 
-> 最后更新：2026-04-25
-> 当前版本：v0.1.0 — 阶段 1-7.5 已完成
+> 最后更新：2026-04-26
+> 当前版本：v0.1.0 — 阶段 1-17 已完成
 
 ## 现状总览
 
 | Crate | 代码行数 | 测试数 | 成熟度 | 状态 |
 |-------|---------|--------|--------|------|
-| `ingjoo-core` | 2,137 | 68 | **成熟** | Domain DSL、Store trait、Dialect — 可用于生产 |
-| `ingjoo-infra` | 5,900 | 125 | **成熟** | DB 实现、认证、存储、handler、中间件、路由、14 个扩展实现 |
-| `ingjoo-security` | 478 | 16 | **成熟** | 三层 RBAC 引擎，已接线到 CRUD handler |
-| `ingjoo-cache` | 216 | 5 | **完整** | Moka 缓存可用 |
-| `ingjoo-queue` | 1,168 | 25 | **已完成** | 内存/SQL 双后端队列、WorkerPool、重试策略、Cron 调度器 |
-| `ingjoo-bin` | 306 | 7 | **可用** | 完整 axum 路由、集成测试通过 |
-| `ingjoo-macros` | 180 | 4 | **可用** | `#[derive(IngjooModel)]` 派生宏，自动生成 ModelDescriptor |
+| `ingjoo-core` | 3,920 | 82 | **成熟** | Domain DSL、Store trait、Dialect、NotificationStore |
+| `ingjoo-infra` | 15,800 | 197 | **成熟** | DB 实现、认证、存储、handler、中间件、路由、15 扩展实现 |
+| `ingjoo-security` | 622 | 22 | **成熟** | 三层 RBAC 引擎，已接线到 CRUD handler |
+| `ingjoo-cache` | 342 | 5 | **完整** | Moka 缓存可用 |
+| `ingjoo-queue` | 1,585 | 25 | **已完成** | 内存/SQL 双后端队列、WorkerPool、重试策略、Cron 调度器 |
+| `ingjoo-bin` | 2,650 | 80 | **可用** | 完整 axum 路由、80 集成测试通过 |
+| `ingjoo-macros` | 210 | — | **可用** | `#[derive(IngjooModel)]` 派生宏 |
 
-**合计**：约 10,500 行代码，370 个测试，66 个源文件。
+**合计**：约 25,500 行代码，415 个单元测试 + 集成测试，130+ 个源文件。
+
+### 前端仓库
+
+| 仓库 | 技术 | 页面 | 状态 |
+|------|------|------|------|
+| `ingjoo-js` (`@ingjoo/web`) | React + TypeScript + Rollup | — | ✅ 共享组件库，auth/i18n/fetch/Domain DSL |
+| `web-base` | Next.js 16 + Tailwind CSS 4 | 12 个 | ✅ 完整前后端对接 |
 
 ---
 
@@ -151,7 +158,7 @@ ingjoo-infra/tests/
 | T4.1 | 插件/模块热加载系统 | P1 | T3.1 | ✅ |
 | T4.2 | 公共 API rustdoc（所有公开项加 `///`） | P1 | 阶段 2 | ✅ |
 | T4.3 | 性能基准测试（criterion） | P2 | 阶段 2 | ✅ |
-| T4.4 | 完整集成测试套件 | P2 | 阶段 2 | 🔄 |
+| T4.4 | 完整集成测试套件 | P2 | 阶段 2 | ✅ |
 | T4.5 | `ingjoo-cli` 管理工具 | P2 | 阶段 2 | ✅ |
 | T4.6 | 多租户集合隔离测试 | P2 | T3.3 | ✅ |
 | T4.7 | 数据库连接池可观测性 | P3 | — | ✅ |
@@ -245,6 +252,25 @@ ingjoo-infra/src/
 
 ---
 
+## 阶段 8：DbSearchEngine + 集成测试 + QA ✅ 已完成
+
+> 目标：实现 DB 后端全文搜索引擎，接入 HTTP 搜索端点，QA 验证，修复发现的问题。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T8.1 | DbSearchEngine 实现 | **P0** | ✅ | `search_engine.rs` — SQL LIKE 全文搜索，ir_search_index 表，v10 迁移 |
+| T8.2 | 搜索接线 | **P0** | ✅ | `build_search()` + `with_search()` 在 main.rs 中 feature-gated |
+| T8.3 | UTF-8 修复 | **P0** | ✅ | `extract_highlights` char 边界对齐（`floor_char_boundary`/`ceil_char_boundary`） |
+| T8.4 | Clippy 清零 | **P0** | ✅ | 0 警告（derive_test dead_code + integration_test is_empty） |
+| T8.5 | 搜索集成测试 | **P0** | ✅ | 3 个测试：匹配/无匹配/空查询（380 个测试总计） |
+| T8.6 | 文档同步 | **P1** | ✅ | ROADMAP + AGENTS.md + QA 报告 |
+| T8.7 | QA 系统化测试 | **P0** | ✅ | 18 个端点/页面测试，健康评分 58/100 |
+| T8.8 | QA 修复：logout 路由注册 | **P0** | ✅ | `POST /api/auth/logout` 路由注册 + 失效 token 校验 |
+| T8.9 | QA 修复：/api/auth/me 端点 | **P0** | ✅ | 新增 `get_me` handler，返回当前用户 `UserPublic` |
+| T8.10 | 种子数据激活 | **P1** | ✅ | `seed_metadata()` 调用接入 `run_migrations()` |
+
+---
+
 ## 额外已完成项（不在原 ROADMAP 中）
 
 | 任务 | 描述 |
@@ -252,6 +278,32 @@ ingjoo-infra/src/
 | Postgres 兼容 | `Dialect` 支持 SQLite + Postgres 双后端（placeholder、时间函数、自增主键、DDL 分割） |
 | Group 权限系统 | `groups` + `group_implied` + `user_groups` 表，完整的分组管理 CRUD API |
 | 记录级权限过滤 | CRUD handler 已接入 `SecurityPolicy`，从 DB 实时加载 model_access + record_rule |
+| PG boolean 适配 | `Dialect::bool_true()`/`bool_false()` 在 menu/view/action handler 中（7 处 SQL） |
+| Captcha 验证码 | `handlers/captcha.rs` — 生成/验证 captcha 图片（feature-gated `captcha`） |
+| 用户偏好 API | `GET/PUT /api/auth/preferences` — theme/language/notification_channels 持久化 |
+| 修改密码 API | `POST /api/auth/change-password` — 验证当前密码 + 更新 |
+| 当前用户 API | `GET /api/auth/me` — 返回当前用户 `UserPublic`（前端刷新验证用） |
+| 安全 logout | `POST /api/auth/logout` — 删除 refresh token + 失效 token 二次调用校验 |
+| 种子数据激活 | `seed_metadata()` 接入 `run_migrations()` — 菜单/视图/动作自动填充 |
+
+---
+
+## 阶段 9：前端对接 ✅ 已完成
+
+> 目标：修复前端与后端 API 的对接问题，实现完整登录→Dashboard 流程。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T9.1 | /register 页面修复 | **P0** | ✅ | `login/page.tsx` 读取 `?register=1` query param 切换注册模式 |
+| T9.2 | Auth token 持久化 | **P0** | ✅ | `ingjoo-web` auth.tsx/fetch.ts 改为 localStorage + Authorization header |
+| T9.3 | /api/auth/me 前端对接 | **P0** | ✅ | 前端 `getMe()` 已对接 `/auth/profile`，页面加载恢复用户状态 |
+| T9.4 | 通知 API 前端 stub | **P1** | ✅ | 4 个 Next.js Route Handler stub（防 404 连锁） |
+| T9.5 | /admin, /search 骨架页面 | **P2** | ✅ | admin 用户管理+审计日志 tabs，search 全局搜索 |
+| T9.6 | 新增后端 API 端点 | **P0** | ✅ | dashboard stats / users search / audit-log 三个端点 |
+| T9.7 | Preferences 路径对齐 | **P1** | ✅ | `/users/me/preferences` → `/auth/preferences` |
+| T9.8 | 死代码清理 | **P2** | ✅ | 删除 `providers.tsx` |
+
+**退出标准**：✅ 登录→Dashboard 完整流程通过浏览器 QA 验证，页面刷新保持登录状态。
 
 ---
 
@@ -263,6 +315,79 @@ ingjoo-infra/src/
 ├── T7.5.2 FsDocumentLoader — ✅ 递归文件扫描，10MB 限制
 ├── T7.5.3 state.rs 真实默认值 — ✅ sanitizer/document_loader/text_splitter
 └── T7.5.4 集成测试 — ✅ 7 个 translation + 7 个 state_machine 测试
+
+阶段 9 已完成（272 个测试，0 clippy 警告，登录→Dashboard QA 通过）
+├── T9.1 /register 页面 — ✅ ?register=1 query param
+├── T9.2 Auth 持久化 — ✅ localStorage + Authorization header
+├── T9.3 /me 前端对接 — ✅ /auth/profile 恢复用户状态
+├── T9.4 通知 stub — ✅ 4 个 Next.js Route Handler
+├── T9.5 admin/search — ✅ 骨架页面
+├── T9.6 新 API 端点 — ✅ dashboard stats / users search / audit-log
+├── T9.7 preferences 路径 — ✅ /auth/preferences
+└── T9.8 死代码清理 — ✅ 删除 providers.tsx
+
+阶段 12 已完成（414 测试，前端 SSE 认证已修复）
+├── T12.1 NotificationBell — ✅ badge + 下拉 + mark-read
+├── T12.2 SSE 认证修复 — ✅ fetch-based SSE 携带 Bearer token
+├── T12.3 通知中心页面 — ✅ 分页 + 筛选 + SSE 实时刷新
+├── T12.4 共享 timeAgo — ✅ 提取到 utils.ts
+└── T12.5 Header 接线 — ✅ 通知铃铛已接入 Header
+
+阶段 13 已完成（集成测试修复 + Profile 完善 + 前端构建修复 + 安全加固）
+├── T13.1 修复 handlers_test.rs runtime-in-runtime — ✅ 已验证无此问题（15 测试通过）
+├── T13.2 Profile 头像上传 — ✅ multipart handler + serve + 前端 UI
+├── T13.3 Profile 偏好设置持久化 — ✅ 已实现完整链路
+├── T13.4 文档纳入版本控制 — ✅ docs/ 已迁入 ingjoo repo
+├── T13.5 页面数修正 (8→12) — ✅
+├── T13.6 前端构建修复 — ✅ NavMenu 类型 + Suspense + UpdatePreferences 类型
+└── T13.7 头像安全加固 — ✅ 路径遍历防护 + 集成测试（4 个头像测试）
+
+阶段 14 已完成（基础设施接线 + 多租户测试 + 性能基准）
+├── T14.1 Email/SMS 接线 — ✅ NoopEmailProvider + NoopSmsProvider + AppState + main.rs
+├── T14.2 S3/OSS 文件存储接线 — ✅ build_file_storage() + 环境变量配置 + S3 降级
+├── T14.3 多租户隔离测试 — ✅ 3 个新集成测试（跨租户/三层组合/创建作用域）
+└── T14.4 性能基准 — ✅ policy_bench + domain/registry 扩展 + Justfile bench
+
+阶段 15 完成（QA 修复 + 文档同步）✅
+├── T15.1 QA 全面测试 — ✅ 12 页面，10 issues，健康评分 49→65→77.5
+├── T15.2 ISSUE-004 搜索修复 — ✅ POST + JSON body + 返回类型解包
+├── T15.3 ISSUE-002 Settings 重定向 — ✅ /settings → /admin/settings
+├── T15.4 ISSUE-003 Admin 用户列表 — ✅ /users/search?q= + 类型修正
+├── T15.5 ISSUE-006 测试用户 — ✅ admin2 创建
+├── T15.6 QA 报告 — ✅ .gstack/qa-reports/ (初始 + retest)
+├── T15.7 文档同步 — ✅ PROGRESS-PLAN/Roadmap/AGENTS.md
+├── T15.8 ISSUE-010 审计日志 API — ✅ handler 已存在，API 返回 200
+├── T15.9 ISSUE-005 忘记密码 API — ✅ handler + 端点修正，API 返回 200
+└── T15.10 ISSUE-001 WebSocket — ✅ 直连 ws://localhost:3000/ws，warnings only
+
+阶段 15.5 完成（QA 修复续）✅
+├── T15.5.1 Footer 合规 404 → ✅ 公共 /api/module-settings 端点
+├── T15.5.2 WebSocket 无条件连接 → ✅ enabled 参数按需连接
+├── T15.5.3 Dashboard 空库无欢迎 → ✅ 欢迎横幅
+├── T15.5.4 Admin 非管理员空白 → ✅ Shield 图标 + 权限提示
+└── T15.5.5 搜索空库无结果 → ✅ seed 搜索索引
+
+阶段 16 完成（QA 验证 + 控制台修复）✅
+├── T16.1 Admin 用户角色修复 → ✅ DB role=user→admin
+├── T16.2 创建管理员账号 → ✅ ingjoo-admin@ingjoo.com / Admin123
+├── T16.3 /api/database/list 404 修复 → ✅ simple_list_databases 回退端点
+├── T16.4 QA Quick tier 全页面验证 → ✅ 7 页面全部通过
+├── T16.5 控制台错误消除 → ✅ 修复前 404+401 循环 → 修复后 0 错误
+└── T16.6 文档同步 → ✅ PROGRESS-REPORT/PLAN/ROADMAP/AGENTS.md
+
+QA 健康评分: 49 → 65 → 77.5 → 85/100
+
+阶段 8 已完成
+├── T8.1 DbSearchEngine — ✅ SQL LIKE 全文搜索
+├── T8.2 搜索接线 — ✅ build_search() + with_search()
+├── T8.3 UTF-8 修复 — ✅ char 边界对齐
+├── T8.4 Clippy 清零 — ✅ 0 警告
+├── T8.5 搜索集成测试 — ✅ 3 个测试
+├── T8.6 文档同步 — ✅ ROADMAP + AGENTS.md
+├── T8.7 QA 测试 — ✅ 18 端点/页面，健康评分 58/100
+├── T8.8 Logout 路由 — ✅ 注册 + 失效校验
+├── T8.9 /api/auth/me — ✅ 当前用户信息
+└── T8.10 种子数据 — ✅ seed_metadata() 接入 run_migrations()
 
 阶段 7 已完成
 ├── T7.1 EventBus — ✅ tokio broadcast
@@ -320,7 +445,7 @@ ingjoo-infra/src/
      └──────────┴──────┬───────┴───────────┘
                        │
                 ┌──────▼──────┐
-                │ ingjoo-infra│  ✅ 完整 (60 测试)
+                 │ ingjoo-infra│  ✅ 完整 (134 测试)
                 │(DB/认证/存储)│
                 └─────────────┘
 ```
@@ -328,3 +453,83 @@ ingjoo-infra/src/
 图例：
 - ✅ 完成：代码完成且有测试
 - ✅ 未使用：代码完成但未被业务流程调用
+
+---
+
+## 阶段 17：视图管线增强 ✅ 完成
+
+> 目标：增强 Action/View 系统的视图渲染管线——结构化 view arch、看板视图接线、表单编辑、搜索视图扩展、收藏过滤。
+
+| # | 任务 | 优先级 | 状态 | 交付物 |
+|---|------|--------|------|--------|
+| T17.1 | 结构化 view arch JSON Schema | **P0** | ✅ 完成 | ViewArch types (ListArch, FormArch, KanbanArch, SearchArch) defined in metadata.rs |
+| T17.2 | 看板视图接入 ViewRenderer | **P0** | ✅ 完成 | ViewRenderer 支持 `activeView === "kanban"` 分支，SDK KanbanBoard 接线 + rollup 多入口修复 |
+| T17.3 | 表单视图内联编辑 | **P0** | ✅ 完成 | ViewRenderer form mode with editing state, dirty field detection, PUT submit, FormField component |
+| T17.4 | 搜索视图种子数据扩展 | **P1** | ✅ 完成 | `seed.rs` 新增 article/product 搜索视图 + 动作 + 菜单 |
+| T17.5 | 搜索收藏（保存过滤条件） | **P2** | ✅ 完成 | ir_search_favorite table + CRUD API + SearchPanel favorites UI |
+
+---
+
+## 阶段 18：自动化规则引擎 📋 待开始
+
+> 目标：实现 Odoo 风格的自动化规则引擎——基于条件自动触发动作（创建/更新/发送通知）。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T18.1 | `ir_action_rule` 表 + 迁移 | **P0** | — | 📋 | DDL: model, trigger (create/update/unlink), filter_domain, action_type, action_id, active, sequence |
+| T18.2 | `ActionRule` 类型定义 | **P0** | T18.1 | 📋 | `ingjoo-core` ActionRule + ActionRuleStore trait |
+| T18.3 | EventBus 订阅 + 规则评估 | **P0** | T18.2 | 📋 | EventBus consumer: model_event → filter_domain 评估 → action 触发 |
+| T18.4 | 内置动作: 更新字段 / 发送通知 | **P1** | T18.3 | 📋 | `UpdateField` / `SendNotification` action 类型实现 |
+| T18.5 | CRUD API `/api/action-rules` | **P1** | T18.2 | 📋 | 管理 CRUD handler + 路由注册 |
+| T18.6 | 批量执行优化 | **P2** | T18.3 | 📋 | 批量规则评估 + N+1 查询避免 |
+
+---
+
+## 阶段 19：计算字段 + 模块继承 📋 待开始
+
+> 目标：实现计算字段（computed fields）和模块继承（module inheritance）机制。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T19.1 | `compute` / `depends` 注册 | **P0** | — | 📋 | ModelRegistry 支持 `computed_fields` + `depends` 声明 |
+| T19.2 | 字段计算引擎 | **P0** | T19.1 | 📋 | 依赖变更 → 自动重算 → 批量更新，避免循环依赖 |
+| T19.3 | 视图继承 (`inherit_id` merge) | **P0** | — | 📋 | `ir_view.inherit_id` 运行时 merge：扩展 arch、添加字段/按钮 |
+| T19.4 | 模型扩展（非继承） | **P1** | T19.3 | 📋 | 通过 `inherit_id` 给已有模型添加字段/方法，不改原表 |
+
+---
+
+## 阶段 20：模块依赖 + 安装顺序 📋 待开始
+
+> 目标：完善模块依赖解析，确保安装/卸载顺序正确，支持依赖冲突检测。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T20.1 | 依赖图解析器 | **P0** | — | 📋 | DAG 拓扑排序 + 循环检测 + 安装/卸载顺序计算 |
+| T20.2 | 安装时依赖检查 | **P0** | T20.1 | 📋 | 安装前检查依赖是否已安装，缺失则自动安装 |
+| T20.3 | 卸载时反向依赖检查 | **P0** | T20.1 | 📋 | 卸载前检查是否有其他模块依赖，有则拒绝 |
+| T20.4 | 模块元数据 API 增强 | **P1** | T20.1 | 📋 | `/api/modules` 返回依赖关系图 + 状态 |
+
+---
+
+## 阶段 21：TestContext 助手 📋 待开始
+
+> 目标：提供统一的测试工具 struct，简化集成测试编写。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T21.1 | `TestContext` struct | **P0** | — | 📋 | 封装 Db + AppState + test user，一行创建测试环境 |
+| T21.2 | 测试固件（fixtures） | **P1** | T21.1 | 📋 | 预定义测试数据工厂（create_test_user, create_test_record） |
+| T21.3 | 断言辅助宏 | **P2** | T21.1 | 📋 | `assert_record_exists!` / `assert_field_equals!` / `assert_domain_matches!` |
+
+---
+
+## 阶段 22：翻译集成 + 文件管理 📋 待开始
+
+> 目标：将翻译系统接入 CRUD 序列化，实现统一文件管理。
+
+| # | 任务 | 优先级 | 依赖 | 状态 | 交付物 |
+|---|------|--------|------|------|--------|
+| T22.1 | 翻译序列化集成 | **P0** | — | 📋 | GET /api/data/{model} 自动按 Accept-Language 返回翻译字段 |
+| T22.2 | 翻译管理 UI | **P1** | T22.1 | 📋 | Admin 翻译管理页面：语言切换 + 字段翻译编辑 |
+| T22.3 | `ir_attachment` 统一文件管理 | **P1** | — | 📋 | 附件模型 + 上传/下载/关联 API + 前端组件 |
+| T22.4 | 文件预览集成 | **P2** | T22.3 | 📋 | PDF/图片/Office 文件在线预览 |

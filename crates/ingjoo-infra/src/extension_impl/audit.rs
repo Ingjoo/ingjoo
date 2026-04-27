@@ -31,9 +31,7 @@ impl DbAuditStore {
             action: row.get("action"),
             resource: row.get("resource"),
             resource_id: row.get("resource_id"),
-            detail: row
-                .get::<Option<String>, _>("detail")
-                .and_then(|s| serde_json::from_str(&s).ok()),
+            detail: row.get::<Option<String>, _>("detail").and_then(|s| serde_json::from_str(&s).ok()),
             ip: row.get("ip"),
             created_at: row.get("created_at"),
         }
@@ -52,15 +50,11 @@ impl AuditStore for DbAuditStore {
         ip: Option<&str>,
     ) -> Result<AuditEntry, anyhow::Error> {
         let id = uuid::Uuid::new_v4().to_string();
-        let detail_str = detail
-            .as_ref()
-            .map(serde_json::to_string)
-            .transpose()?
-            .unwrap_or_default();
+        let detail_str = detail.as_ref().map(serde_json::to_string).transpose()?.unwrap_or_default();
 
         sqlx::query(&self.sql(
             "INSERT INTO audit_logs (id, user_id, action, resource, resource_id, detail, ip) \
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         ))
         .bind(&id)
         .bind(user_id)
@@ -72,13 +66,11 @@ impl AuditStore for DbAuditStore {
         .execute(&self.pool)
         .await?;
 
-        let created_at: String = sqlx::query_scalar(
-            "SELECT created_at FROM audit_logs WHERE id = ?",
-        )
-        .bind(&id)
-        .fetch_one(&self.pool)
-        .await
-        .unwrap_or_default();
+        let created_at: String = sqlx::query_scalar("SELECT created_at FROM audit_logs WHERE id = ?")
+            .bind(&id)
+            .fetch_one(&self.pool)
+            .await
+            .unwrap_or_default();
 
         Ok(AuditEntry {
             id,
@@ -92,10 +84,7 @@ impl AuditStore for DbAuditStore {
         })
     }
 
-    async fn list_audit_logs(
-        &self,
-        query: AuditQuery,
-    ) -> Result<Vec<AuditEntry>, anyhow::Error> {
+    async fn list_audit_logs(&self, query: AuditQuery) -> Result<Vec<AuditEntry>, anyhow::Error> {
         let mut conditions = Vec::new();
         let mut sql = "SELECT * FROM audit_logs".to_string();
 
@@ -150,11 +139,21 @@ impl AuditStore for DbAuditStore {
     }
 
     async fn get_audit_log(&self, id: &str) -> Result<Option<AuditEntry>, anyhow::Error> {
-        let row = sqlx::query(&self.sql("SELECT * FROM audit_logs WHERE id = ?"))
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row =
+            sqlx::query(&self.sql("SELECT * FROM audit_logs WHERE id = ?")).bind(id).fetch_optional(&self.pool).await?;
         Ok(row.as_ref().map(Self::row_to_entry))
+    }
+
+    async fn delete_logs_before(&self, before: &str) -> Result<u64, anyhow::Error> {
+        let sql = match self.dialect {
+            Dialect::Sqlite => self.sql("DELETE FROM audit_logs WHERE created_at < ?"),
+            Dialect::Postgres => "DELETE FROM audit_logs WHERE created_at < $1::timestamptz".to_string(),
+        };
+        let result = sqlx::query(&sql)
+            .bind(before)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected())
     }
 }
 

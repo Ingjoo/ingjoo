@@ -2,37 +2,37 @@ pub mod database_manager;
 pub mod generic;
 pub mod ids;
 pub mod migration;
+#[cfg(feature = "mock")]
+pub mod mock;
 pub mod models;
 pub mod seed;
 pub mod traits;
-#[cfg(feature = "mock")]
-pub mod mock;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use ingjoo_core::db::error::StoreResult;
-use ingjoo_core::pool::Pool;
-use std::pin::Pin;
-use ingjoo_core::PaginatedResult;
-use ingjoo_core::Dialect;
-use ingjoo_core::db::traits::*;
-use ingjoo_core::db::ids::UserId;
 use ingjoo_core::db::ids::GroupId;
+use ingjoo_core::db::ids::UserId;
 use ingjoo_core::db::models::UserPublic;
-use ingjoo_core::extension::audit::{AuditStore, AuditEntry, AuditQuery};
+use ingjoo_core::db::traits::*;
+use ingjoo_core::extension::audit::{AuditEntry, AuditQuery, AuditStore};
+use ingjoo_core::pool::Pool;
+use ingjoo_core::Dialect;
+use ingjoo_core::PaginatedResult;
+use std::pin::Pin;
 
-pub use ingjoo_core::db::models::User;
-pub use ingjoo_core::db::models::UserPreferences;
-pub use ingjoo_core::db::models::UpdatePreferences;
 pub use ingjoo_core::db::models::Attachment;
 pub use ingjoo_core::db::models::CreateAttachment;
-pub use ingjoo_core::db::models::ModuleSetting;
-pub use ingjoo_core::db::models::SetModuleSetting;
 pub use ingjoo_core::db::models::Group;
 pub use ingjoo_core::db::models::GroupImplied;
-pub use ingjoo_core::db::models::UserGroup;
 pub use ingjoo_core::db::models::ModelAccessRow;
+pub use ingjoo_core::db::models::ModuleSetting;
 pub use ingjoo_core::db::models::RecordRuleRow;
+pub use ingjoo_core::db::models::SetModuleSetting;
+pub use ingjoo_core::db::models::UpdatePreferences;
+pub use ingjoo_core::db::models::User;
+pub use ingjoo_core::db::models::UserGroup;
+pub use ingjoo_core::db::models::UserPreferences;
 
 /// 数据库访问层，实现所有 Store trait，聚合为 `Arc<dyn IngjooStore>`
 pub struct Db {
@@ -230,9 +230,25 @@ impl Db {
 
         migration::run_pending_migrations(pool, dialect).await?;
         seed_default_groups(pool, dialect).await?;
+        seed::seed_metadata(pool, dialect).await?;
 
         Ok(())
     }
+}
+
+/// 初始化新数据库：建表 + 增量迁移 + 种子数据（含管理员用户）
+///
+/// 将 `run_migrations`（DDL + 迁移 + 默认分组 + 元数据）和 `seed_core_data`（管理员用户等）
+/// 合并为单次调用。用于默认数据库启动初始化和动态创建数据库后的自动初始化。
+///
+/// # 参数
+/// - `pool`: 数据库连接池
+/// - `dialect`: 数据库方言（SQLite / PostgreSQL）
+/// - `admin_password_hash`: 管理员密码的 argon2 哈希值
+pub async fn init_database(pool: &Pool, dialect: &Dialect, admin_password_hash: &str) -> Result<()> {
+    Db::run_migrations(pool, dialect).await?;
+    seed::seed_core_data(pool, dialect, admin_password_hash).await?;
+    Ok(())
 }
 
 async fn seed_default_groups(pool: &Pool, dialect: &Dialect) -> Result<()> {
@@ -242,9 +258,10 @@ async fn seed_default_groups(pool: &Pool, dialect: &Dialect) -> Result<()> {
         ("viewer", "viewer", "只读用户", "仅可查看和导出"),
     ];
     for (id, name, display_name, comment) in &groups {
-        let sql = dialect.prepare("INSERT INTO groups (id, name, display_name, comment) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING");
-        sqlx::query(&sql).bind(id).bind(name).bind(display_name).bind(comment)
-         .execute(pool).await?;
+        let sql = dialect.prepare(
+            "INSERT INTO groups (id, name, display_name, comment) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+        );
+        sqlx::query(&sql).bind(id).bind(name).bind(display_name).bind(comment).execute(pool).await?;
     }
 
     let implications = [("admin", "user"), ("user", "viewer")];
@@ -253,10 +270,7 @@ async fn seed_default_groups(pool: &Pool, dialect: &Dialect) -> Result<()> {
         _ => "INSERT INTO group_implied (group_id, implied_group_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
     };
     for (gid, implied) in &implications {
-        sqlx::query(
-            &dialect.prepare(insert_ignore)
-        ).bind(gid).bind(implied)
-         .execute(pool).await?;
+        sqlx::query(&dialect.prepare(insert_ignore)).bind(gid).bind(implied).execute(pool).await?;
     }
 
     let models = ["collection", "entry", "source", "project", "user"];
@@ -266,9 +280,7 @@ async fn seed_default_groups(pool: &Pool, dialect: &Dialect) -> Result<()> {
         Dialect::Sqlite => "INSERT OR IGNORE INTO record_rule (id, name, model, group_id, domain, perm_read, perm_write, perm_create, perm_delete) VALUES ('rule_viewer_entry', 'viewer: only published entries', 'entry', 'viewer', '[\"status\", \"=\", \"published\"]', 1, 0, 0, 0)",
         _ => "INSERT INTO record_rule (id, name, model, group_id, domain, perm_read, perm_write, perm_create, perm_delete) VALUES ('rule_viewer_entry', 'viewer: only published entries', 'entry', 'viewer', '[\"status\", \"=\", \"published\"]', 1, 0, 0, 0) ON CONFLICT (id) DO NOTHING",
     };
-    sqlx::query(
-        &dialect.prepare(insert_rule)
-    ).execute(pool).await?;
+    sqlx::query(&dialect.prepare(insert_rule)).execute(pool).await?;
 
     Ok(())
 }
@@ -277,32 +289,57 @@ impl Db {
     // ==================== Users ====================
 
     pub async fn create_user(&self, user: &User) -> StoreResult<User> {
-        sqlx::query_as::<_, User>(
-            &self.sql("INSERT INTO users (id, email, name, password_hash, avatar_url, bio, role, oauth_provider, oauth_id, phone)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *")
-        )
-        .bind(&user.id).bind(&user.email).bind(&user.name)
-        .bind(&user.password_hash).bind(&user.avatar_url).bind(&user.bio)
-        .bind(&user.role).bind(&user.oauth_provider).bind(&user.oauth_id).bind(&user.phone)
-        .fetch_one(&self.pool).await.map_err(Into::into)
+        sqlx::query_as::<_, User>(&self.sql(
+            "INSERT INTO users (id, email, name, password_hash, avatar_url, bio, role, oauth_provider, oauth_id, phone)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+        ))
+        .bind(&user.id)
+        .bind(&user.email)
+        .bind(&user.name)
+        .bind(&user.password_hash)
+        .bind(&user.avatar_url)
+        .bind(&user.bio)
+        .bind(&user.role)
+        .bind(&user.oauth_provider)
+        .bind(&user.oauth_id)
+        .bind(&user.phone)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn get_user_by_email(&self, email: &str) -> StoreResult<Option<User>> {
         sqlx::query_as::<_, User>(&self.sql("SELECT * FROM users WHERE email = ?"))
-            .bind(email).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(email)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_user_by_id(&self, id: &UserId) -> StoreResult<Option<User>> {
         sqlx::query_as::<_, User>(&self.sql("SELECT * FROM users WHERE id = ?"))
-            .bind(id).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_user_by_oauth(&self, provider: &str, oauth_id: &str) -> StoreResult<Option<User>> {
         sqlx::query_as::<_, User>(&self.sql("SELECT * FROM users WHERE oauth_provider = ? AND oauth_id = ?"))
-            .bind(provider).bind(oauth_id).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(provider)
+            .bind(oauth_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
-    pub async fn update_user(&self, id: &UserId, name: Option<&str>, avatar_url: Option<&str>, bio: Option<&str>) -> StoreResult<Option<User>> {
+    pub async fn update_user(
+        &self,
+        id: &UserId,
+        name: Option<&str>,
+        avatar_url: Option<&str>,
+        bio: Option<&str>,
+    ) -> StoreResult<Option<User>> {
         sqlx::query_as::<_, User>(
             &self.sql("UPDATE users SET name=COALESCE(?, name), avatar_url=COALESCE(?, avatar_url), bio=COALESCE(?, bio), updated_at=datetime('now') WHERE id=? RETURNING *")
         )
@@ -311,25 +348,43 @@ impl Db {
     }
 
     pub async fn update_user_role(&self, id: &UserId, role: &str) -> StoreResult<Option<User>> {
-        sqlx::query_as::<_, User>(&self.sql("UPDATE users SET role=?, updated_at=datetime('now') WHERE id=? RETURNING *"))
-            .bind(role).bind(id).fetch_optional(&self.pool).await.map_err(Into::into)
+        sqlx::query_as::<_, User>(
+            &self.sql("UPDATE users SET role=?, updated_at=datetime('now') WHERE id=? RETURNING *"),
+        )
+        .bind(role)
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn update_user_password(&self, id: &UserId, password_hash: &str) -> StoreResult<Option<User>> {
-        sqlx::query_as::<_, User>(&self.sql("UPDATE users SET password_hash=?, updated_at=datetime('now') WHERE id=? RETURNING *"))
-            .bind(password_hash).bind(id).fetch_optional(&self.pool).await.map_err(Into::into)
+        sqlx::query_as::<_, User>(
+            &self.sql("UPDATE users SET password_hash=?, updated_at=datetime('now') WHERE id=? RETURNING *"),
+        )
+        .bind(password_hash)
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn get_user_by_phone(&self, phone: &str) -> StoreResult<Option<User>> {
         sqlx::query_as::<_, User>(&self.sql("SELECT * FROM users WHERE phone = ?"))
-            .bind(phone).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(phone)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn list_users(&self, limit: i64, offset: i64) -> StoreResult<PaginatedResult<User>> {
-        let total: i64 = sqlx::query_scalar(&self.sql("SELECT COUNT(*) FROM users"))
-            .fetch_one(&self.pool).await?;
-        let items = sqlx::query_as::<_, User>(&self.sql("SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?"))
-            .bind(limit).bind(offset).fetch_all(&self.pool).await?;
+        let total: i64 = sqlx::query_scalar(&self.sql("SELECT COUNT(*) FROM users")).fetch_one(&self.pool).await?;
+        let items =
+            sqlx::query_as::<_, User>(&self.sql("SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?"))
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?;
         Ok(PaginatedResult::new(items, total, limit, offset))
     }
 
@@ -347,39 +402,73 @@ impl Db {
 
     // ==================== Refresh Tokens ====================
 
-    pub async fn create_refresh_token(&self, id: &str, user_id: &UserId, token_hash: &str, expires_at: &str) -> StoreResult<()> {
+    pub async fn create_refresh_token(
+        &self,
+        id: &str,
+        user_id: &UserId,
+        token_hash: &str,
+        expires_at: &str,
+    ) -> StoreResult<()> {
         sqlx::query(&self.sql("INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)"))
-            .bind(id).bind(user_id).bind(token_hash).bind(expires_at).execute(&self.pool).await?;
+            .bind(id)
+            .bind(user_id)
+            .bind(token_hash)
+            .bind(expires_at)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     pub async fn get_refresh_token(&self, token_hash: &str) -> StoreResult<Option<(String, String)>> {
         sqlx::query_as(&self.sql("SELECT user_id, expires_at FROM refresh_tokens WHERE token_hash = ?"))
-            .bind(token_hash).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(token_hash)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn delete_refresh_token(&self, token_hash: &str) -> StoreResult<()> {
-        sqlx::query(&self.sql("DELETE FROM refresh_tokens WHERE token_hash = ?")).bind(token_hash).execute(&self.pool).await?;
+        sqlx::query(&self.sql("DELETE FROM refresh_tokens WHERE token_hash = ?"))
+            .bind(token_hash)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     // ==================== Password Reset ====================
 
-    pub async fn create_password_reset_token(&self, id: &str, user_id: &UserId, token: &str, expires_at: &str) -> StoreResult<()> {
-        sqlx::query(&self.sql("INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)"))
-            .bind(id).bind(user_id).bind(token).bind(expires_at)
-            .execute(&self.pool).await?;
+    pub async fn create_password_reset_token(
+        &self,
+        id: &str,
+        user_id: &UserId,
+        token: &str,
+        expires_at: &str,
+    ) -> StoreResult<()> {
+        sqlx::query(
+            &self.sql("INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)"),
+        )
+        .bind(id)
+        .bind(user_id)
+        .bind(token)
+        .bind(expires_at)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
     pub async fn get_password_reset_token(&self, token: &str) -> StoreResult<Option<(String, String, i64, String)>> {
         sqlx::query_as(&self.sql("SELECT user_id, expires_at, used, id FROM password_reset_tokens WHERE token = ?"))
-            .bind(token).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(token)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn mark_password_reset_used(&self, id: &str) -> StoreResult<()> {
         sqlx::query(&self.sql("UPDATE password_reset_tokens SET used = 1 WHERE id = ?"))
-            .bind(id).execute(&self.pool).await?;
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -387,62 +476,93 @@ impl Db {
 
     pub async fn create_captcha(&self, id: &str, answer: &str, expires_at: &str) -> StoreResult<()> {
         sqlx::query(&self.sql("INSERT INTO captcha_codes (id, answer, expires_at) VALUES (?, ?, ?)"))
-            .bind(id).bind(answer).bind(expires_at)
-            .execute(&self.pool).await?;
+            .bind(id)
+            .bind(answer)
+            .bind(expires_at)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     pub async fn get_captcha(&self, id: &str) -> StoreResult<Option<(String, i64, String)>> {
         sqlx::query_as(&self.sql("SELECT answer, used, expires_at FROM captcha_codes WHERE id = ?"))
-            .bind(id).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn mark_captcha_used(&self, id: &str) -> StoreResult<()> {
-        sqlx::query(&self.sql("UPDATE captcha_codes SET used = 1 WHERE id = ?"))
-            .bind(id).execute(&self.pool).await?;
+        sqlx::query(&self.sql("UPDATE captcha_codes SET used = 1 WHERE id = ?")).bind(id).execute(&self.pool).await?;
         Ok(())
     }
 
     // ==================== SMS ====================
 
-    pub async fn create_sms_code(&self, id: &str, phone: &str, code: &str, purpose: &str, ip_address: Option<&str>, expires_at: &str) -> StoreResult<()> {
-        sqlx::query(&self.sql("INSERT INTO sms_codes (id, phone, code, purpose, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, ?)"))
-            .bind(id).bind(phone).bind(code).bind(purpose).bind(ip_address).bind(expires_at)
-            .execute(&self.pool).await?;
+    pub async fn create_sms_code(
+        &self,
+        id: &str,
+        phone: &str,
+        code: &str,
+        purpose: &str,
+        ip_address: Option<&str>,
+        expires_at: &str,
+    ) -> StoreResult<()> {
+        sqlx::query(
+            &self.sql(
+                "INSERT INTO sms_codes (id, phone, code, purpose, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+            ),
+        )
+        .bind(id)
+        .bind(phone)
+        .bind(code)
+        .bind(purpose)
+        .bind(ip_address)
+        .bind(expires_at)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
-    pub async fn get_latest_sms_code(&self, phone: &str, purpose: &str) -> StoreResult<Option<(String, String, i64, String)>> {
+    pub async fn get_latest_sms_code(
+        &self,
+        phone: &str,
+        purpose: &str,
+    ) -> StoreResult<Option<(String, String, i64, String)>> {
         sqlx::query_as(&self.sql("SELECT code, expires_at, used, id FROM sms_codes WHERE phone = ? AND purpose = ? ORDER BY created_at DESC LIMIT 1"))
             .bind(phone).bind(purpose).fetch_optional(&self.pool).await.map_err(Into::into)
     }
 
     pub async fn get_sms_code_sent_within(&self, phone: &str, purpose: &str, seconds: i64) -> StoreResult<bool> {
-        let sql = self.dialect.format_sql(&format!("SELECT COUNT(*) FROM sms_codes WHERE phone = ? AND purpose = ? AND created_at > {}", self.dialect.now_offset_bind("seconds")));
-        let (count,): (i64,) = sqlx::query_as(&sql)
-            .bind(phone).bind(purpose).bind(format!("-{}", seconds))
-            .fetch_one(&self.pool).await?;
+        let sql = self.dialect.format_sql(&format!(
+            "SELECT COUNT(*) FROM sms_codes WHERE phone = ? AND purpose = ? AND created_at > {}",
+            self.dialect.now_offset_bind("seconds")
+        ));
+        let (count,): (i64,) =
+            sqlx::query_as(&sql).bind(phone).bind(purpose).bind(format!("-{}", seconds)).fetch_one(&self.pool).await?;
         Ok(count > 0)
     }
 
     pub async fn mark_sms_code_used(&self, id: &str) -> StoreResult<()> {
-        sqlx::query(&self.sql("UPDATE sms_codes SET used = 1 WHERE id = ?"))
-            .bind(id).execute(&self.pool).await?;
+        sqlx::query(&self.sql("UPDATE sms_codes SET used = 1 WHERE id = ?")).bind(id).execute(&self.pool).await?;
         Ok(())
     }
 
     pub async fn count_sms_by_ip(&self, ip: &str, hours: i64) -> StoreResult<i64> {
-        let sql = self.dialect.format_sql(&format!("SELECT COUNT(*) FROM sms_codes WHERE ip_address = ? AND created_at > {}", self.dialect.now_offset_bind("hours")));
-        let (count,): (i64,) = sqlx::query_as(&sql)
-            .bind(ip).bind(format!("-{}", hours))
-            .fetch_one(&self.pool).await?;
+        let sql = self.dialect.format_sql(&format!(
+            "SELECT COUNT(*) FROM sms_codes WHERE ip_address = ? AND created_at > {}",
+            self.dialect.now_offset_bind("hours")
+        ));
+        let (count,): (i64,) = sqlx::query_as(&sql).bind(ip).bind(format!("-{}", hours)).fetch_one(&self.pool).await?;
         Ok(count)
     }
 
     pub async fn count_sms_by_phone_today(&self, phone: &str) -> StoreResult<i64> {
-        let sql = self.dialect.format_sql(&format!("SELECT COUNT(*) FROM sms_codes WHERE phone = ? AND created_at > {}", self.dialect.now_offset_negative("24 hours")));
-        let (count,): (i64,) = sqlx::query_as(&sql)
-            .bind(phone).fetch_one(&self.pool).await?;
+        let sql = self.dialect.format_sql(&format!(
+            "SELECT COUNT(*) FROM sms_codes WHERE phone = ? AND created_at > {}",
+            self.dialect.now_offset_negative("24 hours")
+        ));
+        let (count,): (i64,) = sqlx::query_as(&sql).bind(phone).fetch_one(&self.pool).await?;
         Ok(count)
     }
 
@@ -450,13 +570,15 @@ impl Db {
 
     pub async fn get_setting(&self, key: &str) -> StoreResult<Option<String>> {
         let row: Option<(String,)> = sqlx::query_as(&self.sql("SELECT value FROM settings WHERE key = ?"))
-            .bind(key).fetch_optional(&self.pool).await?;
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row.map(|(v,)| v))
     }
 
     pub async fn get_all_settings(&self) -> StoreResult<std::collections::HashMap<String, String>> {
-        let rows: Vec<(String, String)> = sqlx::query_as(&self.sql("SELECT key, value FROM settings ORDER BY key"))
-            .fetch_all(&self.pool).await?;
+        let rows: Vec<(String, String)> =
+            sqlx::query_as(&self.sql("SELECT key, value FROM settings ORDER BY key")).fetch_all(&self.pool).await?;
         Ok(rows.into_iter().collect())
     }
 
@@ -481,15 +603,19 @@ impl Db {
     pub async fn seed_settings(&self, pairs: &[(String, String)]) -> StoreResult<()> {
         for (key, value) in pairs {
             sqlx::query(&self.sql("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING"))
-                .bind(key).bind(value).execute(&self.pool).await?;
+                .bind(key)
+                .bind(value)
+                .execute(&self.pool)
+                .await?;
         }
         Ok(())
     }
 
     pub async fn get_user_preferences(&self, user_id: &UserId) -> StoreResult<UserPreferences> {
-        let r = sqlx::query_as::<_, UserPreferences>(
-            &self.sql("SELECT * FROM user_preferences WHERE user_id = ?")
-        ).bind(user_id).fetch_optional(&self.pool).await?;
+        let r = sqlx::query_as::<_, UserPreferences>(&self.sql("SELECT * FROM user_preferences WHERE user_id = ?"))
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
         match r {
             Some(p) => Ok(p),
             None => {
@@ -513,12 +639,43 @@ impl Db {
         }
     }
 
-    pub async fn upsert_user_preferences(&self, user_id: &UserId, input: &UpdatePreferences) -> StoreResult<UserPreferences> {
+    pub async fn upsert_user_preferences(
+        &self,
+        user_id: &UserId,
+        input: &UpdatePreferences,
+    ) -> StoreResult<UserPreferences> {
         let current = self.get_user_preferences(user_id).await?;
         let theme = input.theme.as_ref().unwrap_or(&current.theme);
-        let inline_edit = match input.inline_edit { Some(v) => if v { 1i64 } else { 0i64 }, None => current.inline_edit };
-        let remember_pos = match input.remember_pos { Some(v) => if v { 1i64 } else { 0i64 }, None => current.remember_pos };
-        let line_numbers = match input.line_numbers { Some(v) => if v { 1i64 } else { 0i64 }, None => current.line_numbers };
+        let inline_edit = match input.inline_edit {
+            Some(v) => {
+                if v {
+                    1i64
+                } else {
+                    0i64
+                }
+            }
+            None => current.inline_edit,
+        };
+        let remember_pos = match input.remember_pos {
+            Some(v) => {
+                if v {
+                    1i64
+                } else {
+                    0i64
+                }
+            }
+            None => current.remember_pos,
+        };
+        let line_numbers = match input.line_numbers {
+            Some(v) => {
+                if v {
+                    1i64
+                } else {
+                    0i64
+                }
+            }
+            None => current.line_numbers,
+        };
         let last_collection = input.last_collection.as_ref().or(current.last_collection.as_ref());
         let last_entry = input.last_entry.as_ref().or(current.last_entry.as_ref());
         let language = input.language.as_ref().unwrap_or(&current.language);
@@ -537,22 +694,46 @@ impl Db {
 
     // ==================== Attachments ====================
 
-    pub async fn create_attachment(&self, id: &str, user_id: &UserId, input: &CreateAttachment, storage_path: &str) -> StoreResult<Attachment> {
-        sqlx::query_as::<_, Attachment>(
-            &self.sql("INSERT INTO attachments (id, user_id, filename, mime_type, size, storage_path, entity_type, entity_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *")
-        )
-        .bind(id).bind(user_id).bind(&input.filename).bind(&input.mime_type)
-        .bind(input.size).bind(storage_path)
-        .bind(&input.entity_type).bind(&input.entity_id)
-        .fetch_one(&self.pool).await.map_err(Into::into)
+    pub async fn create_attachment(
+        &self,
+        id: &str,
+        user_id: &UserId,
+        input: &CreateAttachment,
+        storage_path: &str,
+    ) -> StoreResult<Attachment> {
+        sqlx::query_as::<_, Attachment>(&self.sql(
+            "INSERT INTO attachments (id, user_id, filename, mime_type, size, storage_path, entity_type, entity_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+        ))
+        .bind(id)
+        .bind(user_id)
+        .bind(&input.filename)
+        .bind(&input.mime_type)
+        .bind(input.size)
+        .bind(storage_path)
+        .bind(&input.entity_type)
+        .bind(&input.entity_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(Into::into)
     }
 
-    pub async fn list_attachments(&self, entity_type: Option<&str>, entity_id: Option<&str>, limit: i64, offset: i64) -> StoreResult<PaginatedResult<Attachment>> {
+    pub async fn list_attachments(
+        &self,
+        entity_type: Option<&str>,
+        entity_id: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> StoreResult<PaginatedResult<Attachment>> {
         let (items, total) = match (entity_type, entity_id) {
             (Some(et), Some(eid)) => {
-                let total: i64 = sqlx::query_scalar(&self.sql("SELECT COUNT(*) FROM attachments WHERE entity_type = ? AND entity_id = ?"))
-                    .bind(et).bind(eid).fetch_one(&self.pool).await?;
+                let total: i64 = sqlx::query_scalar(
+                    &self.sql("SELECT COUNT(*) FROM attachments WHERE entity_type = ? AND entity_id = ?"),
+                )
+                .bind(et)
+                .bind(eid)
+                .fetch_one(&self.pool)
+                .await?;
                 let items = sqlx::query_as::<_, Attachment>(
                     &self.sql("SELECT * FROM attachments WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?")
                 ).bind(et).bind(eid).bind(limit).bind(offset)
@@ -560,12 +741,15 @@ impl Db {
                 (items, total)
             }
             _ => {
-                let total: i64 = sqlx::query_scalar(&self.sql("SELECT COUNT(*) FROM attachments"))
-                    .fetch_one(&self.pool).await?;
+                let total: i64 =
+                    sqlx::query_scalar(&self.sql("SELECT COUNT(*) FROM attachments")).fetch_one(&self.pool).await?;
                 let items = sqlx::query_as::<_, Attachment>(
-                    &self.sql("SELECT * FROM attachments ORDER BY created_at DESC LIMIT ? OFFSET ?")
-                ).bind(limit).bind(offset)
-                 .fetch_all(&self.pool).await?;
+                    &self.sql("SELECT * FROM attachments ORDER BY created_at DESC LIMIT ? OFFSET ?"),
+                )
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?;
                 (items, total)
             }
         };
@@ -574,63 +758,112 @@ impl Db {
 
     pub async fn get_attachment(&self, id: &str) -> StoreResult<Option<Attachment>> {
         sqlx::query_as::<_, Attachment>(&self.sql("SELECT * FROM attachments WHERE id = ?"))
-            .bind(id).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn delete_attachment(&self, id: &str) -> StoreResult<bool> {
-        let result = sqlx::query(&self.sql("DELETE FROM attachments WHERE id = ?"))
-            .bind(id).execute(&self.pool).await?;
+        let result =
+            sqlx::query(&self.sql("DELETE FROM attachments WHERE id = ?")).bind(id).execute(&self.pool).await?;
         Ok(result.rows_affected() > 0)
     }
 
     // ==================== Module Settings ====================
 
-    pub async fn list_module_settings(&self, scope: &str, scope_id: Option<&str>, module: Option<&str>) -> StoreResult<Vec<ModuleSetting>> {
+    pub async fn list_module_settings(
+        &self,
+        scope: &str,
+        scope_id: Option<&str>,
+        module: Option<&str>,
+    ) -> StoreResult<Vec<ModuleSetting>> {
         let scope_id_val = scope_id.unwrap_or("");
         match module {
-            Some(m) => {
-                sqlx::query_as::<_, ModuleSetting>(
-                    &self.sql("SELECT * FROM module_settings WHERE scope = ? AND scope_id = ? AND module = ? ORDER BY key")
-                ).bind(scope).bind(scope_id_val).bind(m).fetch_all(&self.pool).await.map_err(Into::into)
-            }
-            None => {
-                sqlx::query_as::<_, ModuleSetting>(
-                    &self.sql("SELECT * FROM module_settings WHERE scope = ? AND scope_id = ? ORDER BY module, key")
-                ).bind(scope).bind(scope_id_val).fetch_all(&self.pool).await.map_err(Into::into)
-            }
+            Some(m) => sqlx::query_as::<_, ModuleSetting>(
+                &self.sql("SELECT * FROM module_settings WHERE scope = ? AND scope_id = ? AND module = ? ORDER BY key"),
+            )
+            .bind(scope)
+            .bind(scope_id_val)
+            .bind(m)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(Into::into),
+            None => sqlx::query_as::<_, ModuleSetting>(
+                &self.sql("SELECT * FROM module_settings WHERE scope = ? AND scope_id = ? ORDER BY module, key"),
+            )
+            .bind(scope)
+            .bind(scope_id_val)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(Into::into),
         }
     }
 
-    pub async fn get_module_setting(&self, scope: &str, scope_id: Option<&str>, module: &str, key: &str) -> StoreResult<Option<String>> {
+    pub async fn get_module_setting(
+        &self,
+        scope: &str,
+        scope_id: Option<&str>,
+        module: &str,
+        key: &str,
+    ) -> StoreResult<Option<String>> {
         let scope_id_val = scope_id.unwrap_or("");
         let row: Option<(String,)> = sqlx::query_as(
-            &self.sql("SELECT value FROM module_settings WHERE scope = ? AND scope_id = ? AND module = ? AND key = ?")
-        ).bind(scope).bind(scope_id_val).bind(module).bind(key)
-         .fetch_optional(&self.pool).await?;
+            &self.sql("SELECT value FROM module_settings WHERE scope = ? AND scope_id = ? AND module = ? AND key = ?"),
+        )
+        .bind(scope)
+        .bind(scope_id_val)
+        .bind(module)
+        .bind(key)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(row.map(|(v,)| v))
     }
 
-    pub async fn set_module_setting(&self, id: &str, scope: &str, scope_id: Option<&str>, module: &str, key: &str, value: &str) -> StoreResult<ModuleSetting> {
+    pub async fn set_module_setting(
+        &self,
+        id: &str,
+        scope: &str,
+        scope_id: Option<&str>,
+        module: &str,
+        key: &str,
+        value: &str,
+    ) -> StoreResult<ModuleSetting> {
         let scope_id_val = scope_id.unwrap_or("");
-        sqlx::query_as::<_, ModuleSetting>(
-            &self.sql("INSERT INTO module_settings (id, scope, scope_id, module, key, value, updated_at)
+        sqlx::query_as::<_, ModuleSetting>(&self.sql(
+            "INSERT INTO module_settings (id, scope, scope_id, module, key, value, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
              ON CONFLICT(scope, scope_id, module, key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')
-             RETURNING *")
-        ).bind(id).bind(scope).bind(scope_id_val).bind(module).bind(key).bind(value)
-         .fetch_one(&self.pool).await.map_err(Into::into)
+             RETURNING *",
+        ))
+        .bind(id)
+        .bind(scope)
+        .bind(scope_id_val)
+        .bind(module)
+        .bind(key)
+        .bind(value)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn delete_module_setting(&self, id: &str) -> StoreResult<bool> {
-        let result = sqlx::query(&self.sql("DELETE FROM module_settings WHERE id = ?"))
-            .bind(id).execute(&self.pool).await?;
+        let result =
+            sqlx::query(&self.sql("DELETE FROM module_settings WHERE id = ?")).bind(id).execute(&self.pool).await?;
         Ok(result.rows_affected() > 0)
     }
 
-    pub async fn get_effective_setting(&self, module: &str, key: &str, collection_id: Option<&str>) -> StoreResult<Option<String>> {
+    pub async fn get_effective_setting(
+        &self,
+        module: &str,
+        key: &str,
+        collection_id: Option<&str>,
+    ) -> StoreResult<Option<String>> {
         if let Some(ws_id) = collection_id {
             let ws_val = self.get_module_setting("document_collection", Some(ws_id), module, key).await?;
-            if ws_val.is_some() { return Ok(ws_val); }
+            if ws_val.is_some() {
+                return Ok(ws_val);
+            }
         }
         self.get_module_setting("system", None, module, key).await
     }
@@ -638,22 +871,30 @@ impl Db {
     // ==================== Storage Migration ====================
 
     pub async fn list_all_attachments(&self, limit: i64, offset: i64) -> StoreResult<PaginatedResult<Attachment>> {
-        let total: i64 = sqlx::query_scalar(&self.sql("SELECT COUNT(*) FROM attachments"))
-            .fetch_one(&self.pool).await?;
+        let total: i64 =
+            sqlx::query_scalar(&self.sql("SELECT COUNT(*) FROM attachments")).fetch_one(&self.pool).await?;
         let items = sqlx::query_as::<_, Attachment>(
-            &self.sql("SELECT * FROM attachments ORDER BY created_at ASC LIMIT ? OFFSET ?")
+            &self.sql("SELECT * FROM attachments ORDER BY created_at ASC LIMIT ? OFFSET ?"),
         )
-        .bind(limit).bind(offset)
-        .fetch_all(&self.pool).await?;
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
         Ok(PaginatedResult::new(items, total, limit, offset))
     }
 
-    pub async fn update_attachment_storage(&self, id: &str, storage_path: &str, storage_type: &str) -> StoreResult<bool> {
-        let result = sqlx::query(
-            &self.sql("UPDATE attachments SET storage_path = ?, storage_type = ? WHERE id = ?")
-        )
-        .bind(storage_path).bind(storage_type).bind(id)
-        .execute(&self.pool).await?;
+    pub async fn update_attachment_storage(
+        &self,
+        id: &str,
+        storage_path: &str,
+        storage_type: &str,
+    ) -> StoreResult<bool> {
+        let result = sqlx::query(&self.sql("UPDATE attachments SET storage_path = ?, storage_type = ? WHERE id = ?"))
+            .bind(storage_path)
+            .bind(storage_type)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
         Ok(result.rows_affected() > 0)
     }
 }
@@ -662,77 +903,233 @@ impl Db {
 
 #[async_trait]
 impl UserStore for Db {
-    async fn create_user(&self, user: &User) -> StoreResult<User> { Db::create_user(self, user).await }
-    async fn get_user_by_email(&self, email: &str) -> StoreResult<Option<User>> { Db::get_user_by_email(self, email).await }
-    async fn get_user_by_id(&self, id: &UserId) -> StoreResult<Option<User>> { Db::get_user_by_id(self, id).await }
-    async fn get_user_by_oauth(&self, provider: &str, oauth_id: &str) -> StoreResult<Option<User>> { Db::get_user_by_oauth(self, provider, oauth_id).await }
-    async fn get_user_by_phone(&self, phone: &str) -> StoreResult<Option<User>> { Db::get_user_by_phone(self, phone).await }
-    async fn update_user(&self, id: &UserId, name: Option<&str>, avatar_url: Option<&str>, bio: Option<&str>) -> StoreResult<Option<User>> { Db::update_user(self, id, name, avatar_url, bio).await }
-    async fn update_user_role(&self, id: &UserId, role: &str) -> StoreResult<Option<User>> { Db::update_user_role(self, id, role).await }
-    async fn update_user_password(&self, id: &UserId, password_hash: &str) -> StoreResult<Option<User>> { Db::update_user_password(self, id, password_hash).await }
-    async fn list_users(&self, limit: i64, offset: i64) -> StoreResult<PaginatedResult<User>> { Db::list_users(self, limit, offset).await }
-    async fn search_users(&self, query: &str, limit: i64) -> StoreResult<Vec<UserPublic>> { Db::search_users(self, query, limit).await }
+    async fn create_user(&self, user: &User) -> StoreResult<User> {
+        Db::create_user(self, user).await
+    }
+    async fn get_user_by_email(&self, email: &str) -> StoreResult<Option<User>> {
+        Db::get_user_by_email(self, email).await
+    }
+    async fn get_user_by_id(&self, id: &UserId) -> StoreResult<Option<User>> {
+        Db::get_user_by_id(self, id).await
+    }
+    async fn get_user_by_oauth(&self, provider: &str, oauth_id: &str) -> StoreResult<Option<User>> {
+        Db::get_user_by_oauth(self, provider, oauth_id).await
+    }
+    async fn get_user_by_phone(&self, phone: &str) -> StoreResult<Option<User>> {
+        Db::get_user_by_phone(self, phone).await
+    }
+    async fn update_user(
+        &self,
+        id: &UserId,
+        name: Option<&str>,
+        avatar_url: Option<&str>,
+        bio: Option<&str>,
+    ) -> StoreResult<Option<User>> {
+        Db::update_user(self, id, name, avatar_url, bio).await
+    }
+    async fn update_user_role(&self, id: &UserId, role: &str) -> StoreResult<Option<User>> {
+        Db::update_user_role(self, id, role).await
+    }
+    async fn update_user_password(&self, id: &UserId, password_hash: &str) -> StoreResult<Option<User>> {
+        Db::update_user_password(self, id, password_hash).await
+    }
+    async fn list_users(&self, limit: i64, offset: i64) -> StoreResult<PaginatedResult<User>> {
+        Db::list_users(self, limit, offset).await
+    }
+    async fn search_users(&self, query: &str, limit: i64) -> StoreResult<Vec<UserPublic>> {
+        Db::search_users(self, query, limit).await
+    }
 }
 
 #[async_trait]
 impl TokenStore for Db {
-    async fn create_refresh_token(&self, id: &str, user_id: &UserId, token_hash: &str, expires_at: &str) -> StoreResult<()> { Db::create_refresh_token(self, id, user_id, token_hash, expires_at).await }
-    async fn get_refresh_token(&self, token_hash: &str) -> StoreResult<Option<(String, String)>> { Db::get_refresh_token(self, token_hash).await }
-    async fn delete_refresh_token(&self, token_hash: &str) -> StoreResult<()> { Db::delete_refresh_token(self, token_hash).await }
-    async fn create_password_reset_token(&self, id: &str, user_id: &UserId, token: &str, expires_at: &str) -> StoreResult<()> { Db::create_password_reset_token(self, id, user_id, token, expires_at).await }
-    async fn get_password_reset_token(&self, token: &str) -> StoreResult<Option<(String, String, i64, String)>> { Db::get_password_reset_token(self, token).await }
-    async fn mark_password_reset_used(&self, id: &str) -> StoreResult<()> { Db::mark_password_reset_used(self, id).await }
+    async fn create_refresh_token(
+        &self,
+        id: &str,
+        user_id: &UserId,
+        token_hash: &str,
+        expires_at: &str,
+    ) -> StoreResult<()> {
+        Db::create_refresh_token(self, id, user_id, token_hash, expires_at).await
+    }
+    async fn get_refresh_token(&self, token_hash: &str) -> StoreResult<Option<(String, String)>> {
+        Db::get_refresh_token(self, token_hash).await
+    }
+    async fn delete_refresh_token(&self, token_hash: &str) -> StoreResult<()> {
+        Db::delete_refresh_token(self, token_hash).await
+    }
+    async fn create_password_reset_token(
+        &self,
+        id: &str,
+        user_id: &UserId,
+        token: &str,
+        expires_at: &str,
+    ) -> StoreResult<()> {
+        Db::create_password_reset_token(self, id, user_id, token, expires_at).await
+    }
+    async fn get_password_reset_token(&self, token: &str) -> StoreResult<Option<(String, String, i64, String)>> {
+        Db::get_password_reset_token(self, token).await
+    }
+    async fn mark_password_reset_used(&self, id: &str) -> StoreResult<()> {
+        Db::mark_password_reset_used(self, id).await
+    }
 }
 
 #[async_trait]
 impl CaptchaStore for Db {
-    async fn create_captcha(&self, id: &str, answer: &str, expires_at: &str) -> StoreResult<()> { Db::create_captcha(self, id, answer, expires_at).await }
-    async fn get_captcha(&self, id: &str) -> StoreResult<Option<(String, i64, String)>> { Db::get_captcha(self, id).await }
-    async fn mark_captcha_used(&self, id: &str) -> StoreResult<()> { Db::mark_captcha_used(self, id).await }
+    async fn create_captcha(&self, id: &str, answer: &str, expires_at: &str) -> StoreResult<()> {
+        Db::create_captcha(self, id, answer, expires_at).await
+    }
+    async fn get_captcha(&self, id: &str) -> StoreResult<Option<(String, i64, String)>> {
+        Db::get_captcha(self, id).await
+    }
+    async fn mark_captcha_used(&self, id: &str) -> StoreResult<()> {
+        Db::mark_captcha_used(self, id).await
+    }
 }
 
 #[async_trait]
 impl SmsCodeStore for Db {
-    async fn create_sms_code(&self, id: &str, phone: &str, code: &str, purpose: &str, ip_address: Option<&str>, expires_at: &str) -> StoreResult<()> { Db::create_sms_code(self, id, phone, code, purpose, ip_address, expires_at).await }
-    async fn get_latest_sms_code(&self, phone: &str, purpose: &str) -> StoreResult<Option<(String, String, i64, String)>> { Db::get_latest_sms_code(self, phone, purpose).await }
-    async fn get_sms_code_sent_within(&self, phone: &str, purpose: &str, seconds: i64) -> StoreResult<bool> { Db::get_sms_code_sent_within(self, phone, purpose, seconds).await }
-    async fn mark_sms_code_used(&self, id: &str) -> StoreResult<()> { Db::mark_sms_code_used(self, id).await }
-    async fn count_sms_by_ip(&self, ip: &str, hours: i64) -> StoreResult<i64> { Db::count_sms_by_ip(self, ip, hours).await }
-    async fn count_sms_by_phone_today(&self, phone: &str) -> StoreResult<i64> { Db::count_sms_by_phone_today(self, phone).await }
+    async fn create_sms_code(
+        &self,
+        id: &str,
+        phone: &str,
+        code: &str,
+        purpose: &str,
+        ip_address: Option<&str>,
+        expires_at: &str,
+    ) -> StoreResult<()> {
+        Db::create_sms_code(self, id, phone, code, purpose, ip_address, expires_at).await
+    }
+    async fn get_latest_sms_code(
+        &self,
+        phone: &str,
+        purpose: &str,
+    ) -> StoreResult<Option<(String, String, i64, String)>> {
+        Db::get_latest_sms_code(self, phone, purpose).await
+    }
+    async fn get_sms_code_sent_within(&self, phone: &str, purpose: &str, seconds: i64) -> StoreResult<bool> {
+        Db::get_sms_code_sent_within(self, phone, purpose, seconds).await
+    }
+    async fn mark_sms_code_used(&self, id: &str) -> StoreResult<()> {
+        Db::mark_sms_code_used(self, id).await
+    }
+    async fn count_sms_by_ip(&self, ip: &str, hours: i64) -> StoreResult<i64> {
+        Db::count_sms_by_ip(self, ip, hours).await
+    }
+    async fn count_sms_by_phone_today(&self, phone: &str) -> StoreResult<i64> {
+        Db::count_sms_by_phone_today(self, phone).await
+    }
 }
 
 #[async_trait]
 impl SettingsStore for Db {
-    async fn get_setting(&self, key: &str) -> StoreResult<Option<String>> { Db::get_setting(self, key).await }
-    async fn get_all_settings(&self) -> StoreResult<std::collections::HashMap<String, String>> { Db::get_all_settings(self).await }
-    async fn set_setting(&self, key: &str, value: &str) -> StoreResult<()> { Db::set_setting(self, key, value).await }
-    async fn set_settings(&self, pairs: &[(String, String)]) -> StoreResult<()> { Db::set_settings(self, pairs).await }
-    async fn seed_settings(&self, pairs: &[(String, String)]) -> StoreResult<()> { Db::seed_settings(self, pairs).await }
+    async fn get_setting(&self, key: &str) -> StoreResult<Option<String>> {
+        Db::get_setting(self, key).await
+    }
+    async fn get_all_settings(&self) -> StoreResult<std::collections::HashMap<String, String>> {
+        Db::get_all_settings(self).await
+    }
+    async fn set_setting(&self, key: &str, value: &str) -> StoreResult<()> {
+        Db::set_setting(self, key, value).await
+    }
+    async fn set_settings(&self, pairs: &[(String, String)]) -> StoreResult<()> {
+        Db::set_settings(self, pairs).await
+    }
+    async fn seed_settings(&self, pairs: &[(String, String)]) -> StoreResult<()> {
+        Db::seed_settings(self, pairs).await
+    }
 }
 
 #[async_trait]
 impl PreferenceStore for Db {
-    async fn get_user_preferences(&self, user_id: &UserId) -> StoreResult<UserPreferences> { Db::get_user_preferences(self, user_id).await }
-    async fn upsert_user_preferences(&self, user_id: &UserId, input: &UpdatePreferences) -> StoreResult<UserPreferences> { Db::upsert_user_preferences(self, user_id, input).await }
+    async fn get_user_preferences(&self, user_id: &UserId) -> StoreResult<UserPreferences> {
+        Db::get_user_preferences(self, user_id).await
+    }
+    async fn upsert_user_preferences(
+        &self,
+        user_id: &UserId,
+        input: &UpdatePreferences,
+    ) -> StoreResult<UserPreferences> {
+        Db::upsert_user_preferences(self, user_id, input).await
+    }
 }
 
 #[async_trait]
 impl AttachmentStore for Db {
-    async fn create_attachment(&self, id: &str, user_id: &UserId, input: &CreateAttachment, storage_path: &str) -> StoreResult<Attachment> { Db::create_attachment(self, id, user_id, input, storage_path).await }
-    async fn list_attachments(&self, entity_type: Option<&str>, entity_id: Option<&str>, limit: i64, offset: i64) -> StoreResult<PaginatedResult<Attachment>> { Db::list_attachments(self, entity_type, entity_id, limit, offset).await }
-    async fn get_attachment(&self, id: &str) -> StoreResult<Option<Attachment>> { Db::get_attachment(self, id).await }
-    async fn delete_attachment(&self, id: &str) -> StoreResult<bool> { Db::delete_attachment(self, id).await }
-    async fn list_all_attachments(&self, limit: i64, offset: i64) -> StoreResult<PaginatedResult<Attachment>> { Db::list_all_attachments(self, limit, offset).await }
-    async fn update_attachment_storage(&self, id: &str, storage_path: &str, storage_type: &str) -> StoreResult<bool> { Db::update_attachment_storage(self, id, storage_path, storage_type).await }
+    async fn create_attachment(
+        &self,
+        id: &str,
+        user_id: &UserId,
+        input: &CreateAttachment,
+        storage_path: &str,
+    ) -> StoreResult<Attachment> {
+        Db::create_attachment(self, id, user_id, input, storage_path).await
+    }
+    async fn list_attachments(
+        &self,
+        entity_type: Option<&str>,
+        entity_id: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> StoreResult<PaginatedResult<Attachment>> {
+        Db::list_attachments(self, entity_type, entity_id, limit, offset).await
+    }
+    async fn get_attachment(&self, id: &str) -> StoreResult<Option<Attachment>> {
+        Db::get_attachment(self, id).await
+    }
+    async fn delete_attachment(&self, id: &str) -> StoreResult<bool> {
+        Db::delete_attachment(self, id).await
+    }
+    async fn list_all_attachments(&self, limit: i64, offset: i64) -> StoreResult<PaginatedResult<Attachment>> {
+        Db::list_all_attachments(self, limit, offset).await
+    }
+    async fn update_attachment_storage(&self, id: &str, storage_path: &str, storage_type: &str) -> StoreResult<bool> {
+        Db::update_attachment_storage(self, id, storage_path, storage_type).await
+    }
 }
 
 #[async_trait]
 impl ModuleSettingStore for Db {
-    async fn list_module_settings(&self, scope: &str, scope_id: Option<&str>, module: Option<&str>) -> StoreResult<Vec<ModuleSetting>> { Db::list_module_settings(self, scope, scope_id, module).await }
-    async fn get_module_setting(&self, scope: &str, scope_id: Option<&str>, module: &str, key: &str) -> StoreResult<Option<String>> { Db::get_module_setting(self, scope, scope_id, module, key).await }
-    async fn set_module_setting(&self, id: &str, scope: &str, scope_id: Option<&str>, module: &str, key: &str, value: &str) -> StoreResult<ModuleSetting> { Db::set_module_setting(self, id, scope, scope_id, module, key, value).await }
-    async fn delete_module_setting(&self, id: &str) -> StoreResult<bool> { Db::delete_module_setting(self, id).await }
-    async fn get_effective_setting(&self, module: &str, key: &str, collection_id: Option<&str>) -> StoreResult<Option<String>> { Db::get_effective_setting(self, module, key, collection_id).await }
+    async fn list_module_settings(
+        &self,
+        scope: &str,
+        scope_id: Option<&str>,
+        module: Option<&str>,
+    ) -> StoreResult<Vec<ModuleSetting>> {
+        Db::list_module_settings(self, scope, scope_id, module).await
+    }
+    async fn get_module_setting(
+        &self,
+        scope: &str,
+        scope_id: Option<&str>,
+        module: &str,
+        key: &str,
+    ) -> StoreResult<Option<String>> {
+        Db::get_module_setting(self, scope, scope_id, module, key).await
+    }
+    async fn set_module_setting(
+        &self,
+        id: &str,
+        scope: &str,
+        scope_id: Option<&str>,
+        module: &str,
+        key: &str,
+        value: &str,
+    ) -> StoreResult<ModuleSetting> {
+        Db::set_module_setting(self, id, scope, scope_id, module, key, value).await
+    }
+    async fn delete_module_setting(&self, id: &str) -> StoreResult<bool> {
+        Db::delete_module_setting(self, id).await
+    }
+    async fn get_effective_setting(
+        &self,
+        module: &str,
+        key: &str,
+        collection_id: Option<&str>,
+    ) -> StoreResult<Option<String>> {
+        Db::get_effective_setting(self, module, key, collection_id).await
+    }
 }
 
 impl Db {
@@ -740,27 +1137,46 @@ impl Db {
 
     pub async fn create_group(&self, group: &Group) -> StoreResult<Group> {
         sqlx::query_as::<_, Group>(
-            &self.sql("INSERT INTO groups (id, name, display_name, comment) VALUES (?, ?, ?, ?) RETURNING *")
-        ).bind(&group.id).bind(&group.name).bind(&group.display_name).bind(&group.comment)
-         .fetch_one(&self.pool).await.map_err(Into::into)
+            &self.sql("INSERT INTO groups (id, name, display_name, comment) VALUES (?, ?, ?, ?) RETURNING *"),
+        )
+        .bind(&group.id)
+        .bind(&group.name)
+        .bind(&group.display_name)
+        .bind(&group.comment)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn get_group(&self, id: &GroupId) -> StoreResult<Option<Group>> {
         sqlx::query_as::<_, Group>(&self.sql("SELECT * FROM groups WHERE id = ?"))
-            .bind(id).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn get_group_by_name(&self, name: &str) -> StoreResult<Option<Group>> {
         sqlx::query_as::<_, Group>(&self.sql("SELECT * FROM groups WHERE name = ?"))
-            .bind(name).fetch_optional(&self.pool).await.map_err(Into::into)
+            .bind(name)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn list_groups(&self) -> StoreResult<Vec<Group>> {
         sqlx::query_as::<_, Group>(&self.sql("SELECT * FROM groups ORDER BY name"))
-            .fetch_all(&self.pool).await.map_err(Into::into)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
-    pub async fn update_group(&self, id: &GroupId, display_name: Option<&str>, comment: Option<&str>) -> StoreResult<Option<Group>> {
+    pub async fn update_group(
+        &self,
+        id: &GroupId,
+        display_name: Option<&str>,
+        comment: Option<&str>,
+    ) -> StoreResult<Option<Group>> {
         sqlx::query_as::<_, Group>(
             &self.sql("UPDATE groups SET display_name=COALESCE(?, display_name), comment=COALESCE(?, comment), updated_at=datetime('now') WHERE id=? RETURNING *")
         ).bind(display_name).bind(comment).bind(id)
@@ -768,42 +1184,59 @@ impl Db {
     }
 
     pub async fn delete_group(&self, id: &GroupId) -> StoreResult<bool> {
-        let r = sqlx::query(&self.sql("DELETE FROM groups WHERE id = ?"))
-            .bind(id).execute(&self.pool).await?;
+        let r = sqlx::query(&self.sql("DELETE FROM groups WHERE id = ?")).bind(id).execute(&self.pool).await?;
         Ok(r.rows_affected() > 0)
     }
 
     pub async fn set_implied_groups(&self, group_id: &GroupId, implied_ids: &[GroupId]) -> StoreResult<()> {
         sqlx::query(&self.sql("DELETE FROM group_implied WHERE group_id = ?"))
-            .bind(group_id).execute(&self.pool).await?;
+            .bind(group_id)
+            .execute(&self.pool)
+            .await?;
         for implied_id in implied_ids {
             sqlx::query(&self.sql("INSERT INTO group_implied (group_id, implied_group_id) VALUES (?, ?)"))
-                .bind(group_id).bind(implied_id).execute(&self.pool).await?;
+                .bind(group_id)
+                .bind(implied_id)
+                .execute(&self.pool)
+                .await?;
         }
         Ok(())
     }
 
     pub async fn get_implied_groups(&self, group_id: &GroupId) -> StoreResult<Vec<GroupImplied>> {
         sqlx::query_as::<_, GroupImplied>(&self.sql("SELECT * FROM group_implied WHERE group_id = ?"))
-            .bind(group_id).fetch_all(&self.pool).await.map_err(Into::into)
+            .bind(group_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn add_user_to_group(&self, user_id: &UserId, group_id: &GroupId) -> StoreResult<()> {
         sqlx::query(&self.sql("INSERT INTO user_groups (user_id, group_id) VALUES (?, ?) ON CONFLICT DO NOTHING"))
-            .bind(user_id).bind(group_id).execute(&self.pool).await?;
+            .bind(user_id)
+            .bind(group_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     pub async fn remove_user_from_group(&self, user_id: &UserId, group_id: &GroupId) -> StoreResult<()> {
         sqlx::query(&self.sql("DELETE FROM user_groups WHERE user_id = ? AND group_id = ?"))
-            .bind(user_id).bind(group_id).execute(&self.pool).await?;
+            .bind(user_id)
+            .bind(group_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     pub async fn get_user_groups(&self, user_id: &UserId) -> StoreResult<Vec<Group>> {
-        sqlx::query_as::<_, Group>(
-            &self.sql("SELECT g.* FROM groups g JOIN user_groups ug ON g.id = ug.group_id WHERE ug.user_id = ? ORDER BY g.name")
-        ).bind(user_id).fetch_all(&self.pool).await.map_err(Into::into)
+        sqlx::query_as::<_, Group>(&self.sql(
+            "SELECT g.* FROM groups g JOIN user_groups ug ON g.id = ug.group_id WHERE ug.user_id = ? ORDER BY g.name",
+        ))
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn resolve_all_groups(&self, user_id: &UserId) -> StoreResult<Vec<String>> {
@@ -830,8 +1263,7 @@ impl Db {
     }
 
     pub async fn set_user_groups(&self, user_id: &UserId, group_ids: &[GroupId]) -> StoreResult<()> {
-        sqlx::query(&self.sql("DELETE FROM user_groups WHERE user_id = ?"))
-            .bind(user_id).execute(&self.pool).await?;
+        sqlx::query(&self.sql("DELETE FROM user_groups WHERE user_id = ?")).bind(user_id).execute(&self.pool).await?;
         for gid in group_ids {
             self.add_user_to_group(user_id, gid).await?;
         }
@@ -882,16 +1314,21 @@ impl Db {
 
     pub async fn get_model_access(&self, id: &str) -> StoreResult<Option<ModelAccessRow>> {
         let row = sqlx::query(&self.sql("SELECT * FROM model_access WHERE id = ?"))
-            .bind(id).fetch_optional(&self.pool).await?;
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row.as_ref().map(Self::row_to_model_access))
     }
 
     pub async fn list_model_accesses(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<ModelAccessRow>> {
         let rows = match group_id {
-            Some(gid) => sqlx::query(&self.sql("SELECT * FROM model_access WHERE group_id = ? ORDER BY model"))
-                .bind(gid).fetch_all(&self.pool).await?,
-            None => sqlx::query(&self.sql("SELECT * FROM model_access ORDER BY model"))
-                .fetch_all(&self.pool).await?,
+            Some(gid) => {
+                sqlx::query(&self.sql("SELECT * FROM model_access WHERE group_id = ? ORDER BY model"))
+                    .bind(gid)
+                    .fetch_all(&self.pool)
+                    .await?
+            }
+            None => sqlx::query(&self.sql("SELECT * FROM model_access ORDER BY model")).fetch_all(&self.pool).await?,
         };
         Ok(rows.iter().map(Self::row_to_model_access).collect())
     }
@@ -903,13 +1340,14 @@ impl Db {
          .bind(access.perm_read as i32).bind(access.perm_write as i32).bind(access.perm_create as i32)
          .bind(access.perm_delete as i32).bind(access.perm_import as i32).bind(access.perm_export as i32)
          .bind(id).execute(&self.pool).await?;
-        if result.rows_affected() == 0 { return Ok(None); }
+        if result.rows_affected() == 0 {
+            return Ok(None);
+        }
         Ok(Some(access.clone()))
     }
 
     pub async fn delete_model_access(&self, id: &str) -> StoreResult<bool> {
-        let r = sqlx::query(&self.sql("DELETE FROM model_access WHERE id = ?"))
-            .bind(id).execute(&self.pool).await?;
+        let r = sqlx::query(&self.sql("DELETE FROM model_access WHERE id = ?")).bind(id).execute(&self.pool).await?;
         Ok(r.rows_affected() > 0)
     }
 
@@ -927,16 +1365,23 @@ impl Db {
 
     pub async fn get_record_rule(&self, id: &str) -> StoreResult<Option<RecordRuleRow>> {
         let row = sqlx::query(&self.sql("SELECT * FROM record_rule WHERE id = ?"))
-            .bind(id).fetch_optional(&self.pool).await?;
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row.as_ref().map(Self::row_to_record_rule))
     }
 
     pub async fn list_record_rules(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<RecordRuleRow>> {
         let rows = match group_id {
-            Some(gid) => sqlx::query(&self.sql("SELECT * FROM record_rule WHERE group_id = ? ORDER BY model, name"))
-                .bind(gid).fetch_all(&self.pool).await?,
-            None => sqlx::query(&self.sql("SELECT * FROM record_rule ORDER BY model, name"))
-                .fetch_all(&self.pool).await?,
+            Some(gid) => {
+                sqlx::query(&self.sql("SELECT * FROM record_rule WHERE group_id = ? ORDER BY model, name"))
+                    .bind(gid)
+                    .fetch_all(&self.pool)
+                    .await?
+            }
+            None => {
+                sqlx::query(&self.sql("SELECT * FROM record_rule ORDER BY model, name")).fetch_all(&self.pool).await?
+            }
         };
         Ok(rows.iter().map(Self::row_to_record_rule).collect())
     }
@@ -947,13 +1392,14 @@ impl Db {
         ).bind(&rule.name).bind(&rule.group_id).bind(&rule.model).bind(&rule.domain)
          .bind(rule.perm_read as i32).bind(rule.perm_write as i32).bind(rule.perm_create as i32).bind(rule.perm_delete as i32)
          .bind(id).execute(&self.pool).await?;
-        if result.rows_affected() == 0 { return Ok(None); }
+        if result.rows_affected() == 0 {
+            return Ok(None);
+        }
         Ok(Some(rule.clone()))
     }
 
     pub async fn delete_record_rule(&self, id: &str) -> StoreResult<bool> {
-        let r = sqlx::query(&self.sql("DELETE FROM record_rule WHERE id = ?"))
-            .bind(id).execute(&self.pool).await?;
+        let r = sqlx::query(&self.sql("DELETE FROM record_rule WHERE id = ?")).bind(id).execute(&self.pool).await?;
         Ok(r.rows_affected() > 0)
     }
 
@@ -996,35 +1442,90 @@ impl Db {
 
 #[async_trait]
 impl GroupStore for Db {
-    async fn create_group(&self, group: &Group) -> StoreResult<Group> { Db::create_group(self, group).await }
-    async fn get_group(&self, id: &GroupId) -> StoreResult<Option<Group>> { Db::get_group(self, id).await }
-    async fn get_group_by_name(&self, name: &str) -> StoreResult<Option<Group>> { Db::get_group_by_name(self, name).await }
-    async fn list_groups(&self) -> StoreResult<Vec<Group>> { Db::list_groups(self).await }
-    async fn update_group(&self, id: &GroupId, display_name: Option<&str>, comment: Option<&str>) -> StoreResult<Option<Group>> { Db::update_group(self, id, display_name, comment).await }
-    async fn delete_group(&self, id: &GroupId) -> StoreResult<bool> { Db::delete_group(self, id).await }
-    async fn set_implied_groups(&self, group_id: &GroupId, implied_ids: &[GroupId]) -> StoreResult<()> { Db::set_implied_groups(self, group_id, implied_ids).await }
-    async fn get_implied_groups(&self, group_id: &GroupId) -> StoreResult<Vec<GroupImplied>> { Db::get_implied_groups(self, group_id).await }
-    async fn add_user_to_group(&self, user_id: &UserId, group_id: &GroupId) -> StoreResult<()> { Db::add_user_to_group(self, user_id, group_id).await }
-    async fn remove_user_from_group(&self, user_id: &UserId, group_id: &GroupId) -> StoreResult<()> { Db::remove_user_from_group(self, user_id, group_id).await }
-    async fn get_user_groups(&self, user_id: &UserId) -> StoreResult<Vec<Group>> { Db::get_user_groups(self, user_id).await }
-    async fn resolve_all_groups(&self, user_id: &UserId) -> StoreResult<Vec<String>> { Db::resolve_all_groups(self, user_id).await }
-    async fn set_user_groups(&self, user_id: &UserId, group_ids: &[GroupId]) -> StoreResult<()> { Db::set_user_groups(self, user_id, group_ids).await }
+    async fn create_group(&self, group: &Group) -> StoreResult<Group> {
+        Db::create_group(self, group).await
+    }
+    async fn get_group(&self, id: &GroupId) -> StoreResult<Option<Group>> {
+        Db::get_group(self, id).await
+    }
+    async fn get_group_by_name(&self, name: &str) -> StoreResult<Option<Group>> {
+        Db::get_group_by_name(self, name).await
+    }
+    async fn list_groups(&self) -> StoreResult<Vec<Group>> {
+        Db::list_groups(self).await
+    }
+    async fn update_group(
+        &self,
+        id: &GroupId,
+        display_name: Option<&str>,
+        comment: Option<&str>,
+    ) -> StoreResult<Option<Group>> {
+        Db::update_group(self, id, display_name, comment).await
+    }
+    async fn delete_group(&self, id: &GroupId) -> StoreResult<bool> {
+        Db::delete_group(self, id).await
+    }
+    async fn set_implied_groups(&self, group_id: &GroupId, implied_ids: &[GroupId]) -> StoreResult<()> {
+        Db::set_implied_groups(self, group_id, implied_ids).await
+    }
+    async fn get_implied_groups(&self, group_id: &GroupId) -> StoreResult<Vec<GroupImplied>> {
+        Db::get_implied_groups(self, group_id).await
+    }
+    async fn add_user_to_group(&self, user_id: &UserId, group_id: &GroupId) -> StoreResult<()> {
+        Db::add_user_to_group(self, user_id, group_id).await
+    }
+    async fn remove_user_from_group(&self, user_id: &UserId, group_id: &GroupId) -> StoreResult<()> {
+        Db::remove_user_from_group(self, user_id, group_id).await
+    }
+    async fn get_user_groups(&self, user_id: &UserId) -> StoreResult<Vec<Group>> {
+        Db::get_user_groups(self, user_id).await
+    }
+    async fn resolve_all_groups(&self, user_id: &UserId) -> StoreResult<Vec<String>> {
+        Db::resolve_all_groups(self, user_id).await
+    }
+    async fn set_user_groups(&self, user_id: &UserId, group_ids: &[GroupId]) -> StoreResult<()> {
+        Db::set_user_groups(self, user_id, group_ids).await
+    }
 }
 
 #[async_trait]
 impl AccessStore for Db {
-    async fn create_model_access(&self, access: &ModelAccessRow) -> StoreResult<ModelAccessRow> { Db::create_model_access(self, access).await }
-    async fn get_model_access(&self, id: &str) -> StoreResult<Option<ModelAccessRow>> { Db::get_model_access(self, id).await }
-    async fn list_model_accesses(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<ModelAccessRow>> { Db::list_model_accesses(self, group_id).await }
-    async fn update_model_access(&self, id: &str, access: &ModelAccessRow) -> StoreResult<Option<ModelAccessRow>> { Db::update_model_access(self, id, access).await }
-    async fn delete_model_access(&self, id: &str) -> StoreResult<bool> { Db::delete_model_access(self, id).await }
-    async fn create_record_rule(&self, rule: &RecordRuleRow) -> StoreResult<RecordRuleRow> { Db::create_record_rule(self, rule).await }
-    async fn get_record_rule(&self, id: &str) -> StoreResult<Option<RecordRuleRow>> { Db::get_record_rule(self, id).await }
-    async fn list_record_rules(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<RecordRuleRow>> { Db::list_record_rules(self, group_id).await }
-    async fn update_record_rule(&self, id: &str, rule: &RecordRuleRow) -> StoreResult<Option<RecordRuleRow>> { Db::update_record_rule(self, id, rule).await }
-    async fn delete_record_rule(&self, id: &str) -> StoreResult<bool> { Db::delete_record_rule(self, id).await }
-    async fn get_model_accesses_for_groups(&self, group_names: &[String]) -> StoreResult<Vec<ModelAccessRow>> { Db::get_model_accesses_for_groups(self, group_names).await }
-    async fn get_record_rules_for_groups(&self, group_names: &[String]) -> StoreResult<Vec<RecordRuleRow>> { Db::get_record_rules_for_groups(self, group_names).await }
+    async fn create_model_access(&self, access: &ModelAccessRow) -> StoreResult<ModelAccessRow> {
+        Db::create_model_access(self, access).await
+    }
+    async fn get_model_access(&self, id: &str) -> StoreResult<Option<ModelAccessRow>> {
+        Db::get_model_access(self, id).await
+    }
+    async fn list_model_accesses(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<ModelAccessRow>> {
+        Db::list_model_accesses(self, group_id).await
+    }
+    async fn update_model_access(&self, id: &str, access: &ModelAccessRow) -> StoreResult<Option<ModelAccessRow>> {
+        Db::update_model_access(self, id, access).await
+    }
+    async fn delete_model_access(&self, id: &str) -> StoreResult<bool> {
+        Db::delete_model_access(self, id).await
+    }
+    async fn create_record_rule(&self, rule: &RecordRuleRow) -> StoreResult<RecordRuleRow> {
+        Db::create_record_rule(self, rule).await
+    }
+    async fn get_record_rule(&self, id: &str) -> StoreResult<Option<RecordRuleRow>> {
+        Db::get_record_rule(self, id).await
+    }
+    async fn list_record_rules(&self, group_id: Option<&GroupId>) -> StoreResult<Vec<RecordRuleRow>> {
+        Db::list_record_rules(self, group_id).await
+    }
+    async fn update_record_rule(&self, id: &str, rule: &RecordRuleRow) -> StoreResult<Option<RecordRuleRow>> {
+        Db::update_record_rule(self, id, rule).await
+    }
+    async fn delete_record_rule(&self, id: &str) -> StoreResult<bool> {
+        Db::delete_record_rule(self, id).await
+    }
+    async fn get_model_accesses_for_groups(&self, group_names: &[String]) -> StoreResult<Vec<ModelAccessRow>> {
+        Db::get_model_accesses_for_groups(self, group_names).await
+    }
+    async fn get_record_rules_for_groups(&self, group_names: &[String]) -> StoreResult<Vec<RecordRuleRow>> {
+        Db::get_record_rules_for_groups(self, group_names).await
+    }
 }
 
 #[async_trait]
@@ -1068,11 +1569,21 @@ impl AuditStore for Db {
         let mut sql_parts = vec!["SELECT * FROM audit_logs".to_string()];
         let mut conditions: Vec<String> = Vec::new();
 
-        if query.user_id.is_some() { conditions.push("user_id = ?".to_string()); }
-        if query.action.is_some() { conditions.push("action = ?".to_string()); }
-        if query.resource.is_some() { conditions.push("resource = ?".to_string()); }
-        if query.resource_id.is_some() { conditions.push("resource_id = ?".to_string()); }
-        if query.ip.is_some() { conditions.push("ip = ?".to_string()); }
+        if query.user_id.is_some() {
+            conditions.push("user_id = ?".to_string());
+        }
+        if query.action.is_some() {
+            conditions.push("action = ?".to_string());
+        }
+        if query.resource.is_some() {
+            conditions.push("resource = ?".to_string());
+        }
+        if query.resource_id.is_some() {
+            conditions.push("resource_id = ?".to_string());
+        }
+        if query.ip.is_some() {
+            conditions.push("ip = ?".to_string());
+        }
 
         if !conditions.is_empty() {
             sql_parts.push("WHERE".to_string());
@@ -1088,36 +1599,46 @@ impl AuditStore for Db {
         let sql = self.sql(&sql_parts.join(" "));
         let mut q = sqlx::query(&sql);
 
-        if let Some(ref v) = query.user_id { q = q.bind(v); }
-        if let Some(ref v) = query.action { q = q.bind(v); }
-        if let Some(ref v) = query.resource { q = q.bind(v); }
-        if let Some(ref v) = query.resource_id { q = q.bind(v); }
-        if let Some(ref v) = query.ip { q = q.bind(v); }
+        if let Some(ref v) = query.user_id {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = query.action {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = query.resource {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = query.resource_id {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = query.ip {
+            q = q.bind(v);
+        }
 
         let rows = q.fetch_all(&self.pool).await?;
-        let entries: Vec<AuditEntry> = rows.iter().map(|row| {
-            use sqlx::Row;
-            AuditEntry {
-                id: row.get("id"),
-                user_id: row.get("user_id"),
-                action: row.get("action"),
-                resource: row.get("resource"),
-                resource_id: row.get("resource_id"),
-                detail: row.get::<Option<String>, _>("detail")
-                    .and_then(|s| serde_json::from_str(&s).ok()),
-                ip: row.get("ip"),
-                created_at: row.get("created_at"),
-            }
-        }).collect();
+        let entries: Vec<AuditEntry> = rows
+            .iter()
+            .map(|row| {
+                use sqlx::Row;
+                AuditEntry {
+                    id: row.get("id"),
+                    user_id: row.get("user_id"),
+                    action: row.get("action"),
+                    resource: row.get("resource"),
+                    resource_id: row.get("resource_id"),
+                    detail: row.get::<Option<String>, _>("detail").and_then(|s| serde_json::from_str(&s).ok()),
+                    ip: row.get("ip"),
+                    created_at: row.get("created_at"),
+                }
+            })
+            .collect();
 
         Ok(entries)
     }
 
     async fn get_audit_log(&self, id: &str) -> Result<Option<AuditEntry>, anyhow::Error> {
-        let row = sqlx::query(&self.sql("SELECT * FROM audit_logs WHERE id = ?"))
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row =
+            sqlx::query(&self.sql("SELECT * FROM audit_logs WHERE id = ?")).bind(id).fetch_optional(&self.pool).await?;
 
         Ok(row.map(|row| {
             use sqlx::Row;
@@ -1127,12 +1648,23 @@ impl AuditStore for Db {
                 action: row.get("action"),
                 resource: row.get("resource"),
                 resource_id: row.get("resource_id"),
-                detail: row.get::<Option<String>, _>("detail")
-                    .and_then(|s| serde_json::from_str(&s).ok()),
+                detail: row.get::<Option<String>, _>("detail").and_then(|s| serde_json::from_str(&s).ok()),
                 ip: row.get("ip"),
                 created_at: row.get("created_at"),
             }
         }))
+    }
+
+    async fn delete_logs_before(&self, before: &str) -> Result<u64, anyhow::Error> {
+        let sql = match self.dialect {
+            Dialect::Sqlite => self.sql("DELETE FROM audit_logs WHERE created_at < ?"),
+            Dialect::Postgres => "DELETE FROM audit_logs WHERE created_at < $1::timestamptz".to_string(),
+        };
+        let result = sqlx::query(&sql)
+            .bind(before)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected())
     }
 }
 
@@ -1146,8 +1678,12 @@ impl traits::IngjooTransaction for Db {
         let tx = self.pool.begin().await?;
         let result = f().await;
         match &result {
-            Ok(_) => { tx.commit().await?; }
-            Err(_) => { let _ = tx.rollback().await; }
+            Ok(_) => {
+                tx.commit().await?;
+            }
+            Err(_) => {
+                let _ = tx.rollback().await;
+            }
         }
         result
     }

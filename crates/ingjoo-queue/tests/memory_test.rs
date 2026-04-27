@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use ingjoo_queue::{InMemoryQueue, JobStatus, QueuedJob, Queue};
+use ingjoo_queue::{InMemoryQueue, JobStatus, Queue, QueuedJob};
 use serde_json::json;
 
 #[tokio::test]
@@ -161,8 +161,7 @@ async fn test_fifo_same_priority() {
 #[tokio::test]
 async fn test_delayed_job_not_ready() {
     let queue = InMemoryQueue::new();
-    let job = QueuedJob::new("default", "delayed", json!({}))
-        .with_delay(Duration::from_secs(3600));
+    let job = QueuedJob::new("default", "delayed", json!({})).with_delay(Duration::from_secs(3600));
 
     queue.enqueue(job).await.unwrap();
 

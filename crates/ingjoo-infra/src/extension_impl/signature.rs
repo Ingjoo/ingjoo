@@ -14,6 +14,7 @@ type HmacSha256 = Hmac<Sha256>;
 /// 1. 检查时间戳是否在 tolerance 范围内（防重放）
 /// 2. 重新计算 HMAC-SHA256 签名
 /// 3. 常量时间比较签名（防时序攻击）
+///
 /// HMAC-SHA256 签名验证器
 pub struct HmacSignatureVerifier;
 
@@ -25,16 +26,13 @@ impl HmacSignatureVerifier {
     /// 构造待签名字符串
     fn signing_string(request: &HttpRequest) -> String {
         let body = request.body.as_deref().unwrap_or("");
-        format!(
-            "{}\n{}\n{}\n{}",
-            request.method, request.path, request.timestamp, body
-        )
+        format!("{}\n{}\n{}\n{}", request.method, request.path, request.timestamp, body)
     }
 
     /// 计算 HMAC-SHA256 签名
     fn compute_signature(secret: &str, message: &str) -> Result<Vec<u8>, anyhow::Error> {
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-            .map_err(|_| anyhow::anyhow!("HMAC 密钥初始化失败"))?;
+        let mut mac =
+            HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| anyhow::anyhow!("HMAC 密钥初始化失败"))?;
         mac.update(message.as_bytes());
         Ok(mac.finalize().into_bytes().to_vec())
     }
@@ -71,14 +69,12 @@ impl SignatureVerifier for HmacSignatureVerifier {
             return Ok(false);
         }
 
-        let signature = Self::extract_signature(request)
-            .ok_or_else(|| anyhow::anyhow!("缺少 X-Signature 请求头"))?;
+        let signature = Self::extract_signature(request).ok_or_else(|| anyhow::anyhow!("缺少 X-Signature 请求头"))?;
 
         let message = Self::signing_string(request);
         let expected = Self::compute_signature(secret, &message)?;
 
-        let sig_bytes = hex::decode(&signature)
-            .map_err(|_| anyhow::anyhow!("签名格式无效，预期十六进制编码"))?;
+        let sig_bytes = hex::decode(&signature).map_err(|_| anyhow::anyhow!("签名格式无效，预期十六进制编码"))?;
 
         // 常量时间比较
         if sig_bytes.len() != expected.len() {
@@ -118,10 +114,7 @@ mod tests {
         let verifier = HmacSignatureVerifier::new();
         let now = chrono::Utc::now().timestamp();
         let req = make_request(now, Some("hello"));
-        let result = verifier
-            .verify(&req, "secret_key", std::time::Duration::from_secs(300))
-            .await
-            .unwrap();
+        let result = verifier.verify(&req, "secret_key", std::time::Duration::from_secs(300)).await.unwrap();
         assert!(result);
     }
 
@@ -130,10 +123,7 @@ mod tests {
         let verifier = HmacSignatureVerifier::new();
         let now = chrono::Utc::now().timestamp();
         let req = make_request(now, Some("hello"));
-        let result = verifier
-            .verify(&req, "wrong_secret", std::time::Duration::from_secs(300))
-            .await
-            .unwrap();
+        let result = verifier.verify(&req, "wrong_secret", std::time::Duration::from_secs(300)).await.unwrap();
         assert!(!result);
     }
 
@@ -142,10 +132,7 @@ mod tests {
         let verifier = HmacSignatureVerifier::new();
         let one_hour_ago = chrono::Utc::now().timestamp() - 3600;
         let req = make_request(one_hour_ago, Some("hello"));
-        let result = verifier
-            .verify(&req, "secret_key", std::time::Duration::from_secs(300))
-            .await
-            .unwrap();
+        let result = verifier.verify(&req, "secret_key", std::time::Duration::from_secs(300)).await.unwrap();
         assert!(!result);
     }
 
@@ -160,9 +147,7 @@ mod tests {
             body: None,
             headers: vec![],
         };
-        let result = verifier
-            .verify(&req, "secret_key", std::time::Duration::from_secs(300))
-            .await;
+        let result = verifier.verify(&req, "secret_key", std::time::Duration::from_secs(300)).await;
         assert!(result.is_err());
     }
 

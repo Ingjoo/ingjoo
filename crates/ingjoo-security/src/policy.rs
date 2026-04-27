@@ -136,7 +136,14 @@ impl SecurityPolicy {
     /// 遍历所有 [`RecordRule`]，收集匹配 model + groups + op 的 Domain，
     /// 多条规则之间以 OR 组合。支持通过 `dialect` 参数做跨库 SQL 适配。
     /// 无匹配规则时返回空条件（不追加 WHERE）。
-    pub fn record_filter_groups_with_dialect(&self, model: &str, groups: &[String], _user_id: &str, op: &AccessOp, dialect: Option<&Dialect>) -> SqlCondition {
+    pub fn record_filter_groups_with_dialect(
+        &self,
+        model: &str,
+        groups: &[String],
+        _user_id: &str,
+        op: &AccessOp,
+        dialect: Option<&Dialect>,
+    ) -> SqlCondition {
         let mut domains: Vec<Domain> = Vec::new();
 
         for rule in &self.record_rules {
@@ -173,16 +180,9 @@ impl SecurityPolicy {
         if collection_ids.is_empty() {
             return SqlCondition::expr("1=0".to_string());
         }
-        let col = if let Some(a) = alias {
-            format!("{}.collection_id", a)
-        } else {
-            "collection_id".to_string()
-        };
+        let col = if let Some(a) = alias { format!("{}.collection_id", a) } else { "collection_id".to_string() };
         let placeholders: Vec<&str> = collection_ids.iter().map(|_| "?").collect();
-        SqlCondition {
-            clause: format!("{} IN ({})", col, placeholders.join(", ")),
-            params: collection_ids.to_vec(),
-        }
+        SqlCondition { clause: format!("{} IN ({})", col, placeholders.join(", ")), params: collection_ids.to_vec() }
     }
 }
 
@@ -248,9 +248,7 @@ impl Default for SecurityBuilder {
 impl SecurityBuilder {
     /// 创建空建造器
     pub fn new() -> Self {
-        Self {
-            policy: SecurityPolicy::new(),
-        }
+        Self { policy: SecurityPolicy::new() }
     }
 
     /// 获取内部策略的可变引用，用于直接操作
@@ -302,11 +300,7 @@ impl SecurityBuilder {
 #[derive(Debug)]
 pub enum SecurityError {
     /// 角色对模型执行操作被拒绝
-    AccessDenied {
-        model: String,
-        op: String,
-        role: String,
-    },
+    AccessDenied { model: String, op: String, role: String },
 }
 
 impl std::fmt::Display for SecurityError {
@@ -331,37 +325,55 @@ mod tests {
             builder.policy.add_model_access(ModelAccess {
                 model: model.to_string(),
                 role: "admin".to_string(),
-                read: true, write: true, create: true, delete: true,
-                import: true, export: true,
+                read: true,
+                write: true,
+                create: true,
+                delete: true,
+                import: true,
+                export: true,
             });
         }
         for model in &["collection", "entry", "source", "project"] {
             builder.policy.add_model_access(ModelAccess {
                 model: model.to_string(),
                 role: "viewer".to_string(),
-                read: true, write: false, create: false, delete: false,
-                import: false, export: true,
+                read: true,
+                write: false,
+                create: false,
+                delete: false,
+                import: false,
+                export: true,
             });
         }
         for model in &["collection", "entry", "source", "project"] {
             builder.policy.add_model_access(ModelAccess {
                 model: model.to_string(),
                 role: "user".to_string(),
-                read: true, write: true, create: true, delete: false,
-                import: true, export: true,
+                read: true,
+                write: true,
+                create: true,
+                delete: false,
+                import: true,
+                export: true,
             });
         }
         builder.policy.add_record_rule(RecordRule {
             model: "entry".to_string(),
             role: "viewer".to_string(),
             domain: Domain::from_json(r#"["status", "=", "published"]"#).unwrap(),
-            perm_read: true, perm_write: false, perm_create: false, perm_delete: false,
+            perm_read: true,
+            perm_write: false,
+            perm_create: false,
+            perm_delete: false,
         });
         builder.policy.add_record_rule(RecordRule {
             model: "source".to_string(),
             role: "viewer".to_string(),
             domain: Domain::from_json(r#"["status", "=", "compiled"]"#).unwrap(),
-            perm_read: true, perm_write: false, perm_create: false, perm_delete: false,
+            perm_read: true,
+            perm_write: false,
+            perm_create: false,
+            perm_delete: false,
         });
         builder.build()
     }
@@ -574,11 +586,7 @@ mod tests {
     #[test]
     fn test_collection_isolation_special_characters() {
         let policy = test_policy();
-        let ids = vec![
-            "col%20with%20spaces".to_string(),
-            "集合甲".to_string(),
-            "col\"quoted".to_string(),
-        ];
+        let ids = vec!["col%20with%20spaces".to_string(), "集合甲".to_string(), "col\"quoted".to_string()];
         let result = policy.collection_isolation(&ids, None);
         assert_eq!(result.params.len(), 3);
         assert_eq!(result.params[0], "col%20with%20spaces");

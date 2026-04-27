@@ -15,10 +15,7 @@ pub async fn auth_middleware(
     mut request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    let auth_header = request
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok());
+    let auth_header = request.headers().get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok());
 
     let current_user = match auth_header {
         Some(header) => {

@@ -1,16 +1,12 @@
 use ingjoo_core::module::{FieldType, IdType, ModelDescriptor};
 use ingjoo_core::pool::Pool;
+use ingjoo_core::query::domain::Domain;
 use ingjoo_core::Dialect;
 use ingjoo_infra::db::generic::{GenericDb, GenericRecordStore};
-use ingjoo_core::query::domain::Domain;
 use serde_json::json;
 
 async fn setup_pool() -> Pool {
-    let tmp = tempfile::Builder::new()
-        .prefix("generic_test_")
-        .suffix(".db")
-        .tempfile()
-        .unwrap();
+    let tmp = tempfile::Builder::new().prefix("generic_test_").suffix(".db").tempfile().unwrap();
     let db_path = tmp.path().to_str().unwrap().to_string();
     std::mem::forget(tmp);
 
@@ -51,10 +47,11 @@ async fn test_ensure_table_text_id() {
 
     db.ensure_table(&model).await.unwrap();
 
-    let row: Option<(String,)> = sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table' AND name='test_articles'")
-        .fetch_optional(&pool)
-        .await
-        .unwrap();
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table' AND name='test_articles'")
+            .fetch_optional(&pool)
+            .await
+            .unwrap();
     assert!(row.is_some());
 }
 
@@ -67,10 +64,11 @@ async fn test_ensure_table_integer_id() {
 
     db.ensure_table(&model).await.unwrap();
 
-    let row: Option<(String,)> = sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table' AND name='test_log_entries'")
-        .fetch_optional(&pool)
-        .await
-        .unwrap();
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT name FROM sqlite_master WHERE type='table' AND name='test_log_entries'")
+            .fetch_optional(&pool)
+            .await
+            .unwrap();
     assert!(row.is_some());
 }
 

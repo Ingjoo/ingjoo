@@ -20,12 +20,7 @@ pub struct TokenBucket {
 
 impl TokenBucket {
     pub fn new(max_tokens: u32, refill_per_sec: f64) -> Self {
-        Self {
-            tokens: max_tokens as f64,
-            max_tokens: max_tokens as f64,
-            refill_per_sec,
-            last_refill: Instant::now(),
-        }
+        Self { tokens: max_tokens as f64, max_tokens: max_tokens as f64, refill_per_sec, last_refill: Instant::now() }
     }
 
     pub fn try_consume(&mut self) -> bool {
@@ -52,18 +47,13 @@ pub struct RateLimiter {
 
 impl RateLimiter {
     pub fn new(max_tokens: u32, refill_per_sec: f64) -> Self {
-        Self {
-            buckets: Arc::new(Mutex::new(HashMap::new())),
-            max_tokens,
-            refill_per_sec,
-        }
+        Self { buckets: Arc::new(Mutex::new(HashMap::new())), max_tokens, refill_per_sec }
     }
 
     pub async fn check(&self, key: &str) -> bool {
         let mut buckets = self.buckets.lock().await;
-        let bucket = buckets
-            .entry(key.to_string())
-            .or_insert_with(|| TokenBucket::new(self.max_tokens, self.refill_per_sec));
+        let bucket =
+            buckets.entry(key.to_string()).or_insert_with(|| TokenBucket::new(self.max_tokens, self.refill_per_sec));
         bucket.try_consume()
     }
 }

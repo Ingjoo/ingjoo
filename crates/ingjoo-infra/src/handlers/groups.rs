@@ -5,9 +5,9 @@ use axum::http::StatusCode;
 use axum::Extension;
 use axum::Json;
 
+use ingjoo_core::db::error::StoreError;
 use ingjoo_core::db::ids::GroupId;
 use ingjoo_core::db::models::{Group, UpsertGroupRequest};
-use ingjoo_core::db::error::StoreError;
 use ingjoo_core::db::traits::IngjooStore;
 
 use crate::extractors::CurrentUser;
@@ -18,14 +18,7 @@ use crate::AppState;
 
 async fn require_admin(user: &CurrentUser, store: &Arc<dyn IngjooStore>) -> Result<(), AppError> {
     if !user.is_admin() {
-        let _ = store.create_audit_log(
-            Some(&user.user_id),
-            "admin_required_denied",
-            "groups",
-            None,
-            None,
-            None,
-        ).await;
+        let _ = store.create_audit_log(Some(&user.user_id), "admin_required_denied", "groups", None, None, None).await;
         return Err(AppError::Forbidden("需要管理员权限".into()));
     }
     Ok(())
@@ -72,8 +65,7 @@ pub async fn get_group(
     Path(id): Path<GroupId>,
 ) -> Result<Json<Group>, AppError> {
     require_admin(&current_user, &state.store).await?;
-    let group = state.store.get_group(&id).await?
-        .ok_or_else(|| AppError::NotFound("组不存在".into()))?;
+    let group = state.store.get_group(&id).await?.ok_or_else(|| AppError::NotFound("组不存在".into()))?;
     Ok(Json(group))
 }
 
@@ -84,7 +76,10 @@ pub async fn update_group(
     Json(req): Json<UpsertGroupRequest>,
 ) -> Result<Json<Group>, AppError> {
     require_admin(&current_user, &state.store).await?;
-    let group = state.store.update_group(&id, req.display_name.as_deref(), req.comment.as_deref()).await?
+    let group = state
+        .store
+        .update_group(&id, req.display_name.as_deref(), req.comment.as_deref())
+        .await?
         .ok_or_else(|| AppError::NotFound("组不存在".into()))?;
     state.store.set_implied_groups(&id, &req.implied_group_ids).await?;
     Ok(Json(group))

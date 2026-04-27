@@ -16,8 +16,7 @@ use crate::middleware::error::AppError;
 use crate::AppState;
 
 fn resolve_model(state: &AppState, model_name: &str) -> Result<ingjoo_core::module::ModelDescriptor, AppError> {
-    state.registry.get(model_name)
-        .ok_or_else(|| AppError::NotFound(format!("模型 '{}' 未注册", model_name)))
+    state.registry.get(model_name).ok_or_else(|| AppError::NotFound(format!("模型 '{}' 未注册", model_name)))
 }
 
 async fn load_security_policy(state: &AppState, groups: &[String]) -> Result<SecurityPolicy, AppError> {
@@ -36,7 +35,11 @@ async fn load_security_policy(state: &AppState, groups: &[String]) -> Result<Sec
     let (access_rows, rule_rows) = tokio::try_join!(
         state.store.get_model_accesses_for_groups(groups),
         state.store.get_record_rules_for_groups(groups),
-    ).map_err(|e| AppError::Internal(anyhow::anyhow!("加载权限失败: {}", e)))?;
+    )
+    .map_err(|e| {
+        tracing::error!("加载权限失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("加载权限失败"))
+    })?;
 
     let mut policy = SecurityPolicy::new();
 
@@ -54,8 +57,10 @@ async fn load_security_policy(state: &AppState, groups: &[String]) -> Result<Sec
     }
 
     for row in rule_rows {
-        let domain = ingjoo_core::query::domain::Domain::from_json(&row.domain)
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Record rule domain 解析失败: {}", e)))?;
+        let domain = ingjoo_core::query::domain::Domain::from_json(&row.domain).map_err(|e| {
+            tracing::error!("Record rule domain 解析失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("Record rule domain 解析失败"))
+        })?;
         policy.add_record_rule(RecordRule {
             model: row.model,
             role: row.group_id.to_string(),
@@ -104,20 +109,21 @@ pub async fn upload_attachment(
     }
 
     let mut result: Option<serde_json::Value> = None;
-    while let Some(field) = multipart.next_field().await
-        .map_err(|e| AppError::BadRequest(format!("Multipart 解析错误: {}", e)))?
+    while let Some(field) =
+        multipart.next_field().await.map_err(|e| AppError::BadRequest(format!("Multipart 解析错误: {}", e)))?
     {
         let filename = field.file_name().unwrap_or("unknown").to_string();
         let content_type = field.content_type().unwrap_or("application/octet-stream").to_string();
-        let data = field.bytes().await
-            .map_err(|e| AppError::BadRequest(format!("读取文件数据失败: {}", e)))?;
+        let data = field.bytes().await.map_err(|e| AppError::BadRequest(format!("读取文件数据失败: {}", e)))?;
         let size = data.len() as i64;
 
         let file_id = uuid::Uuid::new_v4().to_string();
         let storage_path = format!("{}/{}/{}_{}", model_name, record_id, file_id, filename);
 
-        state.file_storage.save(&storage_path, &data).await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("文件保存失败: {}", e)))?;
+        state.file_storage.save(&storage_path, &data).await.map_err(|e| {
+            tracing::error!("文件保存失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("文件保存失败"))
+        })?;
 
         let user_id = UserId::new(&current_user.user_id);
         let create = CreateAttachment {
@@ -127,12 +133,11 @@ pub async fn upload_attachment(
             entity_type: Some(model_name.clone()),
             entity_id: Some(record_id.clone()),
         };
-        let attachment = state.store.create_attachment(
-            &file_id,
-            &user_id,
-            &create,
-            &storage_path,
-        ).await.map_err(|e| AppError::Internal(anyhow::anyhow!("创建附件记录失败: {}", e)))?;
+        let attachment =
+            state.store.create_attachment(&file_id, &user_id, &create, &storage_path).await.map_err(|e| {
+                tracing::error!("创建附件记录失败: {:?}", e);
+                AppError::Internal(anyhow::anyhow!("创建附件记录失败"))
+            })?;
 
         result = Some(serde_json::to_value(&attachment).unwrap_or_default());
     }
@@ -152,12 +157,10 @@ pub async fn list_attachments(
     let policy = load_security_policy(&state, &current_user.groups).await?;
     check_read_access(&policy, &model_name, &current_user.groups)?;
 
-    let result = state.store.list_attachments(
-        Some(&model_name),
-        Some(&record_id),
-        100,
-        0,
-    ).await.map_err(|e| AppError::Internal(anyhow::anyhow!("查询附件列表失败: {}", e)))?;
+    let result = state.store.list_attachments(Some(&model_name), Some(&record_id), 100, 0).await.map_err(|e| {
+        tracing::error!("查询附件列表失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("查询附件列表失败"))
+    })?;
 
     Ok(Json(result))
 }
@@ -167,12 +170,20 @@ pub async fn download_attachment(
     State(state): State<Arc<AppState>>,
     Path((_model_name, _record_id, attachment_id)): Path<(String, String, String)>,
 ) -> Result<axum::response::Response, AppError> {
-    let attachment = state.store.get_attachment(&attachment_id).await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询附件失败: {}", e)))?
+    let attachment = state
+        .store
+        .get_attachment(&attachment_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("查询附件失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("查询附件失败"))
+        })?
         .ok_or_else(|| AppError::NotFound(format!("附件 {} 不存在", attachment_id)))?;
 
-    let data = state.file_storage.load(&attachment.storage_path).await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("读取文件失败: {}", e)))?;
+    let data = state.file_storage.load(&attachment.storage_path).await.map_err(|e| {
+        tracing::error!("读取文件失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("读取文件失败"))
+    })?;
 
     let body = axum::body::Body::from(data);
     let response = axum::response::Response::builder()
@@ -180,7 +191,10 @@ pub async fn download_attachment(
         .header("Content-Type", &attachment.mime_type)
         .header("Content-Disposition", format!("attachment; filename=\"{}\"", attachment.filename))
         .body(body)
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("构建响应失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("构建响应失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("构建响应失败"))
+        })?;
 
     Ok(response)
 }
@@ -194,15 +208,25 @@ pub async fn delete_attachment(
     let policy = load_security_policy(&state, &current_user.groups).await?;
     check_write_access(&policy, &model_name, &current_user.groups)?;
 
-    let attachment = state.store.get_attachment(&attachment_id).await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("查询附件失败: {}", e)))?
+    let attachment = state
+        .store
+        .get_attachment(&attachment_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("查询附件失败: {:?}", e);
+            AppError::Internal(anyhow::anyhow!("查询附件失败"))
+        })?
         .ok_or_else(|| AppError::NotFound(format!("附件 {} 不存在", attachment_id)))?;
 
-    state.file_storage.delete(&attachment.storage_path).await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("删除文件失败: {}", e)))?;
+    state.file_storage.delete(&attachment.storage_path).await.map_err(|e| {
+        tracing::error!("删除文件失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("删除文件失败"))
+    })?;
 
-    state.store.delete_attachment(&attachment_id).await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("删除附件记录失败: {}", e)))?;
+    state.store.delete_attachment(&attachment_id).await.map_err(|e| {
+        tracing::error!("删除附件记录失败: {:?}", e);
+        AppError::Internal(anyhow::anyhow!("删除附件记录失败"))
+    })?;
 
     Ok(StatusCode::NO_CONTENT)
 }
